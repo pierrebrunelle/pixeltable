@@ -93,7 +93,7 @@ def import_coco(
     _validate_coco_format(coco_data)
 
     # Convert COCO data to Pixeltable format
-    table_data = _convert_coco_to_pixeltable_format(coco_data, images_dir)
+    table_data = _convert_coco_to_pixeltable_format(coco_data, images_dir, schema_overrides)
 
     # Create the table
     return pxt.create_table(
@@ -148,8 +148,11 @@ def _validate_coco_format(coco_data: dict[str, Any]) -> None:
             raise excs.Error(f'Invalid bbox format in annotation at index {i}. Expected [x, y, width, height]')
 
 
-def _convert_coco_to_pixeltable_format(coco_data: dict[str, Any], images_dir: Path) -> list[dict[str, Any]]:
+def _convert_coco_to_pixeltable_format(coco_data: dict[str, Any], images_dir: Path, schema_overrides: Optional[dict[str, Any]] = None) -> list[dict[str, Any]]:
     """Convert COCO data to Pixeltable table format."""
+    
+    if schema_overrides is None:
+        schema_overrides = {}
 
     # Create mappings
     image_id_to_info = {img['id']: img for img in coco_data['images']}
@@ -219,6 +222,14 @@ def _convert_coco_to_pixeltable_format(coco_data: dict[str, Any], images_dir: Pa
             row['date_captured'] = image_info['date_captured']
         if 'license' in image_info:
             row['license'] = image_info['license']
+
+        # Apply type conversions for schema overrides
+        for field_name, override_type in schema_overrides.items():
+            if field_name in row:
+                # Convert image_id to string if requested
+                if field_name == 'image_id' and hasattr(override_type, 'is_string_type') and override_type.is_string_type():
+                    row[field_name] = str(row[field_name])
+                # Add more type conversions as needed in the future
 
         table_rows.append(row)
 
