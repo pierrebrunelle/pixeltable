@@ -217,6 +217,9 @@ exclude = [
     "tests",
     "tool",
 ]
+artifacts = [
+    "dashboard/dist/**",
+]
 
 [tool.isort]
 force_single_line = false

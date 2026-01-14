@@ -1,0 +1,146 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ============================================
+       KANDINSKY BRAND COLORS
+       ============================================ */
+    --kandinsky-yellow: 42 98% 48%;      /* #F1AE03 */
+    --kandinsky-red: 9 97% 44%;          /* #DC2404 */
+    --kandinsky-blue: 213 96% 18%;       /* #022A59 */
+    --kandinsky-blue-light: 217 79% 71%; /* #7DA8EF */
+    --kandinsky-black: 120 8% 3%;        /* #020704 */
+    --kandinsky-gray: 27 8% 63%;         /* #AAA498 */
+
+    /* ============================================
+       SEMANTIC VARIABLES - DARK THEME (default)
+       ============================================ */
+    --background: var(--kandinsky-black);
+    --foreground: 0 0% 95%;
+
+    --card: 120 8% 6%;                   /* #0E110E */
+    --card-foreground: 0 0% 95%;
+
+    --primary: var(--kandinsky-yellow);
+    --primary-foreground: var(--kandinsky-black);
+
+    --secondary: 0 0% 18%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 120 8% 10%;
+    --muted-foreground: 0 0% 65%;
+
+    --accent: 0 0% 15%;
+    --accent-foreground: 0 0% 90%;
+
+    --destructive: var(--kandinsky-red);
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 0 0% 18%;
+    --input: 0 0% 20%;
+    --ring: var(--kandinsky-yellow);
+
+    --radius: 0.5rem;
+
+    /* Section accent colors */
+    --section-table: var(--kandinsky-blue-light);
+    --section-view: 271 91% 65%;         /* Purple */
+    --section-snapshot: 24 95% 53%;      /* Orange */
+    --section-computed: var(--kandinsky-yellow);
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+    box-sizing: border-box;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-4 py-2 bg-primary text-primary-foreground font-semibold rounded-lg
+           hover:brightness-110 transition-all duration-200
+           focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 focus:ring-offset-background;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2 bg-secondary text-secondary-foreground font-medium rounded-lg
+           hover:bg-secondary/80 transition-colors duration-200
+           focus:outline-none focus:ring-2 focus:ring-primary/30;
+  }
+
+  .card {
+    @apply bg-card border border-border rounded-lg shadow-lg;
+  }
+
+  .sidebar-item {
+    @apply flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted-foreground
+           hover:bg-accent hover:text-foreground transition-colors duration-150 cursor-pointer;
+  }
+
+  .sidebar-item.active {
+    @apply bg-primary/10 text-primary border-l-2 border-primary;
+  }
+
+  /* Table/View type badges */
+  .badge-table {
+    @apply bg-[hsl(var(--section-table))]/20 text-[hsl(var(--section-table))] border border-[hsl(var(--section-table))]/30;
+  }
+
+  .badge-view {
+    @apply bg-[hsl(var(--section-view))]/20 text-[hsl(var(--section-view))] border border-[hsl(var(--section-view))]/30;
+  }
+
+  .badge-snapshot {
+    @apply bg-[hsl(var(--section-snapshot))]/20 text-[hsl(var(--section-snapshot))] border border-[hsl(var(--section-snapshot))]/30;
+  }
+
+  .badge-computed {
+    @apply bg-primary/20 text-primary border border-primary/30;
+  }
+}
+
+/* Scrollbar - Kandinsky styled */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--background));
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Selection */
+::selection {
+  background: hsl(var(--primary) / 0.3);
+  color: hsl(var(--foreground));
+}
+
+/* Focus visible */
+:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterable, Literal, TypedDict, Union
 
@@ -37,13 +38,59 @@ if TYPE_CHECKING:
 
 _logger = logging.getLogger('pixeltable')
 
+# Background dashboard server reference
+_dashboard_thread: threading.Thread | None = None
 
-def init(config_overrides: dict[str, Any] | None = None) -> None:
-    """Initializes the Pixeltable environment."""
+
+def _start_dashboard_background(port: int) -> None:
+    """Start the dashboard server in a background thread."""
+    import threading
+    
+    global _dashboard_thread
+    
+    if _dashboard_thread is not None and _dashboard_thread.is_alive():
+        _logger.info(f'Dashboard already running')
+        return
+    
+    def run_dashboard():
+        try:
+            from pixeltable.dashboard.server import run_server
+            run_server(port=port)
+        except Exception as e:
+            _logger.error(f'Dashboard server error: {e}')
+    
+    _dashboard_thread = threading.Thread(target=run_dashboard, daemon=True)
+    _dashboard_thread.start()
+    
+    # Print Ray-style dashboard message
+    print(f'\n  Pixeltable Dashboard running at http://localhost:{port}\n')
+
+
+def init(
+    config_overrides: dict[str, Any] | None = None,
+    *,
+    dashboard: bool = False,
+    dashboard_port: int = 8080,
+) -> None:
+    """Initializes the Pixeltable environment.
+    
+    Args:
+        config_overrides: Optional dictionary of configuration overrides.
+        dashboard: If True, starts the dashboard server in the background.
+            Similar to Ray's dashboard auto-start behavior.
+        dashboard_port: Port number for the dashboard server (default: 8080).
+    
+    Example:
+        >>> import pixeltable as pxt
+        >>> pxt.init(dashboard=True)  # Starts dashboard at http://localhost:8080
+    """
     if config_overrides is None:
         config_overrides = {}
     Config.init(config_overrides)
     _ = Catalog.get()
+    
+    if dashboard:
+        _start_dashboard_background(dashboard_port)
 
 
 def create_table(

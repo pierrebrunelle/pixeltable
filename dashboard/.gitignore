@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# IDE
+.vscode/
+.idea/
+
+# Testing
+test-results/
+playwright-report/
+
+# Misc
+.DS_Store
+*.log
