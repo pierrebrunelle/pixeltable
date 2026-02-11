@@ -1,0 +1,7 @@
+pixeltable
+twelvelabs
+fastapi
+uvicorn
+python-multipart
+pytubefix
+Pillow
