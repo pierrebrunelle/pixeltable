@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Iterable, cast
 import httpx
 
 import pixeltable as pxt
-from pixeltable import env, exprs
+from pixeltable import env, exceptions as excs, exprs
 from pixeltable.func import Tools
 from pixeltable.runtime import get_runtime
 from pixeltable.utils.code import local_public_names
@@ -164,6 +164,7 @@ async def messages(
     model_kwargs: dict[str, Any] | None = None,
     tools: list[dict[str, Any]] | None = None,
     tool_choice: dict[str, Any] | None = None,
+    max_tool_iterations: int | None = None,
     _runtime_ctx: env.RuntimeCtx | None = None,
 ) -> dict:
     """
@@ -187,9 +188,12 @@ async def messages(
             For details on the available parameters, see: <https://docs.anthropic.com/en/api/messages>
         tools: An optional list of Pixeltable tools to use for the request.
         tool_choice: An optional tool choice configuration.
+        max_tool_iterations: Maximum number of tool-calling iterations. When set along with `tools`, the UDF will
+            automatically execute tool calls and feed results back to the model in a loop, up to this many iterations.
 
     Returns:
-        A dictionary containing the response and other metadata.
+        A dictionary containing the response and other metadata. When `max_tool_iterations` is set, the response
+        includes additional keys `tool_calls_history` and `iterations`.
 
     Examples:
         Add a computed column that applies the model `claude-3-5-sonnet-20241022`
@@ -203,8 +207,16 @@ async def messages(
     if model_kwargs is None:
         model_kwargs = {}
 
+    tools_impl = None
     if tools is not None:
-        # Reformat `tools` into Anthropic format
+        if max_tool_iterations is not None:
+            tools_impl = Tools.from_registry(tools)
+            if tools_impl is None:
+                raise excs.Error(
+                    'max_tool_iterations requires tools created via pxt.tools(); '
+                    'could not find the Tools object in the registry'
+                )
+        api_tools = [item for item in tools if '_pxt_tools_id' not in item]
         model_kwargs['tools'] = [
             {
                 'name': tool['name'],
@@ -215,7 +227,7 @@ async def messages(
                     'required': tool['required'],
                 },
             }
-            for tool in tools
+            for tool in api_tools
         ]
 
     if tool_choice is not None:
@@ -229,12 +241,28 @@ async def messages(
         if not tool_choice['parallel_tool_calls']:
             model_kwargs['tool_choice']['disable_parallel_tool_use'] = True
 
-    # make sure the pool info exists prior to making the request
+    response = await _anthropic_messages_request(messages, model, max_tokens, model_kwargs, _runtime_ctx)
+
+    if tools_impl is None or max_tool_iterations is None or max_tool_iterations <= 0:
+        return response
+
+    return await _anthropic_tool_loop(
+        response, messages, model, max_tokens, model_kwargs, tools_impl, max_tool_iterations, _runtime_ctx
+    )
+
+
+async def _anthropic_messages_request(
+    messages: list,
+    model: str,
+    max_tokens: int,
+    model_kwargs: dict[str, Any],
+    _runtime_ctx: env.RuntimeCtx | None,
+) -> dict:
+    """Single Anthropic messages API call with rate-limit tracking."""
     resource_pool_id = f'rate-limits:anthropic:{model}'
     rate_limits_info = env.Env.get().get_resource_pool_info(resource_pool_id, AnthropicRateLimitsInfo)
     assert isinstance(rate_limits_info, env.RateLimitsInfo)
 
-    # TODO: timeouts should be set system-wide and be user-configurable
     from anthropic.types import MessageParam
 
     start_ts = datetime.datetime.now(tz=datetime.timezone.utc)
@@ -244,9 +272,6 @@ async def messages(
     )
 
     requests_info, input_tokens_info, output_tokens_info = _get_header_info(result.headers)
-    # retry_after_str = result.headers.get('retry-after')
-    # if retry_after_str is not None:
-    #     _logger.debug(f'retry-after: {retry_after_str}')
     is_retry = _runtime_ctx is not None and _runtime_ctx.is_retry
     rate_limits_info.record(
         request_ts=start_ts,
@@ -256,8 +281,72 @@ async def messages(
         reset_exc=is_retry,
     )
 
-    result_dict = json.loads(result.text)
-    return result_dict
+    return json.loads(result.text)
+
+
+def _anthropic_response_has_tool_use(response: dict) -> bool:
+    return response.get('stop_reason') == 'tool_use'
+
+
+async def _anthropic_tool_loop(
+    response: dict,
+    messages: list,
+    model: str,
+    max_tokens: int,
+    model_kwargs: dict[str, Any],
+    tools_impl: Tools,
+    max_iterations: int,
+    _runtime_ctx: env.RuntimeCtx | None,
+) -> dict:
+    """Execute the Anthropic tool-calling loop, returning an enriched response."""
+    all_messages = list(messages)
+    tool_calls_history: list[dict[str, Any]] = []
+
+    for iteration in range(max_iterations):
+        if not _anthropic_response_has_tool_use(response):
+            break
+
+        all_messages.append({'role': 'assistant', 'content': response['content']})
+
+        tool_results: list[dict[str, Any]] = []
+        for block in response['content']:
+            if block['type'] != 'tool_use':
+                continue
+            tool_name = block['name']
+            tool_args = block['input']
+            tool_call_id = block['id']
+
+            try:
+                tool_result = tools_impl.execute_tool(tool_name, tool_args)
+                result_str = json.dumps(tool_result) if not isinstance(tool_result, str) else tool_result
+                error = None
+            except Exception as e:
+                result_str = f'Error executing tool {tool_name}: {e}'
+                error = str(e)
+                _logger.warning('Tool execution error in agent loop (iteration %d): %s', iteration, e)
+
+            tool_calls_history.append({
+                'tool_name': tool_name,
+                'tool_call_id': tool_call_id,
+                'args': tool_args,
+                'result': result_str,
+                'error': error,
+                'iteration': iteration,
+            })
+
+            tool_results.append({
+                'type': 'tool_result',
+                'tool_use_id': tool_call_id,
+                'content': result_str,
+            })
+
+        all_messages.append({'role': 'user', 'content': tool_results})
+
+        response = await _anthropic_messages_request(all_messages, model, max_tokens, model_kwargs, _runtime_ctx)
+
+    response['tool_calls_history'] = tool_calls_history
+    response['iterations'] = len({h['iteration'] for h in tool_calls_history})
+    return response
 
 
 @messages.resource_pool
@@ -280,7 +369,10 @@ def _anthropic_response_to_pxt_tool_calls(response: dict) -> dict | None:
         tool_name = tool_call['name']
         if tool_name not in pxt_tool_calls:
             pxt_tool_calls[tool_name] = []
-        pxt_tool_calls[tool_name].append({'args': tool_call['input']})
+        pxt_tool_calls[tool_name].append({
+            'args': tool_call['input'],
+            'id': tool_call.get('id'),
+        })
     return pxt_tool_calls
 
 

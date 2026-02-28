@@ -1,6 +1,8 @@
+import asyncio
 import json
+import logging
 import uuid
-from typing import TYPE_CHECKING, Any, Callable, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, TypeVar
 
 import pydantic
 
@@ -13,6 +15,7 @@ from .udf import udf
 if TYPE_CHECKING:
     from pixeltable import exprs
 
+_logger = logging.getLogger(__name__)
 
 # The Tool and Tools classes are containers that hold Pixeltable UDFs and related metadata, so that they can be
 # realized as LLM tools. They are implemented as Pydantic models in order to provide a canonical way of converting
@@ -88,9 +91,61 @@ class ToolChoice(pydantic.BaseModel):
 class Tools(pydantic.BaseModel):
     tools: list[Tool]
 
+    _registry: ClassVar[dict[str, 'Tools']] = {}
+    _registry_id: str = pydantic.PrivateAttr(default_factory=lambda: str(uuid.uuid4()))
+
+    def model_post_init(self, _context: Any, /) -> None:
+        Tools._registry[self._registry_id] = self
+
     @pydantic.model_serializer
     def ser_model(self) -> list[dict[str, Any]]:
-        return [tool.ser_model() for tool in self.tools]
+        result = [tool.ser_model() for tool in self.tools]
+        result.append({'_pxt_tools_id': self._registry_id})
+        return result
+
+    @classmethod
+    def from_registry(cls, tools_data: list[dict[str, Any]]) -> 'Tools | None':
+        """Retrieve the Tools object from the registry using the embedded ID in serialized tools data."""
+        for item in tools_data:
+            if '_pxt_tools_id' in item:
+                return cls._registry.get(item['_pxt_tools_id'])
+        return None
+
+    def _get_tool_by_name(self, name: str) -> Tool | None:
+        for tool in self.tools:
+            if (tool.name or tool.fn.name) == name:
+                return tool
+        return None
+
+    def execute_tool(self, tool_name: str, args: dict[str, Any]) -> Any:
+        """Execute a tool's underlying Python function directly at runtime.
+
+        This bypasses the expression-level invocation and calls the function directly,
+        enabling tool execution inside an agent loop within a UDF.
+        """
+        tool = self._get_tool_by_name(tool_name)
+        if tool is None:
+            raise excs.Error(f'Tool not found: {tool_name}')
+
+        from .callable_function import CallableFunction
+        assert isinstance(tool.fn, CallableFunction)
+
+        typed_args: dict[str, Any] = {}
+        for param in tool.parameters.values():
+            if param.name in args:
+                typed_args[param.name] = args[param.name]
+
+        if tool.fn.is_async:
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+            if loop is not None and loop.is_running():
+                return loop.run_until_complete(tool.fn.aexec(**typed_args))
+            else:
+                return asyncio.run(tool.fn.aexec(**typed_args))
+        else:
+            return tool.fn.exec([], typed_args)
 
     # `tool_calls` must be in standardized tool invocation format:
     # {tool_name: {'args': {name1: value1, name2: value2, ...}}, ...}

@@ -458,6 +458,7 @@ async def chat_completions(
     model_kwargs: dict[str, Any] | None = None,
     tools: list[dict[str, Any]] | None = None,
     tool_choice: dict[str, Any] | None = None,
+    max_tool_iterations: int | None = None,
     _runtime_ctx: env.RuntimeCtx | None = None,
 ) -> dict:
     """
@@ -479,9 +480,14 @@ async def chat_completions(
         model: The model to use for chat completion.
         model_kwargs: Additional keyword args for the OpenAI `chat/completions` API. For details on the available
             parameters, see: <https://platform.openai.com/docs/api-reference/chat/create>
+        max_tool_iterations: Maximum number of tool-calling iterations. When set along with `tools`, the UDF will
+            automatically execute tool calls and feed results back to the model in a loop, up to this many iterations.
+            Analogous to `max_turns` in the OpenAI Agents SDK or `recursion_limit` in LangGraph.
 
     Returns:
-        A dictionary containing the response and other metadata.
+        A dictionary containing the response and other metadata. When `max_tool_iterations` is set, the response
+        includes additional keys `tool_calls_history` (list of all tool calls and results) and `iterations`
+        (number of loop iterations completed).
 
     Examples:
         Add a computed column that applies the model `gpt-4o-mini` to an existing Pixeltable column `tbl.prompt`
@@ -495,27 +501,28 @@ async def chat_completions(
         ...     response=chat_completions(messages, model='gpt-4o-mini')
         ... )
 
-        You can also include images in the messages list by passing image data directly in the input dictionary, in
-        the `'image_url'` field of the message content, as in this example:
+        Agent loop with tool calling:
 
-        >>> messages = [
-        ...     {
-        ...         'role': 'user',
-        ...         'content': [
-        ...             {'type': 'text', 'text': "What's in this image?"},
-        ...             {'type': 'image_url', 'image_url': tbl.image},
-        ...         ],
-        ...     }
-        ... ]
+        >>> tools = pxt.tools(get_weather, search_web)
+        ... messages = [{'role': 'user', 'content': tbl.prompt}]
         ... tbl.add_computed_column(
-        ...     response=chat_completions(messages, model='gpt-4o-mini')
+        ...     response=chat_completions(messages, model='gpt-4o-mini', tools=tools, max_tool_iterations=10)
         ... )
     """
     if model_kwargs is None:
         model_kwargs = {}
 
+    tools_impl = None
     if tools is not None:
-        model_kwargs['tools'] = [{'type': 'function', 'function': tool} for tool in tools]
+        if max_tool_iterations is not None:
+            tools_impl = Tools.from_registry(tools)
+            if tools_impl is None:
+                raise excs.Error(
+                    'max_tool_iterations requires tools created via pxt.tools(); '
+                    'could not find the Tools object in the registry'
+                )
+        api_tools = [item for item in tools if '_pxt_tools_id' not in item]
+        model_kwargs['tools'] = [{'type': 'function', 'function': tool} for tool in api_tools]
 
     if tool_choice is not None:
         if tool_choice['auto']:
@@ -543,7 +550,23 @@ async def chat_completions(
                     b64_encoded_image = to_base64(part['image_url'], format='png')
                     part['image_url'] = {'url': f'data:image/png;base64,{b64_encoded_image}'}
 
-    # make sure the pool info exists prior to making the request
+    response = await _openai_chat_request(messages, model, model_kwargs, _runtime_ctx)
+
+    if tools_impl is None or max_tool_iterations is None or max_tool_iterations <= 0:
+        return response
+
+    return await _openai_tool_loop(
+        response, messages, model, model_kwargs, tools_impl, max_tool_iterations, _runtime_ctx
+    )
+
+
+async def _openai_chat_request(
+    messages: list,
+    model: str,
+    model_kwargs: dict[str, Any],
+    _runtime_ctx: env.RuntimeCtx | None,
+) -> dict:
+    """Single OpenAI chat completions API call with rate-limit tracking."""
     resource_pool = _rate_limits_pool(model)
     rate_limits_info = env.Env.get().get_resource_pool_info(
         resource_pool, lambda: OpenAIRateLimitsInfo(_chat_completions_get_request_resources)
@@ -559,6 +582,68 @@ async def chat_completions(
     rate_limits_info.record(request_ts=request_ts, requests=requests_info, tokens=tokens_info, reset_exc=is_retry)
 
     return json.loads(result.text)
+
+
+def _openai_response_has_tool_calls(response: dict) -> bool:
+    msg = response.get('choices', [{}])[0].get('message', {})
+    tool_calls = msg.get('tool_calls')
+    return tool_calls is not None and len(tool_calls) > 0
+
+
+async def _openai_tool_loop(
+    response: dict,
+    messages: list,
+    model: str,
+    model_kwargs: dict[str, Any],
+    tools_impl: Tools,
+    max_iterations: int,
+    _runtime_ctx: env.RuntimeCtx | None,
+) -> dict:
+    """Execute the OpenAI tool-calling loop, returning an enriched response."""
+    all_messages = list(messages)
+    tool_calls_history: list[dict[str, Any]] = []
+
+    for iteration in range(max_iterations):
+        if not _openai_response_has_tool_calls(response):
+            break
+
+        assistant_msg = response['choices'][0]['message']
+        all_messages.append(assistant_msg)
+
+        for tc in assistant_msg['tool_calls']:
+            tool_name = tc['function']['name']
+            tool_args = json.loads(tc['function']['arguments'])
+            tool_call_id = tc['id']
+
+            try:
+                tool_result = tools_impl.execute_tool(tool_name, tool_args)
+                result_str = json.dumps(tool_result) if not isinstance(tool_result, str) else tool_result
+                error = None
+            except Exception as e:
+                result_str = f'Error executing tool {tool_name}: {e}'
+                error = str(e)
+                _logger.warning('Tool execution error in agent loop (iteration %d): %s', iteration, e)
+
+            tool_calls_history.append({
+                'tool_name': tool_name,
+                'tool_call_id': tool_call_id,
+                'args': tool_args,
+                'result': result_str,
+                'error': error,
+                'iteration': iteration,
+            })
+
+            all_messages.append({
+                'role': 'tool',
+                'tool_call_id': tool_call_id,
+                'content': result_str,
+            })
+
+        response = await _openai_chat_request(all_messages, model, model_kwargs, _runtime_ctx)
+
+    response['tool_calls_history'] = tool_calls_history
+    response['iterations'] = len({h['iteration'] for h in tool_calls_history})
+    return response
 
 
 @pxt.udf(is_deterministic=False)
@@ -868,7 +953,10 @@ def _openai_response_to_pxt_tool_calls(response: dict) -> dict | None:
         tool_name = tool_call['function']['name']
         if tool_name not in pxt_tool_calls:
             pxt_tool_calls[tool_name] = []
-        pxt_tool_calls[tool_name].append({'args': json.loads(tool_call['function']['arguments'])})
+        pxt_tool_calls[tool_name].append({
+            'args': json.loads(tool_call['function']['arguments']),
+            'id': tool_call.get('id'),
+        })
     return pxt_tool_calls
 
 

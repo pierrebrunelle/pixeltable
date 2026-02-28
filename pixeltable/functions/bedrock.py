@@ -338,7 +338,10 @@ def _bedrock_response_to_pxt_tool_calls(response: dict) -> dict | None:
             tool_name = tool_call['name']
             if tool_name not in pxt_tool_calls:
                 pxt_tool_calls[tool_name] = []
-            pxt_tool_calls[tool_name].append({'args': tool_call['input']})
+            pxt_tool_calls[tool_name].append({
+                'args': tool_call['input'],
+                'id': tool_call.get('toolUseId'),
+            })
 
     if len(pxt_tool_calls) == 0:
         return None

@@ -178,7 +178,10 @@ def _gemini_response_to_pxt_tool_calls(response: dict) -> dict | None:
             tool_name = tool_call['name']
             if tool_name not in pxt_tool_calls:
                 pxt_tool_calls[tool_name] = []
-            pxt_tool_calls[tool_name].append({'args': tool_call['args']})
+            pxt_tool_calls[tool_name].append({
+                'args': tool_call['args'],
+                'id': tool_call.get('id'),
+            })
     if len(pxt_tool_calls) == 0:
         return None
     return pxt_tool_calls
