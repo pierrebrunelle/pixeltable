@@ -1,0 +1,18 @@
+[project]
+name = "sitewatch"
+version = "0.1.0"
+description = "Video surveillance analysis platform powered by Pixeltable"
+requires-python = ">=3.10"
+dependencies = [
+    "pixeltable>=0.5.19",
+    "fastapi",
+    "uvicorn[standard]",
+    "python-dotenv",
+    "python-multipart",
+    "google-genai",
+    "twelvelabs",
+    "transformers",
+    "timm",
+    "torch",
+    "scenedetect[opencv]",
+]
