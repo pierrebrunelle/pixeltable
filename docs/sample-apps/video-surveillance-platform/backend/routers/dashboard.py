@@ -1,5 +1,6 @@
 """Dashboard endpoints: stats, alerts, activity."""
 import logging
+from collections import Counter
 
 from fastapi import APIRouter
 import pixeltable as pxt
@@ -7,15 +8,18 @@ import pixeltable as pxt
 import config
 from datetime import datetime
 
+from functions import gemini_text
 from models import ActivityItem, AlertItem, AlertsResponse, DashboardStats
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix='/api/dashboard', tags=['dashboard'])
 
+COST_PER_REMOTE_INSPECTION = 300.0
+
 
 @router.get('/stats', response_model=DashboardStats)
 def get_stats():
-    """Aggregate statistics for the dashboard."""
+    """Aggregate statistics for the dashboard — ROI-oriented."""
     stats: dict = {
         'total_videos': 0,
         'total_frames': 0,
@@ -23,6 +27,11 @@ def get_stats():
         'total_audio_chunks': 0,
         'total_transcripts': 0,
         'total_alerts': 0,
+        'anomalies_detected': 0,
+        'critical_alerts': 0,
+        'sites_monitored': 0,
+        'est_cost_savings': 0.0,
+        'avg_processing_time': 0.0,
         'sites': [],
         'severity_counts': {'critical': 0, 'warning': 0, 'info': 0},
         'recent_transcripts': [],
@@ -31,16 +40,50 @@ def get_stats():
 
     try:
         videos = pxt.get_table(f'{config.APP_NAMESPACE}.videos')
-        all_videos = list(videos.select(videos.site_name).collect())
+        all_videos = list(videos.select(videos.site_name, videos.duration).collect())
         stats['total_videos'] = len(all_videos)
-        stats['sites'] = list({r.get('site_name', '') for r in all_videos if r.get('site_name')})
+        site_names = list({r.get('site_name', '') for r in all_videos if r.get('site_name')})
+        stats['sites'] = site_names
+        stats['sites_monitored'] = len(site_names)
+        stats['est_cost_savings'] = len(all_videos) * COST_PER_REMOTE_INSPECTION
+        durations = [r['duration'] for r in all_videos if r.get('duration')]
+        stats['avg_processing_time'] = sum(durations) / len(durations) if durations else 0.0
     except Exception as e:
         logger.warning(f'Could not count videos: {e}')
 
     try:
         frames = pxt.get_table(f'{config.APP_NAMESPACE}.video_frames')
-        frame_rows = list(frames.select(frames.frame_description).collect())
+        frame_rows = list(
+            frames.select(frames.severity, frames.detected_labels).collect()
+        )
         stats['total_frames'] = len(frame_rows)
+
+        sev_counts: Counter[str] = Counter()
+        label_counter: Counter[str] = Counter()
+        for r in frame_rows:
+            sev_text = gemini_text(r.get('severity')).strip().upper()
+            if 'CRITICAL' in sev_text:
+                sev_counts['critical'] += 1
+            elif 'WARNING' in sev_text:
+                sev_counts['warning'] += 1
+            else:
+                sev_counts['info'] += 1
+
+            labels = r.get('detected_labels')
+            if isinstance(labels, list):
+                label_counter.update(labels)
+
+        stats['severity_counts'] = {
+            'critical': sev_counts.get('critical', 0),
+            'warning': sev_counts.get('warning', 0),
+            'info': sev_counts.get('info', 0),
+        }
+        stats['anomalies_detected'] = sev_counts.get('critical', 0) + sev_counts.get('warning', 0)
+        stats['critical_alerts'] = sev_counts.get('critical', 0)
+        stats['total_alerts'] = sev_counts.get('critical', 0)
+        stats['top_labels'] = [
+            {'label': lbl, 'count': cnt} for lbl, cnt in label_counter.most_common(10)
+        ]
     except Exception as e:
         logger.warning(f'Could not count frames: {e}')
 
@@ -76,14 +119,16 @@ def get_alerts(
     site_name: str | None = None,
     limit: int = 50,
 ):
-    """Latest alerts across all videos (based on Gemini frame descriptions)."""
+    """Latest alerts — frames classified as CRITICAL or WARNING by Gemini severity."""
     try:
         frames = pxt.get_table(f'{config.APP_NAMESPACE}.video_frames')
+        base = frames.where(frames.site_name == site_name) if site_name else frames
         rows = list(
-            frames.select(
+            base.select(
                 uuid=frames.uuid,
                 frame=frames.frame_thumbnail,
                 frame_description=frames.frame_description,
+                severity=frames.severity,
                 site_name=frames.site_name,
                 camera_id=frames.camera_id,
             )
@@ -91,23 +136,18 @@ def get_alerts(
             .collect()
         )
 
-        alert_keywords = {'fire', 'smoke', 'damage', 'danger', 'emergency', 'unauthorized', 'suspicious', 'breach'}
         items: list[dict] = []
         for r in rows:
-            if site_name and r.get('site_name') != site_name:
+            sev_text = gemini_text(r.get('severity')).strip().upper()
+            if 'CRITICAL' not in sev_text and 'WARNING' not in sev_text:
                 continue
-            desc = ''
-            try:
-                desc = r['frame_description']['candidates'][0]['content']['parts'][0]['text']
-            except (KeyError, IndexError, TypeError):
-                continue
-            if not any(kw in desc.lower() for kw in alert_keywords):
-                continue
+            sev = 'critical' if 'CRITICAL' in sev_text else 'warning'
+            desc = gemini_text(r.get('frame_description'))
             items.append({
                 'uuid': str(r.get('uuid', '')),
                 'frame': r.get('frame', ''),
                 'segment_labels': [],
-                'severity': 'warning',
+                'severity': sev,
                 'frame_description': desc,
                 'site_name': r.get('site_name'),
                 'camera_id': r.get('camera_id'),
@@ -172,7 +212,7 @@ def get_activity(limit: int = 20):
             items.append({
                 'type': 'segments',
                 'label': f'{seg_count} video segments indexed',
-                'detail': 'Twelve Labs multimodal embeddings',
+                'detail': 'Gemini multimodal embeddings',
             })
     except Exception as e:
         logger.warning(f'Could not fetch segment activity: {e}')

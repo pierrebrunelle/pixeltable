@@ -1,8 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Frame, Film, Clapperboard, AudioLines, Loader2, Play, ScanEye, X, Zap } from 'lucide-react'
+import {
+  Frame, Film, Clapperboard, AudioLines, Loader2, Play, ScanEye, X, Zap,
+  ClipboardList, HardHat,
+} from 'lucide-react'
 import { cn, toDataUrl, formatDuration } from '@/lib/utils'
 import { FormattedText } from '@/components/ui/formatted-text'
 import { Badge } from '@/components/ui/badge'
+import { SeverityBadge } from '@/components/ui/severity-badge'
 import * as api from '@/lib/api'
 import type {
   BrowseFrameItem,
@@ -28,9 +32,9 @@ export function BrowsePage() {
   return (
     <div className="flex flex-col h-full">
       <div className="px-6 py-4">
-        <h2 className="text-lg font-semibold">Browse All Media</h2>
+        <h2 className="text-lg font-semibold">Asset Inspection Browser</h2>
         <p className="text-sm text-muted-foreground">
-          Explore detections, frames, video segments, scenes, and audio across all surveillance footage
+          Explore detections, frames, video segments, scenes, and audio across all inspection footage
         </p>
       </div>
 
@@ -122,9 +126,26 @@ function DetectionsView() {
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
               <ScanEye className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
-            <div className="p-1.5">
-              {f.site_name && (
-                <p className="text-[10px] text-muted-foreground truncate">{f.site_name}</p>
+            <div className="p-1.5 space-y-0.5">
+              <div className="flex items-center gap-1">
+                {f.severity && f.severity !== 'info' && (
+                  <SeverityBadge severity={f.severity} />
+                )}
+                {f.site_name && (
+                  <p className="text-[10px] text-muted-foreground truncate">{f.site_name}</p>
+                )}
+              </div>
+              {f.detected_labels && f.detected_labels.length > 0 && (
+                <div className="flex flex-wrap gap-0.5">
+                  {f.detected_labels.slice(0, 3).map((label, li) => (
+                    <span key={li} className="text-[9px] bg-primary/10 text-primary px-1 py-0.5 rounded">
+                      {label}
+                    </span>
+                  ))}
+                  {f.detected_labels.length > 3 && (
+                    <span className="text-[9px] text-muted-foreground">+{f.detected_labels.length - 3}</span>
+                  )}
+                </div>
               )}
             </div>
           </button>
@@ -158,6 +179,7 @@ function FrameDetailPanel({
   const [detection, setDetection] = useState<DetectionResult | null>(null)
   const [isDetecting, setIsDetecting] = useState(false)
   const [detectError, setDetectError] = useState<string | null>(null)
+  const [showWorkOrder, setShowWorkOrder] = useState(false)
 
   const runDetection = useCallback(async (model: string) => {
     setIsDetecting(true)
@@ -179,6 +201,14 @@ function FrameDetailPanel({
 
   const detectionItems = detection?.detections ?? detection?.segments ?? []
 
+  const severityNorm = frame.severity
+    ? frame.severity.toLowerCase().includes('critical')
+      ? 'critical'
+      : frame.severity.toLowerCase().includes('warning')
+        ? 'warning'
+        : 'info'
+    : null
+
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
       <div
@@ -186,7 +216,10 @@ function FrameDetailPanel({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-4 border-b">
-          <h3 className="text-sm font-semibold">Frame Analysis</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold">Frame Analysis</h3>
+            {severityNorm && <SeverityBadge severity={severityNorm} />}
+          </div>
           <button
             onClick={onClose}
             className="rounded-md p-1 hover:bg-muted transition-colors cursor-pointer"
@@ -198,10 +231,22 @@ function FrameDetailPanel({
         <div className="p-4 space-y-4">
           <div className="relative">
             <img
-              src={toDataUrl(frame.frame)}
-              alt="Frame detail"
+              src={
+                detection?.annotated_image
+                  ? `data:image/jpeg;base64,${detection.annotated_image}`
+                  : toDataUrl(frame.frame)
+              }
+              alt={detection ? 'Annotated frame with detections' : 'Frame detail'}
               className="w-full rounded-lg border"
             />
+            {detection && (
+              <button
+                onClick={() => setDetection(null)}
+                className="absolute top-2 right-2 text-xs bg-black/60 text-white rounded px-2 py-1 hover:bg-black/80 cursor-pointer"
+              >
+                Show original
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -209,7 +254,23 @@ function FrameDetailPanel({
             {frame.camera_id && (
               <Badge variant="default" className="text-[10px]">{frame.camera_id}</Badge>
             )}
+            {frame.asset_id && (
+              <span className="font-mono text-[10px] bg-muted px-1.5 py-0.5 rounded">{frame.asset_id}</span>
+            )}
           </div>
+
+          {/* PPE Assessment */}
+          {frame.ppe_assessment && (
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1">
+                <HardHat className="h-3.5 w-3.5" />
+                PPE Compliance Assessment
+              </div>
+              <div className="bg-muted/50 rounded-lg p-3 border">
+                <FormattedText text={frame.ppe_assessment} className="text-sm" />
+              </div>
+            </div>
+          )}
 
           {/* On-demand detection buttons */}
           <div>
@@ -277,13 +338,74 @@ function FrameDetailPanel({
           {frame.frame_description && (
             <div>
               <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                Gemini Frame Description
+                AI Condition Assessment
               </div>
               <div className="bg-muted/50 rounded-lg p-3 border">
                 <FormattedText text={frame.frame_description} className="text-sm" />
               </div>
             </div>
           )}
+
+          {/* Generate Work Order */}
+          <div className="pt-2 border-t">
+            <button
+              onClick={() => setShowWorkOrder(!showWorkOrder)}
+              className="flex items-center gap-1.5 rounded-md bg-orange-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-orange-700 cursor-pointer"
+            >
+              <ClipboardList className="h-3.5 w-3.5" />
+              {showWorkOrder ? 'Hide Work Order' : 'Generate Work Order'}
+            </button>
+
+            {showWorkOrder && (
+              <div className="mt-3 bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded-lg p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-orange-800 dark:text-orange-300">
+                    Work Order — {frame.asset_id ?? 'N/A'}
+                  </h4>
+                  <span className={cn(
+                    'text-[10px] font-bold px-2 py-0.5 rounded-full uppercase',
+                    severityNorm === 'critical'
+                      ? 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300'
+                      : severityNorm === 'warning'
+                        ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300'
+                        : 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
+                  )}>
+                    Priority: {severityNorm ?? 'info'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="font-medium text-muted-foreground">Site:</span>{' '}
+                    {frame.site_name ?? 'N/A'}
+                  </div>
+                  <div>
+                    <span className="font-medium text-muted-foreground">Camera:</span>{' '}
+                    {frame.camera_id ?? 'N/A'}
+                  </div>
+                  <div>
+                    <span className="font-medium text-muted-foreground">Asset ID:</span>{' '}
+                    {frame.asset_id ?? 'N/A'}
+                  </div>
+                  <div>
+                    <span className="font-medium text-muted-foreground">Detected:</span>{' '}
+                    {frame.detected_labels?.join(', ') || 'None'}
+                  </div>
+                </div>
+                {frame.frame_description && (
+                  <div className="text-xs">
+                    <span className="font-medium text-muted-foreground">Finding:</span>{' '}
+                    <span className="text-foreground/80">
+                      {frame.frame_description.slice(0, 300)}
+                      {frame.frame_description.length > 300 ? '...' : ''}
+                    </span>
+                  </div>
+                )}
+                <p className="text-[10px] text-muted-foreground italic">
+                  Generated by SiteWatch AI &mdash; Condition-Based Maintenance (CBM)
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

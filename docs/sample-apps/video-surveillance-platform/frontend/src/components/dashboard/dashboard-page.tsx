@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
-  Video, Frame, Layers, ShieldAlert, MapPin, RefreshCw,
-  AudioLines, FileText, ScanEye, Activity,
+  Video, ShieldAlert, MapPin, RefreshCw, Frame, Layers, AudioLines, FileText,
+  Activity, AlertTriangle, DollarSign, Clock, Tags,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { StatCard } from '@/components/ui/stat-card'
@@ -42,8 +42,8 @@ export function DashboardPage() {
     <div className="flex flex-col h-full overflow-y-auto">
       <div className="flex items-center justify-between px-6 py-4">
         <div>
-          <h2 className="text-lg font-semibold">Dashboard</h2>
-          <p className="text-sm text-muted-foreground">Surveillance overview and recent alerts</p>
+          <h2 className="text-lg font-semibold">Operations Overview</h2>
+          <p className="text-sm text-muted-foreground">Asset monitoring, condition-based maintenance insights &amp; ROI</p>
         </div>
         <Button variant="outline" size="sm" onClick={loadData} disabled={isLoading}>
           <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
@@ -51,43 +51,43 @@ export function DashboardPage() {
         </Button>
       </div>
 
-      {/* Stat cards -- 6 columns */}
+      {/* ROI stat cards -- 6 columns */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 px-6">
         <StatCard
-          label="Videos"
+          label="Remote Inspections"
           value={stats?.total_videos ?? 0}
           icon={Video}
           accent="bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
         />
         <StatCard
-          label="Frames"
-          value={stats?.total_frames ?? 0}
-          icon={Frame}
-          accent="bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400"
+          label="Anomalies Detected"
+          value={stats?.anomalies_detected ?? 0}
+          icon={AlertTriangle}
+          accent="bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400"
         />
         <StatCard
-          label="Segments"
-          value={stats?.total_segments ?? 0}
-          icon={Layers}
+          label="Critical Alerts"
+          value={stats?.critical_alerts ?? 0}
+          icon={ShieldAlert}
+          accent="bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
+        />
+        <StatCard
+          label="Sites Monitored"
+          value={stats?.sites_monitored ?? 0}
+          icon={MapPin}
           accent="bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"
         />
         <StatCard
-          label="Audio Chunks"
-          value={stats?.total_audio_chunks ?? 0}
-          icon={AudioLines}
+          label="Est. Truck Rolls Saved"
+          value={`$${((stats?.est_cost_savings ?? 0) / 1000).toFixed(1)}k`}
+          icon={DollarSign}
+          accent="bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400"
+        />
+        <StatCard
+          label="Mean Time to Detect"
+          value={`${((stats?.avg_processing_time ?? 0)).toFixed(0)}s`}
+          icon={Clock}
           accent="bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400"
-        />
-        <StatCard
-          label="Transcripts"
-          value={stats?.total_transcripts ?? 0}
-          icon={FileText}
-          accent="bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400"
-        />
-        <StatCard
-          label="Active Alerts"
-          value={stats?.total_alerts ?? 0}
-          icon={ShieldAlert}
-          accent="bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
         />
       </div>
 
@@ -125,30 +125,31 @@ export function DashboardPage() {
           )}
         </div>
 
-        {/* DETR detection info */}
+        {/* Top Detected Objects */}
         <div className="rounded-lg border bg-card p-4">
           <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
-            <ScanEye className="h-3.5 w-3.5 text-emerald-500" />
-            Object Detection (DETR)
+            <Tags className="h-3.5 w-3.5 text-emerald-500" />
+            Top Detected Objects
           </h3>
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">
-              DETR panoptic segmentation runs on-demand when you click a frame in the Browse &rarr; Detections tab.
-            </p>
-            <div className="space-y-1.5 text-xs">
-              <div className="flex items-center gap-2 p-1.5 rounded bg-muted/50">
-                <span className="font-medium">Panoptic</span>
-                <span className="text-muted-foreground">Objects + scene regions</span>
-              </div>
-              <div className="flex items-center gap-2 p-1.5 rounded bg-muted/50">
-                <span className="font-medium">Detection</span>
-                <span className="text-muted-foreground">Object bounding boxes</span>
-              </div>
+          {stats?.top_labels && stats.top_labels.length > 0 ? (
+            <div className="space-y-1.5 max-h-52 overflow-y-auto">
+              {stats.top_labels.map((item) => (
+                <div key={item.label} className="flex items-center justify-between p-1.5 rounded bg-muted/50 text-xs">
+                  <span className="font-medium capitalize">{item.label}</span>
+                  <span className="text-muted-foreground font-mono">{item.count}</span>
+                </div>
+              ))}
             </div>
-            <p className="text-[10px] text-muted-foreground mt-2">
-              facebook/detr-resnet-50-panoptic
-            </p>
-          </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Run DETR detection on frames in Browse &rarr; Detections to populate.
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                facebook/detr-resnet-50-panoptic
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Sites & transcripts */}

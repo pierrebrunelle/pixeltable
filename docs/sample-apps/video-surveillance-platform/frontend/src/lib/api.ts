@@ -35,6 +35,9 @@ export async function uploadVideo(file: File, metadata: {
   site_name: string
   camera_id: string
   location: string
+  asset_id: string
+  gps_lat: string
+  gps_lon: string
   tags: string
 }) {
   const formData = new FormData()
@@ -42,6 +45,9 @@ export async function uploadVideo(file: File, metadata: {
   formData.append('site_name', metadata.site_name)
   formData.append('camera_id', metadata.camera_id)
   formData.append('location', metadata.location)
+  formData.append('asset_id', metadata.asset_id)
+  formData.append('gps_lat', metadata.gps_lat)
+  formData.append('gps_lon', metadata.gps_lon)
   formData.append('tags', metadata.tags)
   const res = await fetch(`${BASE}/videos/upload`, { method: 'POST', body: formData })
   if (!res.ok) {

@@ -22,6 +22,9 @@ export function VideosPage() {
   const [siteName, setSiteName] = useState('Default Site')
   const [cameraId, setCameraId] = useState('CAM-01')
   const [location, setLocation] = useState('')
+  const [assetId, setAssetId] = useState('XFMR-SUB-B-014')
+  const [gpsLat, setGpsLat] = useState('37.7749')
+  const [gpsLon, setGpsLon] = useState('-122.4194')
   const [tags, setTags] = useState('')
 
   const loadVideos = useCallback(async () => {
@@ -46,6 +49,9 @@ export function VideosPage() {
           site_name: siteName,
           camera_id: cameraId,
           location,
+          asset_id: assetId,
+          gps_lat: gpsLat,
+          gps_lon: gpsLon,
           tags,
         })
       }
@@ -73,7 +79,8 @@ export function VideosPage() {
     <div className="flex flex-col h-full overflow-y-auto">
       {/* Upload zone */}
       <div className="m-4 mb-2 border-2 border-dashed rounded-lg p-4">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-3">
+        <p className="text-xs font-medium text-muted-foreground mb-1">Upload Inspection Footage</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-3">
           <input
             type="text"
             placeholder="Site name"
@@ -90,9 +97,30 @@ export function VideosPage() {
           />
           <input
             type="text"
+            placeholder="Asset ID"
+            value={assetId}
+            onChange={(e) => setAssetId(e.target.value)}
+            className="border rounded-md px-3 py-1.5 text-sm bg-background"
+          />
+          <input
+            type="text"
             placeholder="Location"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
+            className="border rounded-md px-3 py-1.5 text-sm bg-background"
+          />
+          <input
+            type="text"
+            placeholder="GPS Lat"
+            value={gpsLat}
+            onChange={(e) => setGpsLat(e.target.value)}
+            className="border rounded-md px-3 py-1.5 text-sm bg-background"
+          />
+          <input
+            type="text"
+            placeholder="GPS Lon"
+            value={gpsLon}
+            onChange={(e) => setGpsLon(e.target.value)}
             className="border rounded-md px-3 py-1.5 text-sm bg-background"
           />
           <input

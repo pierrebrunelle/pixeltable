@@ -89,10 +89,10 @@ export function SearchPage() {
     <div className="flex flex-col h-full">
       <div className="px-6 py-4 border-b space-y-3">
         <div>
-          <h2 className="text-lg font-semibold">Multimodal Search</h2>
+          <h2 className="text-lg font-semibold">Incident Investigation</h2>
           <p className="text-sm text-muted-foreground">
-            Search by text, reference image, video clip, or audio across all surveillance footage.
-            Powered by Twelve Labs cross-modal embeddings.
+            Search your entire media archive by text, reference image, video, or audio to investigate
+            incidents and trace asset conditions over time. Powered by Gemini multimodal embeddings.
           </p>
         </div>
 
@@ -150,7 +150,7 @@ export function SearchPage() {
             searchingLabel="Searching frames & video segments by image..."
             icon={ImageIcon}
             label="Upload a reference image to find similar frames and video segments"
-            sublabel="Cross-modal: image → frames + video segments via Twelve Labs"
+            sublabel="Cross-modal: image → frames + video segments via Gemini embeddings"
             onFile={handleImageSearch}
           />
         )}
@@ -164,7 +164,7 @@ export function SearchPage() {
             searchingLabel="Searching segments & frames by video..."
             icon={Video}
             label="Upload a reference video clip to find similar segments and frames"
-            sublabel="Cross-modal: video → video segments + frames via Twelve Labs"
+            sublabel="Cross-modal: video → video segments + frames via Gemini embeddings"
             onFile={handleVideoSearch}
           />
         )}
@@ -178,7 +178,7 @@ export function SearchPage() {
             searchingLabel="Searching video segments by audio..."
             icon={AudioLines}
             label="Upload a reference audio clip to find matching video segments"
-            sublabel="Cross-modal: audio → video segments via Twelve Labs Marengo"
+            sublabel="Cross-modal: audio → video segments via Gemini embeddings"
             onFile={handleAudioSearch}
           />
         )}

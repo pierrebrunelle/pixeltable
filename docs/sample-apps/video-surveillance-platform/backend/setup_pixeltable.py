@@ -10,9 +10,8 @@ import pixeltable as pxt
 
 from pixeltable.functions import image as pxt_image
 from pixeltable.functions.audio import audio_splitter
-from pixeltable.functions.gemini import generate_content, generate_embedding
+from pixeltable.functions.gemini import generate_content, embed_content
 from pixeltable.functions.string import string_splitter
-from pixeltable.functions.twelvelabs import embed as twelvelabs_embed
 from pixeltable.functions.uuid import uuid7
 from pixeltable.functions.video import (
     extract_audio,
@@ -34,6 +33,9 @@ videos = pxt.create_table(
         'site_name': pxt.String,
         'camera_id': pxt.String,
         'location': pxt.String,
+        'asset_id': pxt.String,
+        'gps_lat': pxt.Float,
+        'gps_lon': pxt.Float,
         'recorded_at': pxt.Timestamp,
         'tags': pxt.Json,
         'uuid': uuid7(),
@@ -55,9 +57,7 @@ videos.add_computed_column(
 
 videos.add_computed_column(
     video_summary=generate_content(
-        [videos.video, 'Analyze this surveillance footage from a utility/energy site. '
-         'Describe all activity: people, vehicles, equipment, environmental conditions, '
-         'and any potential safety or security concerns. Be specific and concise.'],
+        [videos.video, config.VIDEO_SUMMARY_PROMPT],
         model=config.GEMINI_MODEL,
     ),
     if_exists='ignore',
@@ -83,22 +83,39 @@ video_frames.add_computed_column(
 
 video_frames.add_computed_column(
     frame_description=generate_content(
-        [video_frames.frame,
-         'Describe this surveillance camera frame from a utility/energy site. '
-         'Focus on: people present, vehicles, equipment status, environmental conditions, '
-         'and any safety or security observations. Be concise.'],
+        [video_frames.frame, config.FRAME_DESCRIPTION_PROMPT],
         model=config.GEMINI_MODEL,
     ),
     if_exists='ignore',
 )
 
-video_frames.add_embedding_index(
-    'frame',
-    embedding=twelvelabs_embed.using(model_name=config.TWELVELABS_MODEL),
+video_frames.add_computed_column(
+    severity=generate_content(
+        [video_frames.frame, config.SEVERITY_PROMPT],
+        model=config.GEMINI_MODEL,
+    ),
     if_exists='ignore',
 )
 
-print('  Frames: view + Gemini description + Twelve Labs embedding (DETR detection is on-demand)')
+video_frames.add_computed_column(
+    ppe_assessment=generate_content(
+        [video_frames.frame, config.PPE_ASSESSMENT_PROMPT],
+        model=config.GEMINI_MODEL,
+    ),
+    if_exists='ignore',
+)
+
+video_frames.add_column(detected_labels=pxt.Json, if_exists='ignore')
+
+gemini_embed = embed_content.using(model=config.GEMINI_EMBEDDING_MODEL)
+
+video_frames.add_embedding_index(
+    'frame',
+    embedding=gemini_embed,
+    if_exists='ignore',
+)
+
+print('  Frames: view + description + severity + PPE assessment + multimodal embedding + DETR (on-demand)')
 
 # -- 3. Video segments view (for multimodal video search) -------------------
 
@@ -117,11 +134,11 @@ video_segments = pxt.create_view(
 
 video_segments.add_embedding_index(
     'video_segment',
-    embedding=twelvelabs_embed.using(model_name=config.TWELVELABS_MODEL),
+    embedding=gemini_embed,
     if_exists='ignore',
 )
 
-print('  Segments: view + Twelve Labs video embedding (multimodal search)')
+print('  Segments: view + Gemini multimodal video embedding (cross-modal search)')
 
 # -- 4. Scene detection (computed column on videos) -------------------------
 
@@ -148,9 +165,7 @@ audio_chunks = pxt.create_view(
 
 audio_chunks.add_computed_column(
     transcription=generate_content(
-        [audio_chunks.audio_segment,
-         'Transcribe this audio segment from a surveillance camera. '
-         'Include any spoken words, alarms, machinery sounds, or notable audio events.'],
+        [audio_chunks.audio_segment, config.AUDIO_TRANSCRIPTION_PROMPT],
         model=config.GEMINI_MODEL,
     ),
     if_exists='ignore',
@@ -165,8 +180,6 @@ video_sentences = pxt.create_view(
     ),
     if_exists='ignore',
 )
-
-gemini_embed = generate_embedding.using(model=config.GEMINI_EMBEDDING_MODEL)
 
 video_sentences.add_embedding_index(
     'text',

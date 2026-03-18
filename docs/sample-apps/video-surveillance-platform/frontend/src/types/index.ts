@@ -6,6 +6,9 @@ export interface VideoItem {
   site_name: string
   camera_id: string
   location: string
+  asset_id: string | null
+  gps_lat: number | null
+  gps_lon: number | null
   duration: number | null
   recorded_at: string | null
   timestamp: string | null
@@ -20,6 +23,9 @@ export interface VideoDetail {
   site_name: string
   camera_id: string
   location: string
+  asset_id: string | null
+  gps_lat: number | null
+  gps_lon: number | null
   duration: number | null
   recorded_at: string | null
   tags: string[] | null
@@ -106,6 +112,11 @@ export interface DashboardStats {
   total_audio_chunks: number
   total_transcripts: number
   total_alerts: number
+  anomalies_detected: number
+  critical_alerts: number
+  sites_monitored: number
+  est_cost_savings: number
+  avg_processing_time: number
   sites: string[]
   severity_counts: Record<string, number>
   recent_transcripts: string[]
@@ -134,8 +145,12 @@ export interface BrowseFrameItem {
   uuid: string
   frame: string
   frame_description: string | null
+  severity: string | null
+  ppe_assessment: string | null
   site_name: string | null
   camera_id: string | null
+  asset_id: string | null
+  detected_labels: string[] | null
 }
 
 export interface DetectionResult {
@@ -144,6 +159,7 @@ export interface DetectionResult {
   image_width: number
   image_height: number
   count: number
+  annotated_image?: string
   detections?: Array<{
     label: string
     score: number
@@ -185,14 +201,6 @@ export interface BrowseAudioItem {
   audio_url: string | null
   duration: number | null
   transcription: string | null
-  site_name: string | null
-  camera_id: string | null
-}
-
-export interface BrowseTranscriptItem {
-  uuid: string
-  text: string
-  audio_url: string | null
   site_name: string | null
   camera_id: string | null
 }

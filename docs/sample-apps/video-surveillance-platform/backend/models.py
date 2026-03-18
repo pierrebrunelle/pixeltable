@@ -12,6 +12,9 @@ class VideoItem(BaseModel):
     site_name: str
     camera_id: str
     location: str
+    asset_id: str | None = None
+    gps_lat: float | None = None
+    gps_lon: float | None = None
     duration: float | None = None
     recorded_at: str | None = None
     timestamp: str | None = None
@@ -26,6 +29,9 @@ class VideoDetail(BaseModel):
     site_name: str
     camera_id: str
     location: str
+    asset_id: str | None = None
+    gps_lat: float | None = None
+    gps_lon: float | None = None
     duration: float | None = None
     recorded_at: str | None = None
     tags: list[str] | None = None
@@ -123,6 +129,11 @@ class DashboardStats(BaseModel):
     total_audio_chunks: int = 0
     total_transcripts: int = 0
     total_alerts: int = 0
+    anomalies_detected: int = 0
+    critical_alerts: int = 0
+    sites_monitored: int = 0
+    est_cost_savings: float = 0.0
+    avg_processing_time: float = 0.0
     sites: list[str] = []
     severity_counts: dict[str, int] = {}
     recent_transcripts: list[str] = []
@@ -154,8 +165,11 @@ class BrowseFrameItem(BaseModel):
     segment_summary: str | None = None
     frame_description: str | None = None
     severity: str | None = None
+    ppe_assessment: str | None = None
     site_name: str | None = None
     camera_id: str | None = None
+    asset_id: str | None = None
+    detected_labels: list[str] | None = None
 
 
 class BrowseSegmentItem(BaseModel):
@@ -172,14 +186,6 @@ class BrowseAudioItem(BaseModel):
     audio_url: str | None = None
     duration: float | None = None
     transcription: str | None = None
-    site_name: str | None = None
-    camera_id: str | None = None
-
-
-class BrowseTranscriptItem(BaseModel):
-    uuid: str
-    text: str
-    audio_url: str | None = None
     site_name: str | None = None
     camera_id: str | None = None
 

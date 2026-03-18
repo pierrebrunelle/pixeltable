@@ -1,6 +1,6 @@
 """Multimodal search across video segments, frames, and transcripts.
 
-Twelve Labs Marengo embeddings project text, images, audio, and video into the same
+Gemini multimodal embeddings project text, images, audio, and video into the same
 semantic space, enabling true cross-modal search:
 - Text query  -> returns video segments, frames, AND transcripts
 - Image query -> returns frames AND video segments
@@ -18,6 +18,7 @@ from pydantic import BaseModel
 import pixeltable as pxt
 
 import config
+from functions import gemini_text
 from models import SearchResponse
 
 logger = logging.getLogger(__name__)
@@ -85,22 +86,21 @@ def _search_frames(*, limit: int, threshold: float, **sim_kwargs: str) -> list[d
                 uuid=frames.uuid,
                 sim=sim,
                 thumbnail=frames.frame_thumbnail,
-                segment_labels=frames.segment_labels,
-                severity=frames.severity,
+                description=frames.frame_description,
                 source=frames.video,
             )
             .limit(limit)
             .collect()
         )
         for r in rows:
+            desc_text = gemini_text(r.get('description')) or None
             results.append({
                 'type': 'frame',
                 'uuid': str(r.get('uuid', '')),
                 'similarity': round(r.get('sim', 0), 3),
                 'thumbnail': r.get('thumbnail'),
+                'text': desc_text,
                 'metadata': {
-                    'segment_labels': r.get('segment_labels', []),
-                    'severity': r.get('severity'),
                     'source': os.path.basename(str(r.get('source', ''))),
                 },
             })

@@ -1,26 +1,15 @@
-"""Custom UDFs for the SiteWatch surveillance platform."""
-import pixeltable as pxt
-
-import config
+"""Shared helpers and custom UDFs for the SiteWatch surveillance platform."""
+from typing import Any
 
 
-@pxt.udf
-def extract_segment_labels(segments_info: list) -> list:
-    """Pull label_text values from DETR panoptic segmentation output."""
-    if not segments_info:
-        return []
-    return [seg.get('label_text', 'unknown') for seg in segments_info if seg.get('score', 0) > 0.5]
+def gemini_text(val: dict[str, Any] | None) -> str:
+    """Extract plain text from a Gemini generate_content response dict.
 
-
-@pxt.udf
-def format_segment_summary(segments_info: list) -> str:
-    """Produce a human-readable summary from DETR segmentation output."""
-    if not segments_info:
-        return 'No segments detected'
-    parts: list[str] = []
-    for seg in sorted(segments_info, key=lambda s: s.get('score', 0), reverse=True):
-        label = seg.get('label_text', 'unknown')
-        score = seg.get('score', 0)
-        if score > 0.5:
-            parts.append(f'{label} ({score:.0%})')
-    return ', '.join(parts) if parts else 'No confident detections'
+    Returns empty string when the value is None or cannot be parsed.
+    """
+    if not val:
+        return ''
+    try:
+        return val['candidates'][0]['content']['parts'][0]['text']
+    except (KeyError, IndexError, TypeError):
+        return str(val)

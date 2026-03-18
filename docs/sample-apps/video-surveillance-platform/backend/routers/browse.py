@@ -1,17 +1,21 @@
 """Multi-medium browse endpoints: paginated access to frames, segments, scenes, audio, and on-demand detection."""
+import base64
+import io
 import itertools
 import logging
 import os
 from pathlib import Path
-
 from uuid import UUID
 
+import numpy as np
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
+from PIL import Image, ImageDraw, ImageFont
 from pydantic import BaseModel
 import pixeltable as pxt
 
 import config
+from functions import gemini_text
 from models import BrowseAudioItem, BrowseFrameItem, BrowseSegmentItem
 
 logger = logging.getLogger(__name__)
@@ -28,7 +32,7 @@ DETECTION_MODELS: dict[str, dict] = {
         'label': 'DETR ResNet-50 (Object Detection)',
     },
     'detr-resnet-50-panoptic': {
-        'id': 'facebook/detr-resnet-50-panoptic',
+        'id': config.DETR_MODEL,
         'type': 'segmentation',
         'label': 'DETR ResNet-50 Panoptic (Segmentation)',
     },
@@ -60,6 +64,71 @@ def _get_detection_model(model_key: str):
     return processor, model
 
 
+_PALETTE = [
+    (255, 56, 56), (255, 157, 56), (255, 255, 56), (56, 255, 56), (56, 255, 255),
+    (56, 157, 255), (56, 56, 255), (157, 56, 255), (255, 56, 255), (255, 56, 157),
+    (128, 255, 0), (0, 255, 128), (0, 128, 255), (128, 0, 255), (255, 0, 128),
+]
+
+
+def _draw_boxes(img: Image.Image, items: list[dict], key: str = 'box') -> Image.Image:
+    """Draw bounding boxes and labels on a copy of the image."""
+    overlay = img.copy()
+    draw = ImageDraw.Draw(overlay)
+    try:
+        font = ImageFont.truetype('/System/Library/Fonts/Helvetica.ttc', 14)
+    except (OSError, IOError):
+        font = ImageFont.load_default()
+
+    for i, item in enumerate(items):
+        box = item[key]
+        color = _PALETTE[i % len(_PALETTE)]
+        coords = [box['x1'], box['y1'], box['x2'], box['y2']]
+        draw.rectangle(coords, outline=color, width=3)
+        label_text = f"{item['label']} {item['score']:.0%}"
+        bbox = draw.textbbox((0, 0), label_text, font=font)
+        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        draw.rectangle([coords[0], coords[1] - th - 6, coords[0] + tw + 8, coords[1]], fill=color)
+        draw.text((coords[0] + 4, coords[1] - th - 4), label_text, fill='white', font=font)
+    return overlay
+
+
+def _draw_masks(img: Image.Image, seg_array: np.ndarray, segments: list[dict]) -> Image.Image:
+    """Overlay semi-transparent colored masks and bounding boxes."""
+    overlay = img.copy().convert('RGBA')
+    mask_layer = Image.new('RGBA', overlay.size, (0, 0, 0, 0))
+    mask_draw = ImageDraw.Draw(mask_layer)
+
+    for i, seg in enumerate(segments):
+        color = _PALETTE[i % len(_PALETTE)]
+        binary_mask = seg_array == seg['id']
+        rgba = (*color, 80)
+        mask_pixels = np.array(mask_layer)
+        mask_pixels[binary_mask] = rgba
+        mask_layer = Image.fromarray(mask_pixels)
+
+    overlay = Image.alpha_composite(overlay, mask_layer).convert('RGB')
+    return _draw_boxes(overlay, segments)
+
+
+def _img_to_b64(img: Image.Image) -> str:
+    buf = io.BytesIO()
+    img.save(buf, format='JPEG', quality=90)
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+def _persist_labels(uuid_val: UUID, frame_idx: int, labels: list[str]) -> None:
+    """Save detected labels back to the frame row in Pixeltable."""
+    try:
+        frames = pxt.get_table(f'{config.APP_NAMESPACE}.video_frames')
+        frames.where(
+            (frames.uuid == uuid_val) & (frames.pos == frame_idx)
+        ).update({'detected_labels': labels})
+        logger.info(f'Persisted {len(labels)} labels for frame {uuid_val}:{frame_idx}')
+    except Exception as e:
+        logger.warning(f'Failed to persist labels: {e}')
+
+
 class DetectRequest(BaseModel):
     uuid: str
     frame_idx: int
@@ -71,7 +140,8 @@ class DetectRequest(BaseModel):
 def detect_objects(body: DetectRequest):
     """Run on-demand object detection / panoptic segmentation on a single video frame.
 
-    Models are loaded lazily and cached in-memory (runs on CPU like pixelbot).
+    Models are loaded lazily and cached in-memory (runs on CPU).
+    Returns annotated image with boxes/masks and persists labels as metadata.
     """
     import torch
 
@@ -125,6 +195,11 @@ def detect_objects(body: DetectRequest):
                 'box': {'x1': round(box[0], 1), 'y1': round(box[1], 1), 'x2': round(box[2], 1), 'y2': round(box[3], 1)},
             })
         detections.sort(key=lambda d: d['score'], reverse=True)
+
+        annotated = _draw_boxes(img, detections)
+        labels = list({d['label'] for d in detections})
+        _persist_labels(uuid_val, body.frame_idx, labels)
+
         return {
             'type': 'detection',
             'model': body.model,
@@ -132,6 +207,7 @@ def detect_objects(body: DetectRequest):
             'image_height': img_height,
             'count': len(detections),
             'detections': detections,
+            'annotated_image': _img_to_b64(annotated),
         }
 
     else:
@@ -170,6 +246,11 @@ def detect_objects(body: DetectRequest):
                 'pixel_count': int(mask.sum()),
             })
         segments.sort(key=lambda s: s['score'], reverse=True)
+
+        annotated = _draw_masks(img, seg_array, segments)
+        labels = list({s['label'] for s in segments if s['is_thing']})
+        _persist_labels(uuid_val, body.frame_idx, labels)
+
         return {
             'type': 'segmentation',
             'model': body.model,
@@ -177,6 +258,7 @@ def detect_objects(body: DetectRequest):
             'image_height': img_height,
             'count': len(segments),
             'segments': segments,
+            'annotated_image': _img_to_b64(annotated),
         }
 
 
@@ -202,8 +284,12 @@ def browse_frames(
                 uuid=frames.uuid,
                 frame=frames.frame_thumbnail,
                 frame_description=frames.frame_description,
+                severity=frames.severity,
+                ppe_assessment=frames.ppe_assessment,
                 site_name=frames.site_name,
                 camera_id=frames.camera_id,
+                asset_id=frames.asset_id,
+                detected_labels=frames.detected_labels,
             )
             .collect()
         )
@@ -219,18 +305,23 @@ def browse_frames(
         for r in interleaved[offset:]:
             if site_name and r.get('site_name') != site_name:
                 continue
-            desc_text = None
-            if r.get('frame_description'):
-                try:
-                    desc_text = r['frame_description']['candidates'][0]['content']['parts'][0]['text']
-                except (KeyError, IndexError, TypeError):
-                    desc_text = str(r['frame_description'])
+            if label and label not in (r.get('detected_labels') or []):
+                continue
+
+            desc_text = gemini_text(r.get('frame_description'))
+            sev_text = gemini_text(r.get('severity'))
+            ppe_text = gemini_text(r.get('ppe_assessment'))
+
             items.append({
                 'uuid': str(r.get('uuid', '')),
                 'frame': r.get('frame', ''),
                 'frame_description': desc_text,
+                'severity': sev_text.strip().lower() if sev_text else None,
+                'ppe_assessment': ppe_text,
                 'site_name': r.get('site_name'),
                 'camera_id': r.get('camera_id'),
+                'asset_id': r.get('asset_id'),
+                'detected_labels': r.get('detected_labels'),
             })
             if len(items) >= limit:
                 break
@@ -358,11 +449,7 @@ def browse_audio(
         for r in rows[offset:]:
             if site_name and r.get('site_name') != site_name:
                 continue
-            text = ''
-            try:
-                text = r['transcription']['candidates'][0]['content']['parts'][0]['text']
-            except (KeyError, IndexError, TypeError):
-                pass
+            text = gemini_text(r.get('transcription'))
             audio_path = str(r.get('audio_segment', ''))
             items.append({
                 'uuid': str(r.get('uuid', '')),

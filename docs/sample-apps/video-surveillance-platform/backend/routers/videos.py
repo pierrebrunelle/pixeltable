@@ -10,6 +10,7 @@ from fastapi import APIRouter, Form, HTTPException, UploadFile, File
 import pixeltable as pxt
 
 import config
+from functions import gemini_text
 from models import (
     AlertItem,
     AlertsResponse,
@@ -43,6 +44,9 @@ def upload_video(
     site_name: str = Form('Default Site'),
     camera_id: str = Form('CAM-01'),
     location: str = Form(''),
+    asset_id: str = Form('XFMR-SUB-B-014'),
+    gps_lat: float = Form(37.7749),
+    gps_lon: float = Form(-122.4194),
     tags: str = Form(''),
 ):
     if not file.filename:
@@ -68,6 +72,9 @@ def upload_video(
         'site_name': site_name,
         'camera_id': camera_id,
         'location': location,
+        'asset_id': asset_id,
+        'gps_lat': gps_lat,
+        'gps_lon': gps_lon,
         'recorded_at': current_ts,
         'tags': tag_list,
         'timestamp': current_ts,
@@ -97,6 +104,9 @@ def list_videos(site_name: str | None = None):
             site_name=table.site_name,
             camera_id=table.camera_id,
             location=table.location,
+            asset_id=table.asset_id,
+            gps_lat=table.gps_lat,
+            gps_lon=table.gps_lon,
             duration=table.duration,
             recorded_at=table.recorded_at,
             timestamp=table.timestamp,
@@ -112,6 +122,9 @@ def list_videos(site_name: str | None = None):
                 'site_name': r.get('site_name', ''),
                 'camera_id': r.get('camera_id', ''),
                 'location': r.get('location', ''),
+                'asset_id': r.get('asset_id'),
+                'gps_lat': r.get('gps_lat'),
+                'gps_lon': r.get('gps_lon'),
                 'duration': r.get('duration'),
                 'recorded_at': r['recorded_at'].isoformat() if isinstance(r.get('recorded_at'), datetime) else None,
                 'timestamp': r['timestamp'].isoformat() if isinstance(r.get('timestamp'), datetime) else None,
@@ -137,6 +150,9 @@ def get_video(video_uuid: str):
                 site_name=table.site_name,
                 camera_id=table.camera_id,
                 location=table.location,
+                asset_id=table.asset_id,
+                gps_lat=table.gps_lat,
+                gps_lon=table.gps_lon,
                 duration=table.duration,
                 recorded_at=table.recorded_at,
                 tags=table.tags,
@@ -149,18 +165,16 @@ def get_video(video_uuid: str):
         if not rows:
             raise HTTPException(status_code=404, detail='Video not found')
         r = rows[0]
-        summary_text = None
-        if r.get('video_summary'):
-            try:
-                summary_text = r['video_summary']['candidates'][0]['content']['parts'][0]['text']
-            except (KeyError, IndexError, TypeError):
-                summary_text = str(r['video_summary'])
+        summary_text = gemini_text(r.get('video_summary')) or None
         return {
             'uuid': str(r.get('uuid', '')),
             'name': os.path.basename(str(r.get('name', ''))),
             'site_name': r.get('site_name', ''),
             'camera_id': r.get('camera_id', ''),
             'location': r.get('location', ''),
+            'asset_id': r.get('asset_id'),
+            'gps_lat': r.get('gps_lat'),
+            'gps_lon': r.get('gps_lon'),
             'duration': r.get('duration'),
             'recorded_at': r['recorded_at'].isoformat() if isinstance(r.get('recorded_at'), datetime) else None,
             'tags': r.get('tags', []),
@@ -199,15 +213,9 @@ def get_frames(video_uuid: str, limit: int = 24):
         )
         items: list[dict] = []
         for r in rows:
-            desc_text = None
-            if r.get('frame_description'):
-                try:
-                    desc_text = r['frame_description']['candidates'][0]['content']['parts'][0]['text']
-                except (KeyError, IndexError, TypeError):
-                    desc_text = str(r['frame_description'])
             items.append({
                 'frame': r.get('frame', ''),
-                'frame_description': desc_text,
+                'frame_description': gemini_text(r.get('frame_description')) or None,
             })
         return FramesResponse(uuid=video_uuid, frames=items, total=len(items))
     except Exception as e:
@@ -300,25 +308,25 @@ def get_video_alerts(video_uuid: str, limit: int = 50):
                 uuid=frames_view.uuid,
                 frame=frames_view.frame_thumbnail,
                 frame_description=frames_view.frame_description,
+                severity=frames_view.severity,
             )
             .limit(limit * 3)
             .collect()
         )
-        alert_keywords = {'fire', 'smoke', 'damage', 'danger', 'emergency', 'unauthorized', 'suspicious'}
         items = []
         for r in rows:
-            desc = ''
-            try:
-                desc = r['frame_description']['candidates'][0]['content']['parts'][0]['text']
-            except (KeyError, IndexError, TypeError):
+            sev_raw = gemini_text(r.get('severity'))
+            if not sev_raw:
                 continue
-            if not any(kw in desc.lower() for kw in alert_keywords):
+            sev_upper = sev_raw.strip().upper()
+            if 'CRITICAL' not in sev_upper and 'WARNING' not in sev_upper:
                 continue
+            sev = 'critical' if 'CRITICAL' in sev_upper else 'warning'
             items.append({
                 'uuid': str(r.get('uuid', '')),
                 'frame': r.get('frame', ''),
                 'segment_labels': [],
-                'severity': 'warning',
+                'severity': sev,
             })
             if len(items) >= limit:
                 break

@@ -8,10 +8,10 @@ import { SearchPage } from '@/components/search/search-page'
 import { AlertsPage } from '@/components/alerts/alerts-page'
 
 const TABS = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'videos', label: 'Videos', icon: Video },
+  { id: 'dashboard', label: 'Operations', icon: LayoutDashboard },
+  { id: 'videos', label: 'Inspections', icon: Video },
   { id: 'browse', label: 'Browse', icon: Layers },
-  { id: 'search', label: 'Search', icon: Search },
+  { id: 'search', label: 'Investigate', icon: Search },
   { id: 'alerts', label: 'Alerts', icon: ShieldAlert },
 ] as const
 
@@ -31,14 +31,9 @@ const STACK_ITEMS = [
     url: 'https://fastapi.tiangolo.com',
   },
   {
-    label: 'Gemini 2.5 Flash',
-    role: 'LLM',
+    label: 'Gemini',
+    role: 'LLM + Embeddings',
     url: 'https://ai.google.dev',
-  },
-  {
-    label: 'Twelve Labs',
-    role: 'Embeddings',
-    url: 'https://twelvelabs.io',
   },
   {
     label: 'DETR',
@@ -56,7 +51,10 @@ export function App() {
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
             <ShieldAlert className="h-5 w-5 text-primary" />
-            <h1 className="text-base font-semibold tracking-tight">SiteWatch</h1>
+            <div>
+              <h1 className="text-base font-semibold tracking-tight leading-none">SiteWatch</h1>
+              <p className="text-[10px] text-muted-foreground leading-none mt-0.5">AI-Powered Asset Monitoring &amp; Compliance</p>
+            </div>
           </div>
 
           <nav className="flex items-center gap-1 bg-muted rounded-lg p-1">
@@ -120,7 +118,7 @@ export function App() {
             ))}
           </div>
           <span className="text-[10px] text-muted-foreground/50">
-            Storage &middot; Orchestration &middot; Retrieval &mdash; all declarative
+            Condition-Based Maintenance &middot; Digital Twin &middot; Single Source of Truth
           </span>
         </div>
       </footer>

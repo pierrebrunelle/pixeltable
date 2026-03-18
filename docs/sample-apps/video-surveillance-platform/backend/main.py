@@ -34,7 +34,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title='SiteWatch - Video Surveillance Analysis',
-    description='Video surveillance analysis platform powered by Pixeltable, Gemini, and Twelve Labs',
+    description='Video surveillance analysis platform powered by Pixeltable and Google Gemini',
     version='1.0.0',
     lifespan=lifespan,
 )

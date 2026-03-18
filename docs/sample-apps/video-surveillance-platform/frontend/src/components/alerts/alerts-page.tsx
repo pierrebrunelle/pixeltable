@@ -55,9 +55,9 @@ export function AlertsPage() {
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-6 py-4 border-b">
         <div>
-          <h2 className="text-lg font-semibold">Alerts</h2>
+          <h2 className="text-lg font-semibold">Safety &amp; Compliance Alerts</h2>
           <p className="text-sm text-muted-foreground">
-            {alerts.length} alerts detected across all surveillance footage
+            {alerts.length} anomalies detected across all inspection footage
           </p>
         </div>
         <div className="flex items-center gap-2">
