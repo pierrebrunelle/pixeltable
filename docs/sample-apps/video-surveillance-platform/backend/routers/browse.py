@@ -395,8 +395,8 @@ def serve_media(path: str):
 
 
 @router.get('/scenes', response_model=list[dict])
-def browse_scenes(limit: int = 48, offset: int = 0):
-    """Browse scenes extracted from all videos."""
+def browse_scenes(site_name: str | None = None, limit: int = 48, offset: int = 0):
+    """Browse scenes extracted from all videos, with playable video URLs."""
     try:
         videos = pxt.get_table(f'{config.APP_NAMESPACE}.videos')
         rows = list(
@@ -404,20 +404,29 @@ def browse_scenes(limit: int = 48, offset: int = 0):
                 uuid=videos.uuid,
                 scene_cuts=videos.scene_cuts,
                 source=videos.video,
+                site_name=videos.site_name,
+                camera_id=videos.camera_id,
             )
             .collect()
         )
         items: list[dict] = []
         for r in rows:
+            if site_name and r.get('site_name') != site_name:
+                continue
             cuts = r.get('scene_cuts') or []
+            video_path = str(r.get('source', ''))
             for sc in cuts:
                 start = sc.get('start_time', 0)
                 duration = sc.get('duration', 0)
+                video_url = f'/api/browse/media?path={video_path}#t={start:.1f},{start + duration:.1f}' if video_path else None
                 items.append({
                     'uuid': str(r.get('uuid', '')),
                     'scene_start': start,
                     'scene_end': start + duration,
-                    'source': os.path.basename(str(r.get('source', ''))),
+                    'source': os.path.basename(video_path),
+                    'video_url': video_url,
+                    'site_name': r.get('site_name'),
+                    'camera_id': r.get('camera_id'),
                 })
         return items[offset:offset + limit]
     except Exception as e:
@@ -449,7 +458,8 @@ def browse_audio(
         for r in rows[offset:]:
             if site_name and r.get('site_name') != site_name:
                 continue
-            text = gemini_text(r.get('transcription'))
+            raw_transcription = r.get('transcription')
+            text = raw_transcription.get('text', '') if isinstance(raw_transcription, dict) else ''
             audio_path = str(r.get('audio_segment', ''))
             items.append({
                 'uuid': str(r.get('uuid', '')),

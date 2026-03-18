@@ -31,7 +31,7 @@ class TextSearchRequest(BaseModel):
     query: str
     types: list[str] = ['video_segment', 'frame', 'transcript']
     limit: int = 20
-    threshold: float = 0.2
+    threshold: float = 0.15
 
 
 def _search_segments(*, limit: int, threshold: float, **sim_kwargs: str) -> list[dict]:
@@ -141,26 +141,43 @@ def _search_transcripts(*, query: str, limit: int, threshold: float) -> list[dic
 
 @router.post('', response_model=SearchResponse)
 def search_text(body: TextSearchRequest):
-    """Text search across ALL modalities: video segments, frames, and transcripts."""
-    results: list[dict] = []
+    """Text search across ALL modalities: video segments, frames, and transcripts.
+
+    Cross-modal similarity scores differ by modality (text-to-text > text-to-image
+    > text-to-video), so we allocate a per-type quota then round-robin merge to
+    ensure every requested type is represented in the final results.
+    """
+    per_type: dict[str, list[dict]] = {}
+    n_types = len(body.types)
+    per_limit = max(body.limit // max(n_types, 1), 5)
 
     if 'video_segment' in body.types:
-        results.extend(_search_segments(
-            string=body.query, limit=body.limit, threshold=body.threshold,
-        ))
+        per_type['video_segment'] = _search_segments(
+            string=body.query, limit=per_limit, threshold=body.threshold,
+        )
 
     if 'frame' in body.types:
-        results.extend(_search_frames(
-            string=body.query, limit=body.limit, threshold=body.threshold,
-        ))
+        per_type['frame'] = _search_frames(
+            string=body.query, limit=per_limit, threshold=body.threshold,
+        )
 
     if 'transcript' in body.types:
-        results.extend(_search_transcripts(
-            query=body.query, limit=body.limit, threshold=body.threshold,
-        ))
+        per_type['transcript'] = _search_transcripts(
+            query=body.query, limit=per_limit, threshold=body.threshold,
+        )
 
-    results.sort(key=lambda x: x.get('similarity', 0), reverse=True)
-    return {'query': body.query, 'results': results[:body.limit]}
+    merged: list[dict] = []
+    iters = [iter(v) for v in per_type.values()]
+    while iters and len(merged) < body.limit:
+        next_iters = []
+        for it in iters:
+            item = next(it, None)
+            if item is not None:
+                merged.append(item)
+                next_iters.append(it)
+        iters = next_iters
+
+    return {'query': body.query, 'results': merged[:body.limit]}
 
 
 def _save_upload(file: UploadFile) -> Path:

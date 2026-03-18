@@ -12,6 +12,7 @@ from pixeltable.functions import image as pxt_image
 from pixeltable.functions.audio import audio_splitter
 from pixeltable.functions.gemini import generate_content, embed_content
 from pixeltable.functions.string import string_splitter
+from pixeltable.functions.whisper import transcribe as whisper_transcribe
 from pixeltable.functions.uuid import uuid7
 from pixeltable.functions.video import (
     extract_audio,
@@ -164,10 +165,7 @@ audio_chunks = pxt.create_view(
 )
 
 audio_chunks.add_computed_column(
-    transcription=generate_content(
-        [audio_chunks.audio_segment, config.AUDIO_TRANSCRIPTION_PROMPT],
-        model=config.GEMINI_MODEL,
-    ),
+    transcription=whisper_transcribe(audio_chunks.audio_segment, model=config.WHISPER_MODEL),
     if_exists='ignore',
 )
 
@@ -175,7 +173,7 @@ video_sentences = pxt.create_view(
     f'{config.APP_NAMESPACE}.video_sentences',
     audio_chunks.where(audio_chunks.transcription != None),
     iterator=string_splitter(
-        text=audio_chunks.transcription.candidates[0].content.parts[0].text,
+        text=audio_chunks.transcription.text,
         separators='sentence',
     ),
     if_exists='ignore',
@@ -187,6 +185,6 @@ video_sentences.add_embedding_index(
     if_exists='ignore',
 )
 
-print('  Audio: extraction -> Gemini transcription -> sentence embedding')
+print('  Audio: extraction -> Whisper transcription -> sentence embedding')
 
 print('\nSchema setup complete.')

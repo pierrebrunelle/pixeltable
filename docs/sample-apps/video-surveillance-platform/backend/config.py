@@ -8,10 +8,13 @@ APP_NAMESPACE = 'surveillance'
 
 # Google Gemini
 GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-2.5-flash')
-GEMINI_EMBEDDING_MODEL = os.getenv('GEMINI_EMBEDDING_MODEL', 'gemini-embedding-001')
+GEMINI_EMBEDDING_MODEL = os.getenv('GEMINI_EMBEDDING_MODEL', 'gemini-embedding-2-preview')
 
 # DETR panoptic segmentation
 DETR_MODEL = os.getenv('DETR_MODEL', 'facebook/detr-resnet-50-panoptic')
+
+# Whisper (local transcription)
+WHISPER_MODEL = os.getenv('WHISPER_MODEL', 'base.en')
 
 # Video processing
 FRAME_FPS = 1.0
@@ -79,12 +82,3 @@ PPE_ASSESSMENT_PROMPT = (
     'Be concise. If no workers visible, respond "N/A - no workers visible."'
 )
 
-AUDIO_TRANSCRIPTION_PROMPT = (
-    'Transcribe this audio from a utility/energy site surveillance camera. Include:\n'
-    '- Spoken words and radio communications verbatim\n'
-    '- Alarm tones, warning sirens, equipment alerts\n'
-    '- Machinery sounds: hum changes, grinding, sparking, pressure releases\n'
-    '- Verbal safety callouts (e.g., "clear!", "energized", "lockout")\n'
-    '- Environmental sounds: wind, rain, animal activity near equipment\n'
-    'Note any anomalous sounds that could indicate equipment malfunction.'
-)

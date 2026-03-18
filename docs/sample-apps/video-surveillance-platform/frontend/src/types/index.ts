@@ -194,6 +194,9 @@ export interface BrowseSceneItem {
   scene_start: number
   scene_end: number
   source: string
+  video_url: string | null
+  site_name: string | null
+  camera_id: string | null
 }
 
 export interface BrowseAudioItem {

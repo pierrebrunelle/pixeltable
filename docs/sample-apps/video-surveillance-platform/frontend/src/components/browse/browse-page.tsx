@@ -574,6 +574,7 @@ function SegmentsList() {
 function ScenesList() {
   const [scenes, setScenes] = useState<BrowseSceneItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [playingIdx, setPlayingIdx] = useState<number | null>(null)
 
   useEffect(() => {
     setIsLoading(true)
@@ -598,21 +599,69 @@ function ScenesList() {
   }
 
   return (
-    <div className="space-y-2">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {scenes.map((s, i) => {
         const duration = s.scene_end - s.scene_start
+        const mediaUrl = s.video_url?.split('#')[0]
         return (
-          <div key={i} className="flex items-center gap-4 rounded-lg border bg-card p-3">
-            <Clapperboard className="h-5 w-5 text-purple-500 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <span className="text-sm font-medium">
-                Scene {i + 1}: {s.scene_start.toFixed(1)}s &ndash; {s.scene_end.toFixed(1)}s
-              </span>
-              <span className="text-xs text-muted-foreground ml-2">
-                ({formatDuration(duration)})
-              </span>
+          <div key={i} className="rounded-lg border bg-card overflow-hidden">
+            {playingIdx === i && mediaUrl ? (
+              <video
+                src={mediaUrl}
+                controls
+                autoPlay
+                className="w-full aspect-video bg-black"
+                onLoadedMetadata={(e) => {
+                  const vid = e.currentTarget
+                  vid.currentTime = s.scene_start
+                }}
+                onTimeUpdate={(e) => {
+                  const vid = e.currentTarget
+                  if (vid.currentTime >= s.scene_end) {
+                    vid.pause()
+                  }
+                }}
+              />
+            ) : (
+              <button
+                onClick={() => mediaUrl && setPlayingIdx(i)}
+                className={cn(
+                  'w-full aspect-video bg-muted/50 flex items-center justify-center',
+                  mediaUrl ? 'cursor-pointer hover:bg-muted transition-colors' : 'cursor-default',
+                )}
+              >
+                {mediaUrl ? (
+                  <div className="flex flex-col items-center gap-1 text-muted-foreground">
+                    <div className="rounded-full bg-purple-500/10 p-3">
+                      <Clapperboard className="h-6 w-6 text-purple-500" />
+                    </div>
+                    <span className="text-xs">Click to play scene</span>
+                  </div>
+                ) : (
+                  <Clapperboard className="h-8 w-8 text-muted-foreground/40" />
+                )}
+              </button>
+            )}
+
+            <div className="p-3">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-sm font-medium">
+                  Scene {i + 1}: {s.scene_start.toFixed(1)}s &ndash; {s.scene_end.toFixed(1)}s
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {formatDuration(duration)}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {s.site_name && (
+                  <span className="text-xs text-muted-foreground">{s.site_name}</span>
+                )}
+                {s.camera_id && (
+                  <Badge variant="default" className="text-[10px]">{s.camera_id}</Badge>
+                )}
+                <span className="text-xs text-muted-foreground ml-auto truncate max-w-32">{s.source}</span>
+              </div>
             </div>
-            <span className="text-xs text-muted-foreground truncate max-w-48">{s.source}</span>
           </div>
         )
       })}

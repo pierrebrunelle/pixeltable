@@ -24,7 +24,7 @@ Upload a video — Pixeltable's computed columns trigger a full AI pipeline auto
 - **Frame-level inspection** — corrosion, overheating indicators, vegetation encroachment, switch positions, gauge readings
 - **Severity classification** — CRITICAL / WARNING / INFO per frame
 - **PPE compliance** — hardhat, vest, gloves, safety glasses check per worker
-- **Audio transcription** — radio comms, alarm tones, equipment sounds, safety callouts
+- **Audio transcription** — Whisper-based local speech-to-text on extracted audio chunks
 
 ### 2. Alerting and Work Order Generation
 
@@ -114,7 +114,7 @@ Upload footage from the same angle across inspections to track degradation over 
 │    │     └── Gemini multimodal video embeddings   │
 │    ├── scene_cuts             (scene_detect)      │
 │    ├── audio_chunks           (audio_splitter)    │
-│    │     └── Gemini transcription                 │
+│    │     └── Whisper local transcription            │
 │    └── video_sentences        (string_splitter)   │
 │          └── Gemini text embeddings               │
 └───────────────────────────────────────────────────┘
@@ -124,7 +124,8 @@ Upload footage from the same angle across inspections to track degradation over 
 
 | Component | Model | Purpose |
 |-----------|-------|---------|
-| Video Analysis | Gemini 2.5 Flash | Whole-video assessment, frame condition reports, severity, PPE, transcription |
+| Video Analysis | Gemini 2.5 Flash | Whole-video assessment, frame condition reports, severity, PPE |
+| Audio Transcription | OpenAI Whisper (local) | Speech-to-text on extracted audio chunks |
 | Multimodal Embeddings | Gemini Embedding 001 | Text, image, audio, video in one shared semantic space |
 | Object Segmentation | DETR ResNet-50 Panoptic | On-demand pixel-level segmentation with annotated overlays |
 | Scene Detection | PySceneDetect | Content-based scene boundary detection |

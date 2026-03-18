@@ -224,7 +224,7 @@ def get_activity(limit: int = 20):
             items.append({
                 'type': 'audio',
                 'label': f'{chunk_count} audio chunks transcribed',
-                'detail': 'Gemini audio transcription',
+                'detail': 'Whisper local transcription',
             })
     except Exception as e:
         logger.warning(f'Could not fetch audio activity: {e}')
