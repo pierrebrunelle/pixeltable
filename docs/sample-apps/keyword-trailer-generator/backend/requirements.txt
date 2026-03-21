@@ -1,0 +1,7 @@
+fastapi
+pixeltable
+python-multipart
+scenedetect
+sentence-transformers
+transformers
+uvicorn
