@@ -8,8 +8,7 @@ semantic space, enabling true cross-modal search:
 - Audio query -> returns video segments
 
 Related events: given any search result, find semantically similar events across
-the entire archive — the same "Related Events" capability highlighted by platforms
-like Conntour, implemented here as a single Pixeltable .similarity() call.
+the entire archive using a single Pixeltable .similarity() call.
 """
 import logging
 import os
@@ -314,8 +313,7 @@ def get_related_events(body: RelatedRequest):
 
     Uses Pixeltable's embedding similarity to discover related events across
     the entire archive — text descriptions, video segments, and transcripts.
-    This is the "Related Events" feature highlighted by platforms like Conntour,
-    implemented here as a single .similarity() call per modality.
+    A single .similarity() call per modality.
     """
     all_results: list[dict] = []
     per_limit = max(body.limit, 4)

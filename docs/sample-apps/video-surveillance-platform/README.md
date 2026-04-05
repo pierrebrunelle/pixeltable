@@ -1,30 +1,35 @@
-# SiteWatch — Open-Source AI Video Intelligence
+# SiteWatch — Open-Source AI Video Intelligence for Utilities
 
-**Build your own [Conntour](https://www.conntour.com/) with ~190 lines of Python.**
+**Enterprise-grade video intelligence in ~190 lines of declarative Python.**
 
-Full-stack video intelligence platform built on [Pixeltable](https://github.com/pixeltable/pixeltable). Natural language search across video feeds, automated threat detection, cross-modal incident investigation, and related-event discovery — the same capabilities that [raised $7M from General Catalyst and YC](https://techcrunch.com/2026/03/26/conntour-raises-7m-from-general-catalyst-yc-to-build-an-ai-search-engine-for-security-video-systems/), built entirely open-source.
+Full-stack video intelligence platform built on [Pixeltable](https://github.com/pixeltable/pixeltable) for utility and energy companies. Natural language search across drone and CCTV feeds, automated threat detection, cross-modal incident investigation, and related-event discovery — capabilities that proprietary platforms charge six figures for, built entirely open-source.
 
 No Kafka, no Spark, no vector database, no object store, no ETL orchestrator. Just Pixeltable.
 
-## Why This Exists
+## The Problem
 
-Conntour's platform lets security teams search video feeds with natural language — *"Find instances of someone passing a bag in the lobby"* — and surfaces related events with confidence scores. It's powerful, proprietary, and priced for enterprise.
+Major utilities conduct over **100,000 drone flights per year** — hundreds of assessments daily across substations, transmission lines, generation sites, and rights-of-way. Each flight produces hours of video, thermal imaging, and audio.
 
-SiteWatch demonstrates that the same core architecture is achievable with open-source tools and a fraction of the code. Pixeltable handles multimodal storage, AI pipelines, embedding indexes, and cross-modal retrieval as declarative infrastructure — the hard problems Conntour is solving with a team and $7M.
+- **Human review doesn't scale.** No team can watch 400 flights a day and reliably catch vegetation encroachment, corrosion, missing PPE, or flood damage.
+- **Data lives in silos.** Video in one system, thermal data in another, audio in a third, text reports in SharePoint. None of it is cross-searchable.
+- **Insights are reactive.** Corrosion on a transformer may have been visible for months in archived footage nobody reviewed.
+- **Proprietary platforms are expensive.** Enterprise video intelligence solutions require specialized hardware, vendor lock-in, and six-figure contracts.
 
-| Capability | Conntour | SiteWatch |
-|------------|----------|-----------|
+SiteWatch shows there's another way. Pixeltable treats video, audio, images, and text as first-class citizens in a unified, queryable data layer — giving utility teams the same AI-powered capabilities in an open-source stack they fully control.
+
+| Capability | Proprietary Platforms | SiteWatch + Pixeltable |
+|------------|----------------------|------------------------|
 | Natural language video search | ✅ Proprietary VLMs | ✅ Gemini via Pixeltable |
 | Cross-modal retrieval (text→video, image→video, audio→video) | ✅ | ✅ Gemini multimodal embeddings |
-| Confidence/similarity scores | ✅ | ✅ Cosine similarity from embedding index |
+| Confidence / similarity scores | ✅ | ✅ Cosine similarity from embedding index |
 | Related events discovery | ✅ | ✅ `.similarity()` on any result |
 | Automated alert detection | ✅ Preset rules | ✅ Gemini severity classification |
 | Incident reports / work orders | ✅ | ✅ Generated from AI assessment + asset metadata |
 | Object detection & segmentation | ✅ | ✅ On-demand DETR panoptic |
-| PPE compliance monitoring | — | ✅ Per-frame Gemini assessment |
-| Audio transcription | — | ✅ Local Whisper |
-| Scene boundary detection | — | ✅ PySceneDetect |
-| On-premises deployment | ✅ | ✅ Runs fully local |
+| PPE compliance monitoring | Limited | ✅ Per-frame Gemini assessment |
+| Audio transcription | Limited | ✅ Local Whisper |
+| Scene boundary detection | Varies | ✅ PySceneDetect |
+| On-premises / air-gapped deployment | ✅ (at cost) | ✅ Runs fully local |
 | Scales to 1000s of cameras | ✅ Custom infra | Pixeltable incremental processing |
 | **Infrastructure code** | **Proprietary** | **~190 lines of declarative Python** |
 
@@ -36,7 +41,7 @@ Type any query — *"water pooling near transformer"*, *"vehicle at perimeter ga
 
 ### 2. Related Events
 
-Click any search result to see related events across your entire archive. Pixeltable's embedding indexes make this a single `.similarity()` call — the same capability Conntour highlights as a core differentiator.
+Click any search result to see related events across your entire archive. Pixeltable's embedding indexes make this a single `.similarity()` call — turning months of footage into a searchable knowledge graph.
 
 ### 3. Automated Equipment Audit
 
@@ -63,9 +68,11 @@ Gemini multimodal embeddings project text, images, audio, and video into a singl
 | Video clip | Segments, frames | Upload sparking equipment to find other incidents |
 | Audio | Segments | Upload an alarm sample to find matching events |
 
+After a hurricane, search *"downed lines near substation"* — the system returns exact timestamps, frames, and clips across every flight in the archive.
+
 ### 6. Condition-Based Maintenance
 
-Upload footage from the same angle across inspections to track degradation over time — corrosion progression, vegetation growth, equipment discoloration. Pixeltable's incremental architecture processes only new data, building a longitudinal view of asset health.
+Upload footage from the same angle across inspections to track degradation over time — corrosion progression, vegetation growth, equipment discoloration. Pixeltable's incremental architecture processes only new data, building a longitudinal view of asset health. This replaces fixed inspection schedules with data-driven maintenance decisions.
 
 ## The Pixeltable Advantage
 

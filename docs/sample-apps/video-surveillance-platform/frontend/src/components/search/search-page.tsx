@@ -357,7 +357,7 @@ function EventDetailView({
             </div>
           </div>
 
-          {/* Search bar at bottom (like Conntour) */}
+          {/* Original query context */}
           {query && (
             <div className="flex items-center gap-2 border rounded-lg px-4 py-2.5 bg-muted/30">
               <Search className="h-4 w-4 text-muted-foreground shrink-0" />
