@@ -1,22 +1,44 @@
-# SiteWatch — AI-Powered Asset Monitoring for Utilities
+# SiteWatch — Open-Source AI Video Intelligence
 
-Full-stack video intelligence platform built on [Pixeltable](https://github.com/pixeltable/pixeltable). Transforms raw drone and CCTV footage into a proactive maintenance engine — auditing every frame for equipment condition, safety compliance, environmental hazards, and security events, then making the entire archive searchable across modalities.
+**Build your own [Conntour](https://www.conntour.com/) with ~190 lines of Python.**
 
-**~190 lines of declarative Python** (`setup_pixeltable.py` + `config.py`). No Kafka, no Spark, no vector database, no object store, no ETL orchestrator. Just Pixeltable.
+Full-stack video intelligence platform built on [Pixeltable](https://github.com/pixeltable/pixeltable). Natural language search across video feeds, automated threat detection, cross-modal incident investigation, and related-event discovery — the same capabilities that [raised $7M from General Catalyst and YC](https://techcrunch.com/2026/03/26/conntour-raises-7m-from-general-catalyst-yc-to-build-an-ai-search-engine-for-security-video-systems/), built entirely open-source.
 
-## The Problem
+No Kafka, no Spark, no vector database, no object store, no ETL orchestrator. Just Pixeltable.
 
-Major utilities conduct over **100,000 drone flights per year** — hundreds of assessments daily across substations, transmission lines, generation sites, and rights-of-way. Each flight produces hours of video, thermal imaging, and audio.
+## Why This Exists
 
-- **Human review doesn't scale.** No team can watch 400 flights a day and reliably catch vegetation encroachment, corrosion, missing PPE, or flood damage.
-- **Data lives in silos.** Video in one system, thermal data in another, audio in a third, text reports in SharePoint. None of it is cross-searchable.
-- **Insights are reactive.** Corrosion on a transformer may have been visible for months in archived footage nobody reviewed.
+Conntour's platform lets security teams search video feeds with natural language — *"Find instances of someone passing a bag in the lobby"* — and surfaces related events with confidence scores. It's powerful, proprietary, and priced for enterprise.
 
-Pixeltable eliminates this by treating video, audio, images, and text as first-class citizens in a unified, queryable data layer.
+SiteWatch demonstrates that the same core architecture is achievable with open-source tools and a fraction of the code. Pixeltable handles multimodal storage, AI pipelines, embedding indexes, and cross-modal retrieval as declarative infrastructure — the hard problems Conntour is solving with a team and $7M.
+
+| Capability | Conntour | SiteWatch |
+|------------|----------|-----------|
+| Natural language video search | ✅ Proprietary VLMs | ✅ Gemini via Pixeltable |
+| Cross-modal retrieval (text→video, image→video, audio→video) | ✅ | ✅ Gemini multimodal embeddings |
+| Confidence/similarity scores | ✅ | ✅ Cosine similarity from embedding index |
+| Related events discovery | ✅ | ✅ `.similarity()` on any result |
+| Automated alert detection | ✅ Preset rules | ✅ Gemini severity classification |
+| Incident reports / work orders | ✅ | ✅ Generated from AI assessment + asset metadata |
+| Object detection & segmentation | ✅ | ✅ On-demand DETR panoptic |
+| PPE compliance monitoring | — | ✅ Per-frame Gemini assessment |
+| Audio transcription | — | ✅ Local Whisper |
+| Scene boundary detection | — | ✅ PySceneDetect |
+| On-premises deployment | ✅ | ✅ Runs fully local |
+| Scales to 1000s of cameras | ✅ Custom infra | Pixeltable incremental processing |
+| **Infrastructure code** | **Proprietary** | **~190 lines of declarative Python** |
 
 ## What SiteWatch Does
 
-### 1. Automated Equipment Audit
+### 1. Natural Language Video Search
+
+Type any query — *"water pooling near transformer"*, *"vehicle at perimeter gate"*, *"person without hardhat"* — and SiteWatch returns matching video segments, frames, and transcripts with similarity scores. Upload a reference image, video clip, or audio file for cross-modal retrieval.
+
+### 2. Related Events
+
+Click any search result to see related events across your entire archive. Pixeltable's embedding indexes make this a single `.similarity()` call — the same capability Conntour highlights as a core differentiator.
+
+### 3. Automated Equipment Audit
 
 Upload a video — Pixeltable's computed columns trigger a full AI pipeline automatically:
 
@@ -26,15 +48,11 @@ Upload a video — Pixeltable's computed columns trigger a full AI pipeline auto
 - **PPE compliance** — hardhat, vest, gloves, safety glasses check per worker
 - **Audio transcription** — Whisper-based local speech-to-text on extracted audio chunks
 
-### 2. Alerting and Work Order Generation
+### 4. Alerting and Work Order Generation
 
 CRITICAL/WARNING frames surface automatically. From any flagged frame, generate a mock work order combining AI assessment, asset ID, GPS coordinates, and severity — demonstrating integration with ServiceNow or SAP.
 
-### 3. PPE Compliance Monitoring
-
-Every frame is evaluated for PPE compliance: each visible worker checked for required gear, rated COMPLIANT / PARTIAL / NON-COMPLIANT. Continuous automated safety auditing across all sites.
-
-### 4. Cross-Modal Incident Investigation
+### 5. Cross-Modal Incident Investigation
 
 Gemini multimodal embeddings project text, images, audio, and video into a single semantic space:
 
@@ -45,46 +63,36 @@ Gemini multimodal embeddings project text, images, audio, and video into a singl
 | Video clip | Segments, frames | Upload sparking equipment to find other incidents |
 | Audio | Segments | Upload an alarm sample to find matching events |
 
-After a hurricane, search *"downed lines near substation"* — the system returns exact timestamps, frames, and clips across every flight in the archive.
+### 6. Condition-Based Maintenance
 
-### 5. Condition-Based Maintenance
+Upload footage from the same angle across inspections to track degradation over time — corrosion progression, vegetation growth, equipment discoloration. Pixeltable's incremental architecture processes only new data, building a longitudinal view of asset health.
 
-Upload footage from the same angle across inspections to track degradation over time — corrosion progression, vegetation growth, equipment discoloration. Pixeltable's incremental architecture processes only new data, building a longitudinal view of asset health. This replaces fixed inspection schedules with data-driven maintenance decisions.
+## The Pixeltable Advantage
 
-## Demo Walkthrough
+What makes this possible in ~190 lines:
 
-### Act 1: Operations Overview
+```python
+# Cross-modal search in 3 lines
+sim = frames.frame.similarity(string="person near transformer")
+results = frames.order_by(sim, asc=False).limit(10).collect()
 
-**Operations** tab. Dashboard shows ROI metrics:
+# Related events in 2 lines
+sim = segments.video_segment.similarity(video=result_path)
+related = segments.order_by(sim, asc=False).limit(8).collect()
 
-- **Anomalies Detected** — CRITICAL + WARNING frames
-- **Critical Alerts** — most urgent findings
-- **Sites Monitored** — distinct locations
-- **Estimated Cost Savings** — ~$300/remote inspection vs. truck roll
-- **Severity Breakdown** — CRITICAL / WARNING / INFO distribution
+# Automated AI pipeline: just declare it
+t.add_computed_column(severity=gemini(t.frame, prompt=SEVERITY_PROMPT))
+t.add_computed_column(ppe=gemini(t.frame, prompt=PPE_PROMPT))
+# Runs automatically on every new row. No DAGs, no queues.
+```
 
-*"Every upload triggers a complete automated audit. Hours of analyst review reduced to minutes, every finding categorized and searchable."*
+Replaces five+ infrastructure services (object store, video pipeline, orchestrator, vector DB, LLM gateway) with one declarative framework:
 
-### Act 2: Automated Dispatch
-
-**Inspections** tab. Browse frames. Find a WARNING — vegetation encroachment, corrosion, missing hardhat.
-
-1. Open frame detail — full AI condition assessment
-2. Review severity and PPE compliance
-3. Note asset ID and GPS linking to specific equipment
-4. Click **"Generate Work Order"** — structured dispatch from all findings
-
-*"Raw drone footage to an actionable ServiceNow ticket in seconds. Corrosion detected on XFMR-SUB-B-014 at 37.77, -122.42 — maintenance dispatched without a human watching the video."*
-
-### Act 3: Post-Storm Triage
-
-**Investigate** tab. The incident investigation tool.
-
-1. Text search *"water pooling near equipment"* — matching frames, segments, transcripts across all videos
-2. Upload a flood photo — finds visually similar conditions
-3. Upload alarm audio — finds segments with matching events
-
-*"After hurricane season, search by text, photo, clip, or audio — find the exact moment across your entire archive."*
+- **Computed columns** — AI analysis runs automatically on insert. No DAGs, no queues, no schedulers.
+- **Multimodal iterators** — `frame_iterator`, `video_splitter`, `audio_splitter`, `string_splitter` decompose video into frames, clips, audio chunks, sentences as materialized views.
+- **Multimodal embeddings** — `embed_content` indexes frames, segments, and text in one space. Cross-modal search with a single `similarity()` call.
+- **Incremental processing** — only new data is processed. Second inspection of the same asset computes only the delta.
+- **Idempotent schema** — `if_exists='ignore'` everywhere. Safe to re-run at any time.
 
 ## Architecture
 
@@ -126,21 +134,9 @@ Upload footage from the same angle across inspections to track degradation over 
 |-----------|-------|---------|
 | Video Analysis | Gemini 2.5 Flash | Whole-video assessment, frame condition reports, severity, PPE |
 | Audio Transcription | OpenAI Whisper (local) | Speech-to-text on extracted audio chunks |
-| Multimodal Embeddings | Gemini Embedding 001 | Text, image, audio, video in one shared semantic space |
+| Multimodal Embeddings | Gemini Embedding 2 | Text, image, audio, video in one shared semantic space |
 | Object Segmentation | DETR ResNet-50 Panoptic | On-demand pixel-level segmentation with annotated overlays |
 | Scene Detection | PySceneDetect | Content-based scene boundary detection |
-
-## Why Pixeltable
-
-Replaces five+ infrastructure services (object store, video pipeline, orchestrator, vector DB, LLM gateway) with one declarative framework:
-
-- **Computed columns** — AI analysis runs automatically on insert. No DAGs, no queues, no schedulers.
-- **Multimodal iterators** — `frame_iterator`, `video_splitter`, `audio_splitter`, `string_splitter` decompose video into frames, clips, audio chunks, sentences as materialized views.
-- **Multimodal embeddings** — `embed_content` indexes frames, segments, and text in one space. Cross-modal search with a single `similarity()` call.
-- **Incremental processing** — only new data is processed. Second inspection of the same asset computes only the delta.
-- **Idempotent schema** — `if_exists='ignore'` everywhere. Safe to re-run at any time.
-
-A single source of truth for multimodal data — a digital twin where raw media, AI insights, and operational metadata coexist in one queryable system.
 
 ## Quick Start
 
@@ -185,7 +181,7 @@ Available at [http://localhost:8000](http://localhost:8000).
 │   ├── pyproject.toml
 │   └── routers/
 │       ├── videos.py         # Upload, list, delete, frames, scenes
-│       ├── search.py         # Cross-modal search (text/image/video/audio)
+│       ├── search.py         # Cross-modal search + related events
 │       ├── browse.py         # Multi-medium browsing + on-demand DETR
 │       └── dashboard.py      # ROI metrics, alerts, activity
 ├── frontend/

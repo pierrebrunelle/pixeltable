@@ -37,12 +37,8 @@ export interface VideoDetail {
 
 export interface FrameItem {
   frame: string
-  segment_labels: string[] | null
-  segment_summary: string | null
   frame_description: string | null
   severity: string | null
-  is_alert: boolean
-  position: number | null
 }
 
 export interface FramesResponse {

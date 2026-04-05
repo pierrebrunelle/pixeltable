@@ -1,12 +1,11 @@
-from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel
 
 
-# -- Video endpoints --------------------------------------------------------
+# -- Video ------------------------------------------------------------------
 
-class VideoItem(BaseModel):
+class VideoBase(BaseModel):
     uuid: str
     name: str
     site_name: str
@@ -17,25 +16,16 @@ class VideoItem(BaseModel):
     gps_lon: float | None = None
     duration: float | None = None
     recorded_at: str | None = None
-    timestamp: str | None = None
     tags: list[str] | None = None
     video_summary: str | None = None
+
+
+class VideoItem(VideoBase):
+    timestamp: str | None = None
     alert_count: int = 0
 
 
-class VideoDetail(BaseModel):
-    uuid: str
-    name: str
-    site_name: str
-    camera_id: str
-    location: str
-    asset_id: str | None = None
-    gps_lat: float | None = None
-    gps_lon: float | None = None
-    duration: float | None = None
-    recorded_at: str | None = None
-    tags: list[str] | None = None
-    video_summary: str | None = None
+class VideoDetail(VideoBase):
     metadata: dict[str, Any] | None = None
 
 
@@ -50,16 +40,12 @@ class DeleteResponse(BaseModel):
     num_deleted: int
 
 
-# -- Frame endpoints --------------------------------------------------------
+# -- Frame ------------------------------------------------------------------
 
 class FrameItem(BaseModel):
     frame: str
-    segment_labels: list[str] | None = None
-    segment_summary: str | None = None
     frame_description: str | None = None
     severity: str | None = None
-    is_alert: bool = False
-    position: float | None = None
 
 
 class FramesResponse(BaseModel):
@@ -68,7 +54,7 @@ class FramesResponse(BaseModel):
     total: int
 
 
-# -- Segment endpoints ------------------------------------------------------
+# -- Segment ----------------------------------------------------------------
 
 class SegmentItem(BaseModel):
     segment_start: float
@@ -82,7 +68,7 @@ class SegmentsResponse(BaseModel):
     total: int
 
 
-# -- Scene endpoints --------------------------------------------------------
+# -- Scene ------------------------------------------------------------------
 
 class SceneItem(BaseModel):
     scene_start: float
@@ -95,7 +81,7 @@ class ScenesResponse(BaseModel):
     total: int
 
 
-# -- Transcription endpoints ------------------------------------------------
+# -- Transcription ----------------------------------------------------------
 
 class TranscriptionResponse(BaseModel):
     uuid: str
@@ -103,7 +89,7 @@ class TranscriptionResponse(BaseModel):
     full_text: str
 
 
-# -- Search endpoints -------------------------------------------------------
+# -- Search -----------------------------------------------------------------
 
 class SearchResult(BaseModel):
     type: str
@@ -120,7 +106,7 @@ class SearchResponse(BaseModel):
     results: list[SearchResult]
 
 
-# -- Dashboard endpoints ----------------------------------------------------
+# -- Dashboard --------------------------------------------------------------
 
 class DashboardStats(BaseModel):
     total_videos: int = 0
@@ -156,13 +142,11 @@ class AlertsResponse(BaseModel):
     total: int
 
 
-# -- Browse endpoints -------------------------------------------------------
+# -- Browse -----------------------------------------------------------------
 
 class BrowseFrameItem(BaseModel):
     uuid: str
     frame: str
-    segment_labels: list[str] | None = None
-    segment_summary: str | None = None
     frame_description: str | None = None
     severity: str | None = None
     ppe_assessment: str | None = None

@@ -10,7 +10,7 @@ from fastapi import APIRouter, Form, HTTPException, UploadFile, File
 import pixeltable as pxt
 
 import config
-from functions import gemini_text
+from functions import gemini_text, parse_severity
 from models import (
     AlertItem,
     AlertsResponse,
@@ -315,13 +315,9 @@ def get_video_alerts(video_uuid: str, limit: int = 50):
         )
         items = []
         for r in rows:
-            sev_raw = gemini_text(r.get('severity'))
-            if not sev_raw:
+            sev = parse_severity(r.get('severity'))
+            if sev == 'info':
                 continue
-            sev_upper = sev_raw.strip().upper()
-            if 'CRITICAL' not in sev_upper and 'WARNING' not in sev_upper:
-                continue
-            sev = 'critical' if 'CRITICAL' in sev_upper else 'warning'
             items.append({
                 'uuid': str(r.get('uuid', '')),
                 'frame': r.get('frame', ''),

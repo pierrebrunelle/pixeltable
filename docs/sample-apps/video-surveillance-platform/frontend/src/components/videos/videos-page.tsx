@@ -352,11 +352,6 @@ function VideoDetail({ uuid }: { uuid: string }) {
                     <SeverityBadge severity={f.severity} />
                   </div>
                 )}
-                {f.segment_labels && f.segment_labels.length > 0 && (
-                  <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[9px] px-1 py-0.5 truncate opacity-0 group-hover:opacity-100 transition-opacity">
-                    {f.segment_labels.join(', ')}
-                  </div>
-                )}
               </div>
             ))}
           </div>
@@ -383,7 +378,7 @@ function VideoDetail({ uuid }: { uuid: string }) {
       {transcription && (
         <div>
           <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-            Transcription &mdash; Gemini
+            Transcription &mdash; Whisper
           </div>
           <div className="bg-muted/50 rounded-lg p-4 border max-h-48 overflow-y-auto">
             <FormattedText text={transcription} className="text-xs" />

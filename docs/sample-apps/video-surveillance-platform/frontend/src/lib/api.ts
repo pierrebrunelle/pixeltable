@@ -122,6 +122,19 @@ export async function searchByAudio(file: File, limit = 20): Promise<SearchRespo
   return res.json()
 }
 
+export async function getRelatedEvents(params: {
+  type: string
+  text?: string
+  video_url?: string
+  uuid?: string
+  limit?: number
+}): Promise<SearchResponse> {
+  return request<SearchResponse>(`${BASE}/search/related`, {
+    method: 'POST',
+    body: JSON.stringify(params),
+  })
+}
+
 // -- Dashboard -------------------------------------------------------------
 
 export async function getDashboardStats(): Promise<DashboardStats> {
