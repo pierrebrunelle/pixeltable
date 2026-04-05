@@ -10,6 +10,7 @@ from pixeltable.env import Env
 
 if TYPE_CHECKING:
     import fiftyone as fo  # type: ignore[import-untyped]
+    import pyarrow as pa
 
 
 def create_label_studio_project(
@@ -225,3 +226,82 @@ def export_images_as_fo_dataset(
     return fo.Dataset.from_importer(
         PxtImageDatasetImporter(tbl, images, image_format, classifications=classifications, detections=detections)
     )
+
+
+def send_to_rerun(
+    tbl: pxt.Table,
+    *,
+    columns: list[exprs.Expr] | None = None,
+    table_name: str | None = None,
+    viewer: Any = None,
+    addr: str | None = None,
+) -> 'pa.RecordBatch':
+    """
+    Send data from a Pixeltable table to a Rerun viewer as a table entry.
+
+    The data is converted to a PyArrow RecordBatch and sent via Rerun's experimental
+    ``send_table`` API. Scalar types (int, float, string, bool, date, timestamp) are
+    included directly; media types are represented as string descriptions; JSON values
+    are serialized as strings.
+
+    Three usage modes are supported:
+
+    - **Notebook viewer**: pass a ``rerun_notebook.Viewer`` instance as ``viewer``.
+    - **Remote viewer**: pass an address string (e.g. ``'rerun+http://0.0.0.0:9876/proxy'``)
+      as ``addr`` to connect to a running Rerun Viewer.
+    - **Dry run**: omit both ``viewer`` and ``addr`` to convert the data without sending it,
+      returning the RecordBatch for manual use.
+
+    __Requirements:__
+
+    - ``pip install "rerun-sdk[notebook]"``
+
+    Args:
+        tbl: The Pixeltable table to export.
+        columns: Optional list of column expressions to include. If ``None``, all columns
+            are selected.
+        table_name: Name for the table entry in the Rerun viewer. Defaults to the
+            Pixeltable table name.
+        viewer: A ``rerun_notebook.Viewer`` or ``rerun.experimental.ViewerClient``
+            instance. If provided, ``send_table`` is called on this object directly.
+        addr: Address of a running Rerun Viewer to connect to (e.g.
+            ``'rerun+http://0.0.0.0:9876/proxy'``). Ignored if ``viewer`` is provided.
+
+    Returns:
+        The PyArrow RecordBatch that was (or would be) sent to Rerun.
+
+    Examples:
+        Send all columns of a table to an inline notebook viewer:
+
+        >>> from rerun_notebook import Viewer
+        >>> viewer = Viewer(width=800, height=400)
+        >>> viewer.display()
+        >>> pxt.io.send_to_rerun(t, viewer=viewer)
+
+        Send selected columns to a remote Rerun Viewer:
+
+        >>> pxt.io.send_to_rerun(
+        ...     t,
+        ...     columns=[t.id, t.name, t.score],
+        ...     addr='rerun+http://0.0.0.0:9876/proxy',
+        ... )
+
+        Convert without sending (dry run):
+
+        >>> batch = pxt.io.send_to_rerun(t)
+    """
+    from pixeltable.io.rerun import send_record_batch, to_rerun_record_batch
+
+    record_batch, inferred_name = to_rerun_record_batch(tbl, columns)
+    name = table_name if table_name is not None else inferred_name
+
+    if viewer is not None:
+        send_record_batch(viewer, name, record_batch)
+    elif addr is not None:
+        Env.get().require_package('rerun')
+        from rerun.experimental import ViewerClient  # type: ignore[import-not-found]
+
+        client = ViewerClient(addr=addr)
+        send_record_batch(client, name, record_batch)
+
+    return record_batch

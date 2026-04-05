@@ -753,6 +753,7 @@ class Env:
         self.__register_package('pyarrow')
         self.__register_package('pydantic')
         self.__register_package('replicate')
+        self.__register_package('rerun', library_name='rerun-sdk')
         self.__register_package('reve')
         self.__register_package('runwayml')
         self.__register_package('scenedetect')

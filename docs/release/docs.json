@@ -78,7 +78,8 @@
                   "howto/providers/working-with-twelvelabs",
                   "howto/providers/working-with-voyageai",
                   "howto/using-label-studio-with-pixeltable",
-                  "howto/working-with-fiftyone"
+                  "howto/working-with-fiftyone",
+                  "howto/working-with-rerun"
                 ]
               },
               {
