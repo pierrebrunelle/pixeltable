@@ -146,29 +146,23 @@ export interface BrowseFrameItem {
   site_name: string | null
   camera_id: string | null
   asset_id: string | null
-  detected_labels: string[] | null
 }
 
-export interface DetectionResult {
-  type: 'detection' | 'segmentation'
-  model: string
-  image_width: number
-  image_height: number
-  count: number
-  annotated_image?: string
-  detections?: Array<{
-    label: string
-    score: number
-    box: { x1: number; y1: number; x2: number; y2: number }
-  }>
-  segments?: Array<{
+export interface BrowseDetectionItem {
+  uuid: string
+  segmentation_overlay: string
+  detected_labels: string[]
+  segments_info: Array<{
     id: number
-    label: string
+    label_id: number
+    label_text: string
     score: number
-    is_thing: boolean
-    box: { x1: number; y1: number; x2: number; y2: number }
-    pixel_count: number
+    was_fused: boolean
   }>
+  severity: string | null
+  site_name: string | null
+  camera_id: string | null
+  asset_id: string | null
 }
 
 export interface LabelCount {

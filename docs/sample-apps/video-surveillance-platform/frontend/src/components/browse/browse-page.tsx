@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import {
-  Frame, Film, Clapperboard, AudioLines, Loader2, Play, ScanEye, X, Zap,
+  Frame, Film, Clapperboard, AudioLines, Loader2, Play, ScanEye, X,
   ClipboardList, HardHat,
 } from 'lucide-react'
 import { cn, toDataUrl, formatDuration } from '@/lib/utils'
@@ -13,7 +13,7 @@ import type {
   BrowseSegmentItem,
   BrowseSceneItem,
   BrowseAudioItem,
-  DetectionResult,
+  BrowseDetectionItem,
 } from '@/types'
 
 const MEDIUM_TABS = [
@@ -57,7 +57,7 @@ export function BrowsePage() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 pb-6">
-        {tab === 'detections' && <FrameGridView showDetections />}
+        {tab === 'detections' && <DetectionsGrid />}
         {tab === 'frames' && <FrameGridView />}
         {tab === 'segments' && <SegmentsList />}
         {tab === 'scenes' && <ScenesList />}
@@ -68,23 +68,150 @@ export function BrowsePage() {
 }
 
 // ---------------------------------------------------------------------------
-// Shared frame grid used by both Detections and Frames tabs
+// Pre-computed DETR panoptic segmentation grid
 // ---------------------------------------------------------------------------
 
-function FrameGridView({ showDetections = false }: { showDetections?: boolean }) {
-  const [frames, setFrames] = useState<BrowseFrameItem[]>([])
+function DetectionsGrid() {
+  const [detections, setDetections] = useState<BrowseDetectionItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [selectedFrame, setSelectedFrame] = useState<BrowseFrameItem | null>(null)
-  const [selectedIdx, setSelectedIdx] = useState(0)
+  const [selected, setSelected] = useState<BrowseDetectionItem | null>(null)
 
   useEffect(() => {
     setIsLoading(true)
-    api
-      .browseFrames({ limit: showDetections ? 48 : 60 })
-      .then(setFrames)
+    api.browseDetections({ limit: 48 })
+      .then(setDetections)
       .catch(() => {})
       .finally(() => setIsLoading(false))
-  }, [showDetections])
+  }, [])
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12 text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin mr-2" />
+        Loading DETR panoptic segmentation results...
+      </div>
+    )
+  }
+
+  if (!detections.length) {
+    return (
+      <div className="text-center text-muted-foreground py-12 text-sm">
+        No detections yet. Upload videos &mdash; DETR panoptic segmentation runs automatically on every frame.
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        DETR Panoptic Segmentation &mdash; auto-computed on every video frame via Pixeltable
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+        {detections.map((d, i) => (
+          <button
+            key={i}
+            onClick={() => setSelected(d)}
+            className="relative group rounded-lg border overflow-hidden bg-card cursor-pointer text-left hover:ring-2 hover:ring-primary/50 transition-all"
+          >
+            <img
+              src={toDataUrl(d.segmentation_overlay)}
+              alt={`Detection ${i}`}
+              className="w-full aspect-video object-cover"
+            />
+            <div className="p-1.5 space-y-0.5">
+              <div className="flex items-center gap-1">
+                {d.severity && d.severity !== 'info' && <SeverityBadge severity={d.severity} />}
+                {d.site_name && <p className="text-[10px] text-muted-foreground truncate">{d.site_name}</p>}
+              </div>
+              {d.detected_labels.length > 0 && (
+                <div className="flex flex-wrap gap-0.5">
+                  {d.detected_labels.slice(0, 3).map((label, li) => (
+                    <span key={li} className="text-[9px] bg-primary/10 text-primary px-1 py-0.5 rounded">{label}</span>
+                  ))}
+                  {d.detected_labels.length > 3 && (
+                    <span className="text-[9px] text-muted-foreground">+{d.detected_labels.length - 3}</span>
+                  )}
+                </div>
+              )}
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {selected && <DetectionDetailPanel detection={selected} onClose={() => setSelected(null)} />}
+    </div>
+  )
+}
+
+function DetectionDetailPanel({ detection, onClose }: { detection: BrowseDetectionItem; onClose: () => void }) {
+  const thingSegments = detection.segments_info.filter(s => s.label_text)
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-card rounded-xl border shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-4 border-b">
+          <div className="flex items-center gap-2">
+            <ScanEye className="h-4 w-4 text-primary" />
+            <h3 className="text-sm font-semibold">DETR Panoptic Segmentation</h3>
+            {detection.severity && <SeverityBadge severity={detection.severity} />}
+          </div>
+          <button onClick={onClose} className="rounded-md p-1 hover:bg-muted transition-colors cursor-pointer">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          <img
+            src={toDataUrl(detection.segmentation_overlay)}
+            alt="Segmentation overlay"
+            className="w-full rounded-lg border"
+          />
+
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            {detection.site_name && <span>{detection.site_name}</span>}
+            {detection.camera_id && <Badge variant="default" className="text-[10px]">{detection.camera_id}</Badge>}
+            {detection.asset_id && <span className="font-mono text-[10px] bg-muted px-1.5 py-0.5 rounded">{detection.asset_id}</span>}
+          </div>
+
+          {thingSegments.length > 0 && (
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                Detected Objects ({thingSegments.length})
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {thingSegments.map((seg, i) => (
+                  <span key={i} className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full font-medium">
+                    {seg.label_text}
+                    <span className="text-primary/60 ml-1">{(seg.score * 100).toFixed(0)}%</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <p className="text-[10px] text-muted-foreground italic">
+            Computed automatically by Pixeltable &middot; facebook/detr-resnet-50-panoptic &middot; overlay_segmentation
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Frame grid (no on-demand detection — DETR is a computed column)
+// ---------------------------------------------------------------------------
+
+function FrameGridView() {
+  const [frames, setFrames] = useState<BrowseFrameItem[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [selectedFrame, setSelectedFrame] = useState<BrowseFrameItem | null>(null)
+
+  useEffect(() => {
+    setIsLoading(true)
+    api.browseFrames({ limit: 60 }).then(setFrames).catch(() => {}).finally(() => setIsLoading(false))
+  }, [])
 
   if (isLoading) {
     return (
@@ -105,81 +232,37 @@ function FrameGridView({ showDetections = false }: { showDetections?: boolean })
 
   return (
     <div className="space-y-4">
-      {showDetections && (
-        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          DETR Panoptic Segmentation &mdash; Click a frame to run on-demand detection
-        </div>
-      )}
-
       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
         {frames.map((f, i) => (
           <button
             key={i}
-            onClick={() => { setSelectedFrame(f); setSelectedIdx(i) }}
+            onClick={() => setSelectedFrame(f)}
             className="relative group rounded-lg border overflow-hidden bg-card cursor-pointer text-left hover:ring-2 hover:ring-primary/50 transition-all"
           >
             <img src={toDataUrl(f.frame)} alt={`Frame ${i}`} className="w-full aspect-video object-cover" />
-            {showDetections && (
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
-                <ScanEye className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-            )}
             <div className="p-1.5 space-y-0.5">
               <div className="flex items-center gap-1">
                 {f.severity && f.severity !== 'info' && <SeverityBadge severity={f.severity} />}
                 {f.site_name && <p className="text-[10px] text-muted-foreground truncate">{f.site_name}</p>}
               </div>
-              {showDetections && f.detected_labels && f.detected_labels.length > 0 && (
-                <div className="flex flex-wrap gap-0.5">
-                  {f.detected_labels.slice(0, 3).map((label, li) => (
-                    <span key={li} className="text-[9px] bg-primary/10 text-primary px-1 py-0.5 rounded">{label}</span>
-                  ))}
-                  {f.detected_labels.length > 3 && (
-                    <span className="text-[9px] text-muted-foreground">+{f.detected_labels.length - 3}</span>
-                  )}
-                </div>
-              )}
             </div>
           </button>
         ))}
       </div>
 
       {selectedFrame && (
-        <FrameDetailPanel frame={selectedFrame} frameIdx={selectedIdx} onClose={() => setSelectedFrame(null)} />
+        <FrameDetailPanel frame={selectedFrame} onClose={() => setSelectedFrame(null)} />
       )}
     </div>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Frame detail panel with on-demand DETR detection
+// Frame detail panel (Gemini analysis + PPE — no DETR buttons)
 // ---------------------------------------------------------------------------
 
-function FrameDetailPanel({
-  frame, frameIdx, onClose,
-}: {
-  frame: BrowseFrameItem
-  frameIdx: number
-  onClose: () => void
-}) {
-  const [detection, setDetection] = useState<DetectionResult | null>(null)
-  const [isDetecting, setIsDetecting] = useState(false)
-  const [detectError, setDetectError] = useState<string | null>(null)
+function FrameDetailPanel({ frame, onClose }: { frame: BrowseFrameItem; onClose: () => void }) {
   const [showWorkOrder, setShowWorkOrder] = useState(false)
-
-  const runDetection = useCallback(async (model: string) => {
-    setIsDetecting(true)
-    setDetectError(null)
-    try {
-      setDetection(await api.detectFrame({ uuid: frame.uuid, frame_idx: frameIdx, model, threshold: 0.5 }))
-    } catch (e) {
-      setDetectError(e instanceof Error ? e.message : 'Detection failed')
-    } finally {
-      setIsDetecting(false)
-    }
-  }, [frame.uuid, frameIdx])
-
-  const detectionItems = detection?.detections ?? detection?.segments ?? []
   const severityNorm = frame.severity
     ? frame.severity.toLowerCase().includes('critical') ? 'critical'
       : frame.severity.toLowerCase().includes('warning') ? 'warning' : 'info'
@@ -199,28 +282,14 @@ function FrameDetailPanel({
         </div>
 
         <div className="p-4 space-y-4">
-          {/* Image */}
-          <div className="relative">
-            <img
-              src={detection?.annotated_image ? `data:image/jpeg;base64,${detection.annotated_image}` : toDataUrl(frame.frame)}
-              alt={detection ? 'Annotated frame' : 'Frame detail'}
-              className="w-full rounded-lg border"
-            />
-            {detection && (
-              <button onClick={() => setDetection(null)} className="absolute top-2 right-2 text-xs bg-black/60 text-white rounded px-2 py-1 hover:bg-black/80 cursor-pointer">
-                Show original
-              </button>
-            )}
-          </div>
+          <img src={toDataUrl(frame.frame)} alt="Frame detail" className="w-full rounded-lg border" />
 
-          {/* Metadata */}
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             {frame.site_name && <span>{frame.site_name}</span>}
             {frame.camera_id && <Badge variant="default" className="text-[10px]">{frame.camera_id}</Badge>}
             {frame.asset_id && <span className="font-mono text-[10px] bg-muted px-1.5 py-0.5 rounded">{frame.asset_id}</span>}
           </div>
 
-          {/* PPE */}
           {frame.ppe_assessment && (
             <div>
               <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1">
@@ -232,46 +301,6 @@ function FrameDetailPanel({
             </div>
           )}
 
-          {/* DETR buttons */}
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">DETR Object Detection</div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => runDetection('detr-resnet-50-panoptic')} disabled={isDetecting}
-                className="flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 cursor-pointer">
-                {isDetecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
-                Panoptic Segmentation
-              </button>
-              <button onClick={() => runDetection('detr-resnet-50')} disabled={isDetecting}
-                className="flex items-center gap-1.5 rounded-md bg-muted text-foreground px-3 py-1.5 text-sm font-medium hover:bg-accent disabled:opacity-50 cursor-pointer">
-                {isDetecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ScanEye className="h-3.5 w-3.5" />}
-                Object Detection
-              </button>
-            </div>
-          </div>
-
-          {detectError && <p className="text-sm text-destructive">{detectError}</p>}
-
-          {/* Detection results */}
-          {detection && (
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                {detection.type === 'segmentation' ? 'Segmentation' : 'Detection'} Results ({detection.count} {detection.count === 1 ? 'object' : 'objects'})
-              </div>
-              {detectionItems.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {detectionItems.map((item, i) => (
-                    <span key={i} className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full font-medium">
-                      {item.label} <span className="text-primary/60 ml-1">{(item.score * 100).toFixed(0)}%</span>
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No objects detected above threshold.</p>
-              )}
-            </div>
-          )}
-
-          {/* Gemini description */}
           {frame.frame_description && (
             <div>
               <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">AI Condition Assessment</div>
@@ -281,7 +310,6 @@ function FrameDetailPanel({
             </div>
           )}
 
-          {/* Work Order */}
           <div className="pt-2 border-t">
             <button onClick={() => setShowWorkOrder(!showWorkOrder)}
               className="flex items-center gap-1.5 rounded-md bg-orange-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-orange-700 cursor-pointer">
@@ -304,7 +332,6 @@ function FrameDetailPanel({
                   <div><span className="font-medium text-muted-foreground">Site:</span> {frame.site_name ?? 'N/A'}</div>
                   <div><span className="font-medium text-muted-foreground">Camera:</span> {frame.camera_id ?? 'N/A'}</div>
                   <div><span className="font-medium text-muted-foreground">Asset ID:</span> {frame.asset_id ?? 'N/A'}</div>
-                  <div><span className="font-medium text-muted-foreground">Detected:</span> {frame.detected_labels?.join(', ') || 'None'}</div>
                 </div>
                 {frame.frame_description && (
                   <div className="text-xs">

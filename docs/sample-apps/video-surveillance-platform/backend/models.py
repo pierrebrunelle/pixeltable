@@ -153,7 +153,17 @@ class BrowseFrameItem(BaseModel):
     site_name: str | None = None
     camera_id: str | None = None
     asset_id: str | None = None
-    detected_labels: list[str] | None = None
+
+
+class BrowseDetectionItem(BaseModel):
+    uuid: str
+    segmentation_overlay: str
+    detected_labels: list[str] = []
+    segments_info: list[dict[str, Any]] = []
+    severity: str | None = None
+    site_name: str | None = None
+    camera_id: str | None = None
+    asset_id: str | None = None
 
 
 class BrowseSegmentItem(BaseModel):

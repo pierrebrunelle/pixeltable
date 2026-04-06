@@ -7,7 +7,7 @@ from fastapi import APIRouter
 import pixeltable as pxt
 
 import config
-from functions import gemini_text, is_alert, parse_severity
+from functions import gemini_text, parse_severity
 from models import ActivityItem, AlertItem, AlertsResponse, DashboardStats
 
 logger = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ def get_stats():
 
     try:
         frames = _table('video_frames')
-        frame_rows = list(frames.select(frames.severity, frames.detected_labels).collect())
+        frame_rows = list(frames.select(frames.severity, frames.detr_seg).collect())
         stats['total_frames'] = len(frame_rows)
 
         sev_counts: Counter[str] = Counter()
@@ -55,9 +55,11 @@ def get_stats():
         for r in frame_rows:
             sev = parse_severity(r.get('severity'))
             sev_counts[sev] += 1
-            labels = r.get('detected_labels')
-            if isinstance(labels, list):
-                label_counter.update(labels)
+            seg = r.get('detr_seg') or {}
+            for info in seg.get('segments_info', []):
+                label = info.get('label_text')
+                if label:
+                    label_counter[label] += 1
 
         stats['severity_counts'] = dict(sev_counts)
         stats['anomalies_detected'] = sev_counts['critical'] + sev_counts['warning']

@@ -25,7 +25,7 @@ SiteWatch shows there's another way. Pixeltable treats video, audio, images, and
 | Related events discovery | ✅ | ✅ `.similarity()` on any result |
 | Automated alert detection | ✅ Preset rules | ✅ Gemini severity classification |
 | Incident reports / work orders | ✅ | ✅ Generated from AI assessment + asset metadata |
-| Object detection & segmentation | ✅ | ✅ On-demand DETR panoptic |
+| Object detection & segmentation | ✅ | ✅ Auto DETR panoptic (computed column) |
 | PPE compliance monitoring | Limited | ✅ Per-frame Gemini assessment |
 | Audio transcription | Limited | ✅ Local Whisper |
 | Scene boundary detection | Varies | ✅ PySceneDetect |
@@ -124,7 +124,8 @@ Replaces five+ infrastructure services (object store, video pipeline, orchestrat
 │    │     ├── Gemini severity classification       │
 │    │     ├── Gemini PPE compliance check          │
 │    │     ├── Gemini multimodal image embeddings   │
-│    │     └── On-demand DETR panoptic segmentation │
+│    │     ├── DETR panoptic segmentation (auto)     │
+│    │     └── Segmentation overlay visualization    │
 │    ├── video_segments         (video_splitter)    │
 │    │     └── Gemini multimodal video embeddings   │
 │    ├── scene_cuts             (scene_detect)      │
@@ -142,7 +143,7 @@ Replaces five+ infrastructure services (object store, video pipeline, orchestrat
 | Video Analysis | Gemini 2.5 Flash | Whole-video assessment, frame condition reports, severity, PPE |
 | Audio Transcription | OpenAI Whisper (local) | Speech-to-text on extracted audio chunks |
 | Multimodal Embeddings | Gemini Embedding 2 | Text, image, audio, video in one shared semantic space |
-| Object Segmentation | DETR ResNet-50 Panoptic | On-demand pixel-level segmentation with annotated overlays |
+| Object Segmentation | DETR ResNet-50 Panoptic | Auto per-frame panoptic segmentation + overlay (computed column) |
 | Scene Detection | PySceneDetect | Content-based scene boundary detection |
 
 ## Quick Start
@@ -187,14 +188,14 @@ Available at [http://localhost:8000](http://localhost:8000).
 │   ├── main.py               # FastAPI app
 │   ├── config.py             # Configuration and Gemini prompts
 │   ├── models.py             # Pydantic response models
-│   ├── functions.py          # Shared helpers and custom UDFs
-│   ├── setup_pixeltable.py   # Schema definition (~190 lines)
+│   ├── functions.py          # Shared helpers (severity parsing, text extraction)
+│   ├── setup_pixeltable.py   # Schema definition (Pixeltable primitives only)
 │   ├── seed_data.py          # Download & upload 12 sample videos
 │   ├── pyproject.toml
 │   └── routers/
 │       ├── videos.py         # Upload, list, delete, frames, scenes
 │       ├── search.py         # Cross-modal search + related events
-│       ├── browse.py         # Multi-medium browsing + on-demand DETR
+│       ├── browse.py         # Multi-medium browsing + pre-computed detections
 │       └── dashboard.py      # ROI metrics, alerts, activity
 ├── frontend/
 │   ├── src/

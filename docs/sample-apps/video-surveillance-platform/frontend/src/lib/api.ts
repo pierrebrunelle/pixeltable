@@ -12,7 +12,7 @@ import type {
   BrowseSegmentItem,
   BrowseSceneItem,
   BrowseAudioItem,
-  DetectionResult,
+  BrowseDetectionItem,
 } from '@/types'
 
 const BASE = '/api'
@@ -160,22 +160,24 @@ export async function getDashboardActivity(limit = 20): Promise<ActivityItem[]> 
 
 // -- Browse ----------------------------------------------------------------
 
-export async function detectFrame(params: {
-  uuid: string
-  frame_idx: number
-  model?: string
-  threshold?: number
-}): Promise<DetectionResult> {
-  return request<DetectionResult>(`${BASE}/browse/detect`, {
-    method: 'POST',
-    body: JSON.stringify(params),
-  })
+export async function browseDetections(params?: {
+  site_name?: string
+  label?: string
+  limit?: number
+  offset?: number
+}): Promise<BrowseDetectionItem[]> {
+  const searchParams = new URLSearchParams()
+  if (params?.site_name) searchParams.set('site_name', params.site_name)
+  if (params?.label) searchParams.set('label', params.label)
+  if (params?.limit) searchParams.set('limit', String(params.limit))
+  if (params?.offset) searchParams.set('offset', String(params.offset))
+  const qs = searchParams.toString()
+  return request<BrowseDetectionItem[]>(`${BASE}/browse/detections${qs ? `?${qs}` : ''}`)
 }
 
 export async function browseFrames(params?: {
   site_name?: string
   severity?: string
-  label?: string
   alerts_only?: boolean
   limit?: number
   offset?: number
@@ -183,7 +185,6 @@ export async function browseFrames(params?: {
   const searchParams = new URLSearchParams()
   if (params?.site_name) searchParams.set('site_name', params.site_name)
   if (params?.severity) searchParams.set('severity', params.severity)
-  if (params?.label) searchParams.set('label', params.label)
   if (params?.alerts_only) searchParams.set('alerts_only', 'true')
   if (params?.limit) searchParams.set('limit', String(params.limit))
   if (params?.offset) searchParams.set('offset', String(params.offset))

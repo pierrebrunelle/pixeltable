@@ -1,19 +1,16 @@
-"""Multi-medium browse endpoints: paginated access to frames, segments, scenes, audio, and on-demand detection."""
+"""Multi-medium browse endpoints: paginated access to frames, segments, detections, scenes, and audio."""
 import itertools
 import logging
 import os
 from pathlib import Path
-from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
 import pixeltable as pxt
 
 import config
-from detection import MODELS as DETECTION_MODELS, run_detection
 from functions import gemini_text, parse_severity
-from models import BrowseAudioItem, BrowseFrameItem, BrowseSegmentItem
+from models import BrowseAudioItem, BrowseDetectionItem, BrowseFrameItem, BrowseSegmentItem
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix='/api/browse', tags=['browse'])
@@ -32,41 +29,58 @@ def _interleave_by_video(rows: list[dict]) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# On-demand DETR detection
+# Pre-computed DETR detections (from video_frames computed columns)
 # ---------------------------------------------------------------------------
 
-class DetectRequest(BaseModel):
-    uuid: str
-    frame_idx: int
-    model: str = 'detr-resnet-50-panoptic'
-    threshold: float = 0.5
-
-
-@router.post('/detect')
-def detect_objects(body: DetectRequest):
-    """Run on-demand object detection / panoptic segmentation on a single video frame."""
-    if body.model not in DETECTION_MODELS:
-        raise HTTPException(status_code=400, detail=f'Unknown model: {body.model}')
-
-    frames = _table('video_frames')
-    uuid_val = UUID(body.uuid)
-    rows = list(
-        frames.where((frames.uuid == uuid_val) & (frames.pos == body.frame_idx))
-        .select(frame=frames.frame)
-        .limit(1)
-        .collect()
-    )
-    if not rows:
+@router.get('/detections', response_model=list[BrowseDetectionItem])
+def browse_detections(
+    site_name: str | None = None,
+    label: str | None = None,
+    limit: int = 48,
+    offset: int = 0,
+):
+    """Browse pre-computed DETR panoptic segmentation results from video frames."""
+    try:
+        frames = _table('video_frames')
+        base = frames.where(frames.site_name == site_name) if site_name else frames
         rows = list(
-            frames.where(frames.uuid == uuid_val)
-            .select(frame=frames.frame)
-            .limit(1)
-            .collect()
+            base.select(
+                uuid=frames.uuid,
+                segmentation_overlay_b64=frames.segmentation_overlay_b64,
+                detr_seg=frames.detr_seg,
+                severity=frames.severity,
+                site_name=frames.site_name,
+                camera_id=frames.camera_id,
+                asset_id=frames.asset_id,
+            ).collect()
         )
-    if not rows:
-        raise HTTPException(status_code=404, detail='Frame not found')
+        interleaved = _interleave_by_video(rows)
 
-    return run_detection(rows[0]['frame'], body.model, body.threshold, uuid_val, body.frame_idx)
+        items: list[dict] = []
+        for r in interleaved[offset:]:
+            seg = r.get('detr_seg') or {}
+            segments_info = seg.get('segments_info', [])
+            labels = sorted({s['label_text'] for s in segments_info if s.get('label_text')})
+
+            if label and label not in labels:
+                continue
+
+            items.append({
+                'uuid': str(r.get('uuid', '')),
+                'segmentation_overlay': r.get('segmentation_overlay_b64', ''),
+                'detected_labels': labels,
+                'segments_info': segments_info,
+                'severity': parse_severity(r.get('severity')),
+                'site_name': r.get('site_name'),
+                'camera_id': r.get('camera_id'),
+                'asset_id': r.get('asset_id'),
+            })
+            if len(items) >= limit:
+                break
+        return items
+    except Exception as e:
+        logger.warning(f'Browse detections failed: {e}')
+        return []
 
 
 # ---------------------------------------------------------------------------
@@ -77,7 +91,6 @@ def detect_objects(body: DetectRequest):
 def browse_frames(
     site_name: str | None = None,
     severity: str | None = None,
-    label: str | None = None,
     alerts_only: bool = False,
     limit: int = 48,
     offset: int = 0,
@@ -92,15 +105,13 @@ def browse_frames(
                 frame_description=frames.frame_description,
                 severity=frames.severity, ppe_assessment=frames.ppe_assessment,
                 site_name=frames.site_name, camera_id=frames.camera_id,
-                asset_id=frames.asset_id, detected_labels=frames.detected_labels,
+                asset_id=frames.asset_id,
             ).collect()
         )
         interleaved = _interleave_by_video(rows)
 
         items: list[dict] = []
         for r in interleaved[offset:]:
-            if label and label not in (r.get('detected_labels') or []):
-                continue
             sev = parse_severity(r.get('severity'))
             if alerts_only and sev == 'info':
                 continue
@@ -113,7 +124,6 @@ def browse_frames(
                 'site_name': r.get('site_name'),
                 'camera_id': r.get('camera_id'),
                 'asset_id': r.get('asset_id'),
-                'detected_labels': r.get('detected_labels'),
             })
             if len(items) >= limit:
                 break

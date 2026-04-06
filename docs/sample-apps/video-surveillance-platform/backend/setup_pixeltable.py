@@ -5,13 +5,17 @@ Run once to initialize the database schema:
 
 WARNING: This drops and recreates the namespace on every run.
 """
+import numpy as np
+
 import config
 import pixeltable as pxt
 
 from pixeltable.functions import image as pxt_image
 from pixeltable.functions.audio import audio_splitter
 from pixeltable.functions.gemini import generate_content, embed_content
+from pixeltable.functions.huggingface import detr_for_segmentation
 from pixeltable.functions.string import string_splitter
+from pixeltable.functions.vision import overlay_segmentation
 from pixeltable.functions.whisper import transcribe as whisper_transcribe
 from pixeltable.functions.uuid import uuid7
 from pixeltable.functions.video import (
@@ -106,7 +110,32 @@ video_frames.add_computed_column(
     if_exists='ignore',
 )
 
-video_frames.add_column(detected_labels=pxt.Json, if_exists='ignore')
+# DETR panoptic segmentation — automatic on every frame
+video_frames.add_computed_column(
+    detr_seg=detr_for_segmentation(
+        video_frames.frame,
+        model_id=config.DETR_MODEL,
+        threshold=0.5,
+    ),
+    if_exists='ignore',
+)
+
+# Segmentation overlay visualization (b64 thumbnail for API display)
+video_frames.add_computed_column(
+    segmentation_overlay_b64=pxt_image.b64_encode(
+        pxt_image.thumbnail(
+            overlay_segmentation(
+                video_frames.frame,
+                video_frames.detr_seg.segmentation.astype(pxt.Array[(None, None), np.int32]),
+                alpha=0.5,
+                draw_contours=True,
+                contour_thickness=2,
+            ),
+            size=(480, 480),
+        )
+    ),
+    if_exists='ignore',
+)
 
 gemini_embed = embed_content.using(model=config.GEMINI_EMBEDDING_MODEL)
 
@@ -116,7 +145,7 @@ video_frames.add_embedding_index(
     if_exists='ignore',
 )
 
-print('  Frames: view + description + severity + PPE assessment + multimodal embedding + DETR (on-demand)')
+print('  Frames: view + Gemini description/severity/PPE + DETR panoptic + overlay + embedding')
 
 # -- 3. Video segments view (for multimodal video search) -------------------
 

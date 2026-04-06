@@ -143,10 +143,10 @@ export function DashboardPage() {
           ) : (
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground">
-                Run DETR detection on frames in Browse &rarr; Detections to populate.
+                Upload videos &mdash; DETR panoptic segmentation runs automatically on every frame.
               </p>
               <p className="text-[10px] text-muted-foreground">
-                facebook/detr-resnet-50-panoptic
+                pixeltable.functions.huggingface.detr_for_segmentation
               </p>
             </div>
           )}

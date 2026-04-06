@@ -1,4 +1,4 @@
-"""Shared helpers and custom UDFs for the SiteWatch surveillance platform."""
+"""Shared helpers for the SiteWatch surveillance platform."""
 from typing import Any
 
 
