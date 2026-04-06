@@ -156,16 +156,20 @@ cp .env.example .env       # add your GEMINI_API_KEY
 # Backend
 cd backend
 uv sync
-uv run python setup_pixeltable.py
-uv run python main.py      # terminal 1
+uv run python setup_pixeltable.py   # create Pixeltable schema
+uv run python main.py               # start server (terminal 1)
 
-# Frontend
+# Load sample data (12 utility/energy videos from Pexels, CC0 licensed)
+pip install yt-dlp                   # one-time install
+uv run python seed_data.py           # downloads + uploads + triggers AI pipeline
+
+# Frontend (optional — backend also serves the built frontend)
 cd ../frontend
 npm install
-npm run dev                 # terminal 2
+npm run dev                          # terminal 2
 ```
 
-Open [http://localhost:5173](http://localhost:5173).
+Open [http://localhost:5173](http://localhost:5173) (dev) or [http://localhost:8000](http://localhost:8000) (production build).
 
 ## Docker
 
@@ -185,6 +189,7 @@ Available at [http://localhost:8000](http://localhost:8000).
 │   ├── models.py             # Pydantic response models
 │   ├── functions.py          # Shared helpers and custom UDFs
 │   ├── setup_pixeltable.py   # Schema definition (~190 lines)
+│   ├── seed_data.py          # Download & upload 12 sample videos
 │   ├── pyproject.toml
 │   └── routers/
 │       ├── videos.py         # Upload, list, delete, frames, scenes
