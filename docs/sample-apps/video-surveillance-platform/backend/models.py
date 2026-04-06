@@ -44,8 +44,6 @@ class DeleteResponse(BaseModel):
 
 class FrameItem(BaseModel):
     frame: str
-    frame_description: str | None = None
-    severity: str | None = None
 
 
 class FramesResponse(BaseModel):
@@ -147,9 +145,6 @@ class AlertsResponse(BaseModel):
 class BrowseFrameItem(BaseModel):
     uuid: str
     frame: str
-    frame_description: str | None = None
-    severity: str | None = None
-    ppe_assessment: str | None = None
     site_name: str | None = None
     camera_id: str | None = None
     asset_id: str | None = None
@@ -160,7 +155,6 @@ class BrowseDetectionItem(BaseModel):
     segmentation_overlay: str
     detected_labels: list[str] = []
     segments_info: list[dict[str, Any]] = []
-    severity: str | None = None
     site_name: str | None = None
     camera_id: str | None = None
     asset_id: str | None = None
@@ -171,8 +165,16 @@ class BrowseSegmentItem(BaseModel):
     segment_start: float
     segment_end: float
     video_url: str | None = None
+    description: str | None = None
+    severity: str | None = None
+    severity_reason: str | None = None
+    ppe_status: str | None = None
+    ppe_details: str | None = None
+    equipment: list[str] = []
+    hazards: list[str] = []
     site_name: str | None = None
     camera_id: str | None = None
+    asset_id: str | None = None
 
 
 class BrowseAudioItem(BaseModel):

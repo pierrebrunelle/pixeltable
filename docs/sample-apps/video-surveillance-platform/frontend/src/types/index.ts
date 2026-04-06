@@ -37,8 +37,6 @@ export interface VideoDetail {
 
 export interface FrameItem {
   frame: string
-  frame_description: string | null
-  severity: string | null
 }
 
 export interface FramesResponse {
@@ -127,6 +125,8 @@ export interface AlertItem {
   frame_description: string | null
   site_name: string | null
   camera_id: string | null
+  video_url: string | null
+  severity_reason: string | null
   timestamp: string | null
 }
 
@@ -140,9 +140,6 @@ export interface AlertsResponse {
 export interface BrowseFrameItem {
   uuid: string
   frame: string
-  frame_description: string | null
-  severity: string | null
-  ppe_assessment: string | null
   site_name: string | null
   camera_id: string | null
   asset_id: string | null
@@ -159,7 +156,6 @@ export interface BrowseDetectionItem {
     score: number
     was_fused: boolean
   }>
-  severity: string | null
   site_name: string | null
   camera_id: string | null
   asset_id: string | null
@@ -175,8 +171,16 @@ export interface BrowseSegmentItem {
   segment_start: number
   segment_end: number
   video_url: string | null
+  description: string | null
+  severity: string | null
+  severity_reason: string | null
+  ppe_status: string | null
+  ppe_details: string | null
+  equipment: string[]
+  hazards: string[]
   site_name: string | null
   camera_id: string | null
+  asset_id: string | null
 }
 
 export interface BrowseSceneItem {

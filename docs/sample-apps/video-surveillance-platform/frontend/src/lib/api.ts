@@ -177,15 +177,11 @@ export async function browseDetections(params?: {
 
 export async function browseFrames(params?: {
   site_name?: string
-  severity?: string
-  alerts_only?: boolean
   limit?: number
   offset?: number
 }): Promise<BrowseFrameItem[]> {
   const searchParams = new URLSearchParams()
   if (params?.site_name) searchParams.set('site_name', params.site_name)
-  if (params?.severity) searchParams.set('severity', params.severity)
-  if (params?.alerts_only) searchParams.set('alerts_only', 'true')
   if (params?.limit) searchParams.set('limit', String(params.limit))
   if (params?.offset) searchParams.set('offset', String(params.offset))
   const qs = searchParams.toString()
@@ -194,11 +190,15 @@ export async function browseFrames(params?: {
 
 export async function browseSegments(params?: {
   site_name?: string
+  severity?: string
+  alerts_only?: boolean
   limit?: number
   offset?: number
 }): Promise<BrowseSegmentItem[]> {
   const searchParams = new URLSearchParams()
   if (params?.site_name) searchParams.set('site_name', params.site_name)
+  if (params?.severity) searchParams.set('severity', params.severity)
+  if (params?.alerts_only) searchParams.set('alerts_only', 'true')
   if (params?.limit) searchParams.set('limit', String(params.limit))
   if (params?.offset) searchParams.set('offset', String(params.offset))
   const qs = searchParams.toString()

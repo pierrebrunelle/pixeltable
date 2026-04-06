@@ -21,7 +21,6 @@ from pydantic import BaseModel
 import pixeltable as pxt
 
 import config
-from functions import gemini_text, parse_severity
 from models import SearchResponse
 
 logger = logging.getLogger(__name__)
@@ -128,8 +127,6 @@ def _search_frames(*, limit: int, threshold: float, **sim_kwargs: str) -> list[d
                 uuid=frames.uuid,
                 sim=sim,
                 thumbnail=frames.frame_thumbnail,
-                description=frames.frame_description,
-                severity=frames.severity,
                 source=frames.video,
                 site_name=frames.site_name,
                 camera_id=frames.camera_id,
@@ -138,17 +135,13 @@ def _search_frames(*, limit: int, threshold: float, **sim_kwargs: str) -> list[d
             .collect()
         )
         for r in rows:
-            desc_text = gemini_text(r.get('description')) or None
-            sev = parse_severity(r.get('severity'))
             results.append({
                 'type': 'frame',
                 'uuid': str(r.get('uuid', '')),
                 'similarity': round(r.get('sim', 0), 3),
                 'thumbnail': r.get('thumbnail'),
-                'text': desc_text,
                 'metadata': {
                     'source': os.path.basename(str(r.get('source', ''))),
-                    'severity': sev,
                     'site_name': r.get('site_name'),
                     'camera_id': r.get('camera_id'),
                 },

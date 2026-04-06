@@ -7,7 +7,7 @@ from fastapi import APIRouter
 import pixeltable as pxt
 
 import config
-from functions import gemini_text, parse_severity
+from functions import gemini_text, parse_segment_analysis, severity_from_analysis
 from models import ActivityItem, AlertItem, AlertsResponse, DashboardStats
 
 logger = logging.getLogger(__name__)
@@ -46,33 +46,43 @@ def get_stats():
         logger.warning(f'Could not count videos: {e}')
 
     try:
-        frames = _table('video_frames')
-        frame_rows = list(frames.select(frames.severity, frames.detr_seg).collect())
-        stats['total_frames'] = len(frame_rows)
+        stats['total_frames'] = _table('video_frames').count()
+    except Exception as e:
+        logger.warning(f'Could not count frames: {e}')
+
+    # Severity + labels from video_segments (Gemini analysis) + DETR
+    try:
+        segs = _table('video_segments')
+        seg_rows = list(segs.select(segs.segment_analysis).collect())
+        stats['total_segments'] = len(seg_rows)
 
         sev_counts: Counter[str] = Counter()
-        label_counter: Counter[str] = Counter()
-        for r in frame_rows:
-            sev = parse_severity(r.get('severity'))
+        for r in seg_rows:
+            analysis = parse_segment_analysis(r.get('segment_analysis'))
+            sev = severity_from_analysis(analysis)
             sev_counts[sev] += 1
-            seg = r.get('detr_seg') or {}
-            for info in seg.get('segments_info', []):
-                label = info.get('label_text')
-                if label:
-                    label_counter[label] += 1
 
         stats['severity_counts'] = dict(sev_counts)
         stats['anomalies_detected'] = sev_counts['critical'] + sev_counts['warning']
         stats['critical_alerts'] = sev_counts['critical']
         stats['total_alerts'] = sev_counts['critical']
-        stats['top_labels'] = [{'label': lbl, 'count': cnt} for lbl, cnt in label_counter.most_common(10)]
-    except Exception as e:
-        logger.warning(f'Could not count frames: {e}')
-
-    try:
-        stats['total_segments'] = _table('video_segments').count()
     except Exception as e:
         logger.warning(f'Could not count segments: {e}')
+
+    # Top DETR labels from video_frames
+    try:
+        frames = _table('video_frames')
+        frame_rows = list(frames.select(frames.detr_seg).collect())
+        label_counter: Counter[str] = Counter()
+        for r in frame_rows:
+            seg = r.get('detr_seg') or {}
+            for info in seg.get('segments_info', []):
+                label = info.get('label_text')
+                if label:
+                    label_counter[label] += 1
+        stats['top_labels'] = [{'label': lbl, 'count': cnt} for lbl, cnt in label_counter.most_common(10)]
+    except Exception as e:
+        logger.warning(f'Could not count labels: {e}')
 
     try:
         stats['total_audio_chunks'] = _table('audio_chunks').count()
@@ -92,34 +102,39 @@ def get_stats():
 
 @router.get('/alerts', response_model=AlertsResponse)
 def get_alerts(site_name: str | None = None, limit: int = 50):
-    """Frames classified as CRITICAL or WARNING by Gemini severity."""
+    """Segments classified as CRITICAL or WARNING by Gemini analysis."""
     try:
-        frames = _table('video_frames')
-        base = frames.where(frames.site_name == site_name) if site_name else frames
+        segs = _table('video_segments')
+        base = segs.where(segs.site_name == site_name) if site_name else segs
         rows = list(
             base.select(
-                uuid=frames.uuid, frame=frames.frame_thumbnail,
-                frame_description=frames.frame_description,
-                severity=frames.severity,
-                site_name=frames.site_name, camera_id=frames.camera_id,
-            )
-            .limit(limit * 3)
-            .collect()
+                uuid=segs.uuid,
+                segment_analysis=segs.segment_analysis,
+                segment_start=segs.segment_start,
+                segment_end=segs.segment_end,
+                video_segment=segs.video_segment,
+                site_name=segs.site_name,
+                camera_id=segs.camera_id,
+            ).collect()
         )
 
         items: list[dict] = []
         for r in rows:
-            sev = parse_severity(r.get('severity'))
+            analysis = parse_segment_analysis(r.get('segment_analysis'))
+            sev = severity_from_analysis(analysis)
             if sev == 'info':
                 continue
+            video_path = str(r.get('video_segment', ''))
             items.append({
                 'uuid': str(r.get('uuid', '')),
-                'frame': r.get('frame', ''),
-                'segment_labels': [],
+                'frame': '',
+                'segment_labels': analysis.get('equipment', []),
                 'severity': sev,
-                'frame_description': gemini_text(r.get('frame_description')),
+                'frame_description': analysis.get('description', ''),
                 'site_name': r.get('site_name'),
                 'camera_id': r.get('camera_id'),
+                'video_url': f'/api/browse/media?path={video_path}' if video_path else None,
+                'severity_reason': analysis.get('severity_reason', ''),
             })
             if len(items) >= limit:
                 break
@@ -164,8 +179,8 @@ def get_activity(limit: int = 20):
         if total_frames > 0:
             items.append({
                 'type': 'analysis',
-                'label': f'{total_frames} frames analyzed',
-                'detail': 'Gemini condition assessment per frame',
+                'label': f'{total_frames} frames with DETR segmentation',
+                'detail': 'Auto panoptic segmentation + overlay',
             })
     except Exception as e:
         logger.warning(f'Could not fetch frame activity: {e}')
@@ -175,8 +190,8 @@ def get_activity(limit: int = 20):
         if seg_count > 0:
             items.append({
                 'type': 'segments',
-                'label': f'{seg_count} video segments indexed',
-                'detail': 'Gemini multimodal embeddings',
+                'label': f'{seg_count} segments analyzed by Gemini',
+                'detail': 'Description + severity + PPE in one JSON call per segment',
             })
     except Exception as e:
         logger.warning(f'Could not fetch segment activity: {e}')

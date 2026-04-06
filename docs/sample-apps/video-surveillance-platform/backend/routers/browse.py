@@ -1,4 +1,4 @@
-"""Multi-medium browse endpoints: paginated access to frames, segments, detections, scenes, and audio."""
+"""Multi-medium browse endpoints: frames (DETR), segments (Gemini AI), scenes, and audio."""
 import itertools
 import logging
 import os
@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 import pixeltable as pxt
 
 import config
-from functions import gemini_text, parse_severity
+from functions import gemini_text, parse_segment_analysis, severity_from_analysis
 from models import BrowseAudioItem, BrowseDetectionItem, BrowseFrameItem, BrowseSegmentItem
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ def _interleave_by_video(rows: list[dict]) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# Pre-computed DETR detections (from video_frames computed columns)
+# DETR detections (pre-computed on video_frames)
 # ---------------------------------------------------------------------------
 
 @router.get('/detections', response_model=list[BrowseDetectionItem])
@@ -48,7 +48,6 @@ def browse_detections(
                 uuid=frames.uuid,
                 segmentation_overlay_b64=frames.segmentation_overlay_b64,
                 detr_seg=frames.detr_seg,
-                severity=frames.severity,
                 site_name=frames.site_name,
                 camera_id=frames.camera_id,
                 asset_id=frames.asset_id,
@@ -70,7 +69,6 @@ def browse_detections(
                 'segmentation_overlay': r.get('segmentation_overlay_b64', ''),
                 'detected_labels': labels,
                 'segments_info': segments_info,
-                'severity': parse_severity(r.get('severity')),
                 'site_name': r.get('site_name'),
                 'camera_id': r.get('camera_id'),
                 'asset_id': r.get('asset_id'),
@@ -84,43 +82,32 @@ def browse_detections(
 
 
 # ---------------------------------------------------------------------------
-# Frame / segment / scene / audio browsing
+# Frames (thumbnails only — AI analysis is on segments)
 # ---------------------------------------------------------------------------
 
 @router.get('/frames', response_model=list[BrowseFrameItem])
 def browse_frames(
     site_name: str | None = None,
-    severity: str | None = None,
-    alerts_only: bool = False,
-    limit: int = 48,
+    limit: int = 60,
     offset: int = 0,
 ):
-    """Paginated frame browser with filters."""
+    """Paginated frame thumbnail browser."""
     try:
         frames = _table('video_frames')
         base = frames.where(frames.site_name == site_name) if site_name else frames
         rows = list(
             base.select(
                 uuid=frames.uuid, frame=frames.frame_thumbnail,
-                frame_description=frames.frame_description,
-                severity=frames.severity, ppe_assessment=frames.ppe_assessment,
                 site_name=frames.site_name, camera_id=frames.camera_id,
                 asset_id=frames.asset_id,
             ).collect()
         )
         interleaved = _interleave_by_video(rows)
-
         items: list[dict] = []
         for r in interleaved[offset:]:
-            sev = parse_severity(r.get('severity'))
-            if alerts_only and sev == 'info':
-                continue
             items.append({
                 'uuid': str(r.get('uuid', '')),
                 'frame': r.get('frame', ''),
-                'frame_description': gemini_text(r.get('frame_description')),
-                'severity': sev,
-                'ppe_assessment': gemini_text(r.get('ppe_assessment')),
                 'site_name': r.get('site_name'),
                 'camera_id': r.get('camera_id'),
                 'asset_id': r.get('asset_id'),
@@ -133,9 +120,19 @@ def browse_frames(
         return []
 
 
+# ---------------------------------------------------------------------------
+# Segments (Gemini AI analysis — description, severity, PPE)
+# ---------------------------------------------------------------------------
+
 @router.get('/segments', response_model=list[BrowseSegmentItem])
-def browse_segments(site_name: str | None = None, limit: int = 48, offset: int = 0):
-    """Paginated video segment browser."""
+def browse_segments(
+    site_name: str | None = None,
+    severity: str | None = None,
+    alerts_only: bool = False,
+    limit: int = 48,
+    offset: int = 0,
+):
+    """Paginated video segment browser with Gemini AI analysis."""
     try:
         segs = _table('video_segments')
         base = segs.where(segs.site_name == site_name) if site_name else segs
@@ -143,20 +140,36 @@ def browse_segments(site_name: str | None = None, limit: int = 48, offset: int =
             base.select(
                 uuid=segs.uuid, segment_start=segs.segment_start,
                 segment_end=segs.segment_end, video_segment=segs.video_segment,
+                segment_analysis=segs.segment_analysis,
                 site_name=segs.site_name, camera_id=segs.camera_id,
+                asset_id=segs.asset_id,
             ).collect()
         )
         interleaved = _interleave_by_video(rows)
         items: list[dict] = []
         for r in interleaved[offset:]:
+            analysis = parse_segment_analysis(r.get('segment_analysis'))
+            sev = severity_from_analysis(analysis)
+            if alerts_only and sev == 'info':
+                continue
+            if severity and sev != severity:
+                continue
             video_path = str(r.get('video_segment', ''))
             items.append({
                 'uuid': str(r.get('uuid', '')),
                 'segment_start': r.get('segment_start', 0),
                 'segment_end': r.get('segment_end', 0),
                 'video_url': f'/api/browse/media?path={video_path}' if video_path else None,
+                'description': analysis.get('description', ''),
+                'severity': sev,
+                'severity_reason': analysis.get('severity_reason', ''),
+                'ppe_status': analysis.get('ppe_status', 'N_A'),
+                'ppe_details': analysis.get('ppe_details', ''),
+                'equipment': analysis.get('equipment', []),
+                'hazards': analysis.get('hazards', []),
                 'site_name': r.get('site_name'),
                 'camera_id': r.get('camera_id'),
+                'asset_id': r.get('asset_id'),
             })
             if len(items) >= limit:
                 break

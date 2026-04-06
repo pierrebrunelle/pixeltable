@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SiteWatch Data Flow Architecture</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0e17;
+  --surface: #111827;
+  --surface-2: #1a2234;
+  --border: #1e293b;
+  --border-accent: #334155;
+  --text: #e2e8f0;
+  --text-dim: #64748b;
+  --text-muted: #475569;
+  --accent-blue: #3b82f6;
+  --accent-cyan: #06b6d4;
+  --accent-emerald: #10b981;
+  --accent-amber: #f59e0b;
+  --accent-red: #ef4444;
+  --accent-purple: #8b5cf6;
+  --accent-pink: #ec4899;
+  --accent-orange: #f97316;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px 24px 60px;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 48px;
+}
+
+.header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 8px;
+}
+
+.header p {
+  color: var(--text-dim);
+  font-size: 14px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.stats-bar {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.stat { text-align: center; }
+
+.stat-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--accent-cyan);
+}
+
+.stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.flow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.connector {
+  display: flex;
+  justify-content: center;
+  height: 32px;
+  position: relative;
+}
+
+.connector::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background: var(--border-accent);
+}
+
+.connector .arrow-head {
+  position: absolute;
+  bottom: 0;
+  width: 0; height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 7px solid var(--border-accent);
+}
+
+.section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color 0.3s;
+}
+
+.section:hover { border-color: var(--border-accent); }
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+}
+
+.section-header:hover { background: var(--surface-2); }
+
+.section-icon {
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  flex-shrink: 0;
+}
+
+.section-title { font-size: 14px; font-weight: 600; }
+
+.section-subtitle {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.section-badge {
+  margin-left: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.section-body { padding: 16px 18px; display: none; }
+.section.open .section-body { display: block; }
+.section.open .toggle-icon { transform: rotate(90deg); }
+
+.toggle-icon {
+  color: var(--text-muted);
+  font-size: 12px;
+  transition: transform 0.2s;
+  margin-left: 8px;
+}
+
+.branches {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+.columns { display: flex; flex-direction: column; gap: 8px; }
+
+.col-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.col-icon {
+  flex-shrink: 0;
+  width: 26px; height: 26px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+}
+
+.col-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.col-desc { font-size: 11px; color: var(--text-dim); line-height: 1.4; }
+
+.col-provider {
+  font-size: 9px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+
+.bg-blue { background: rgba(59, 130, 246, 0.15); color: var(--accent-blue); }
+.bg-cyan { background: rgba(6, 182, 212, 0.15); color: var(--accent-cyan); }
+.bg-emerald { background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); }
+.bg-amber { background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); }
+.bg-red { background: rgba(239, 68, 68, 0.15); color: var(--accent-red); }
+.bg-purple { background: rgba(139, 92, 246, 0.15); color: var(--accent-purple); }
+.bg-pink { background: rgba(236, 72, 153, 0.15); color: var(--accent-pink); }
+.bg-orange { background: rgba(249, 115, 22, 0.15); color: var(--accent-orange); }
+
+.badge-blue { background: rgba(59, 130, 246, 0.15); color: var(--accent-blue); }
+.badge-cyan { background: rgba(6, 182, 212, 0.15); color: var(--accent-cyan); }
+.badge-emerald { background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); }
+.badge-amber { background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); }
+.badge-purple { background: rgba(139, 92, 246, 0.15); color: var(--accent-purple); }
+
+.border-blue { border-color: rgba(59, 130, 246, 0.3) !important; }
+.border-cyan { border-color: rgba(6, 182, 212, 0.3) !important; }
+.border-emerald { border-color: rgba(16, 185, 129, 0.3) !important; }
+.border-amber { border-color: rgba(245, 158, 11, 0.3) !important; }
+.border-purple { border-color: rgba(139, 92, 246, 0.3) !important; }
+.border-pink { border-color: rgba(236, 72, 153, 0.3) !important; }
+.border-orange { border-color: rgba(249, 115, 22, 0.3) !important; }
+
+.api-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.api-card {
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.api-method {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  display: inline-block;
+  margin-bottom: 4px;
+}
+
+.api-path {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.api-desc { font-size: 10px; color: var(--text-dim); margin-top: 3px; }
+
+.method-post { background: rgba(16, 185, 129, 0.2); color: var(--accent-emerald); }
+.method-get { background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); }
+
+.ui-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+.ui-card {
+  padding: 12px;
+  border-radius: 8px;
+  text-align: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.ui-card-icon { font-size: 22px; margin-bottom: 6px; }
+.ui-card-name { font-size: 12px; font-weight: 600; }
+.ui-card-desc { font-size: 10px; color: var(--text-dim); margin-top: 3px; }
+
+.branch-label {
+  text-align: center;
+  padding: 10px 0;
+}
+
+.branch-label span {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  padding: 5px 16px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+}
+
+.legend {
+  margin-top: 36px;
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.legend-title {
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: var(--text-dim);
+}
+
+.legend-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 11px;
+}
+
+.legend-items span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.legend-note {
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+}
+
+.call-count {
+  display: inline-block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  margin-left: 4px;
+}
+
+.call-api { background: rgba(139, 92, 246, 0.15); color: var(--accent-purple); }
+.call-local { background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); }
+
+@media (max-width: 900px) {
+  .branches { grid-template-columns: 1fr; }
+  .api-grid { grid-template-columns: repeat(2, 1fr); }
+  .ui-grid { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <h1>SiteWatch &mdash; Data Flow Architecture</h1>
+    <p>Raw Video &rarr; Pixeltable Computed Columns &rarr; FastAPI &rarr; React UI</p>
+    <div class="stats-bar">
+      <div class="stat"><div class="stat-value">~5</div><div class="stat-label">Gemini generate / video</div></div>
+      <div class="stat"><div class="stat-value">~49</div><div class="stat-label">embed_content / video</div></div>
+      <div class="stat"><div class="stat-value">3</div><div class="stat-label">embedding indexes</div></div>
+      <div class="stat"><div class="stat-value">0</div><div class="stat-label">custom UDFs</div></div>
+    </div>
+  </div>
+
+  <div class="flow">
+
+    <!-- ========== STAGE 1: INPUT ========== -->
+    <div class="section open" data-section>
+      <div class="section-header" onclick="toggle(this)">
+        <div class="section-icon bg-blue">&#x1F4F9;</div>
+        <div>
+          <div class="section-title">Stage 1 &mdash; Video Upload &amp; Base Table</div>
+          <div class="section-subtitle">POST /api/videos/upload &rarr; pxt.insert &rarr; triggers everything</div>
+        </div>
+        <span class="section-badge badge-blue">INPUT</span>
+        <span class="toggle-icon">&#x25B6;</span>
+      </div>
+      <div class="section-body">
+        <div class="columns">
+          <div class="col-item border-blue">
+            <div class="col-icon bg-blue">&#x1F4C1;</div>
+            <div>
+              <div class="col-name">surveillance.videos <span class="call-count call-local">TABLE</span></div>
+              <div class="col-desc">Base table &mdash; stores raw <code>pxt.Video</code> + metadata columns: site_name, camera_id, location, asset_id, gps_lat, gps_lon, tags, recorded_at, uuid (auto uuid7)</div>
+              <div class="col-provider">One insert triggers ALL downstream computed columns &amp; views automatically</div>
+            </div>
+          </div>
+          <div class="col-item border-cyan">
+            <div class="col-icon bg-cyan">&#x23F1;</div>
+            <div>
+              <div class="col-name">duration <span class="call-count call-local">local</span></div>
+              <div class="col-desc">Video length in seconds</div>
+              <div class="col-provider">pixeltable.functions.video.get_duration</div>
+            </div>
+          </div>
+          <div class="col-item border-cyan">
+            <div class="col-icon bg-cyan">&#x1F4CB;</div>
+            <div>
+              <div class="col-name">metadata <span class="call-count call-local">local</span></div>
+              <div class="col-desc">Container metadata: codec, resolution, fps, etc.</div>
+              <div class="col-provider">pixeltable.functions.video.get_metadata</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><div class="arrow-head"></div></div>
+
+    <!-- ========== STAGE 2: VIDEO-LEVEL ========== -->
+    <div class="section open" data-section>
+      <div class="section-header" onclick="toggle(this)">
+        <div class="section-icon bg-purple">&#x1F916;</div>
+        <div>
+          <div class="section-title">Stage 2 &mdash; Video-Level Analysis</div>
+          <div class="section-subtitle">Computed columns on the videos table itself</div>
+        </div>
+        <span class="section-badge badge-purple">1 API call</span>
+        <span class="toggle-icon">&#x25B6;</span>
+      </div>
+      <div class="section-body">
+        <div class="columns">
+          <div class="col-item border-purple">
+            <div class="col-icon bg-purple">&#x1F4DD;</div>
+            <div>
+              <div class="col-name">video_summary <span class="call-count call-api">gemini</span></div>
+              <div class="col-desc">Sends the <strong>entire video</strong> to Gemini 2.5 Flash with VIDEO_SUMMARY_PROMPT. Returns structured assessment: equipment condition, worker safety, environmental hazards, security, overall risk.</div>
+              <div class="col-provider">gemini.generate_content([videos.video, PROMPT], model='gemini-2.5-flash')</div>
+            </div>
+          </div>
+          <div class="col-item border-pink">
+            <div class="col-icon bg-pink">&#x1F3AC;</div>
+            <div>
+              <div class="col-name">scene_cuts <span class="call-count call-local">local</span></div>
+              <div class="col-desc">Content-based scene boundary detection &mdash; identifies visual transition points in the video</div>
+              <div class="col-provider">videos.video.scene_detect_content() &middot; PySceneDetect</div>
+            </div>
+          </div>
+          <div class="col-item border-pink">
+            <div class="col-icon bg-pink">&#x1F3B5;</div>
+            <div>
+              <div class="col-name">audio <span class="call-count call-local">local</span></div>
+              <div class="col-desc">Extract MP3 audio track from video (used as input for audio_chunks view below)</div>
+              <div class="col-provider">video.extract_audio(videos.video, format='mp3')</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><div class="arrow-head"></div></div>
+
+    <!-- ========== BRANCH POINT ========== -->
+    <div class="branch-label">
+      <span>videos.video &rarr; 3 iterator views (auto-populated on insert)</span>
+    </div>
+
+    <!-- ========== STAGE 3: THREE BRANCHES ========== -->
+    <div class="branches">
+
+      <!-- FRAMES BRANCH -->
+      <div class="section open" data-section>
+        <div class="section-header" onclick="toggle(this)">
+          <div class="section-icon bg-cyan">&#x1F5BC;</div>
+          <div>
+            <div class="section-title">video_frames</div>
+            <div class="section-subtitle">frame_iterator @ 1 fps</div>
+          </div>
+          <span class="toggle-icon">&#x25B6;</span>
+        </div>
+        <div class="section-body">
+          <div class="columns">
+            <div class="col-item border-cyan">
+              <div class="col-icon bg-cyan">&#x1F532;</div>
+              <div>
+                <div class="col-name">frame_thumbnail <span class="call-count call-local">local</span></div>
+                <div class="col-desc">Base64 320&times;320 JPEG thumbnail for UI display</div>
+                <div class="col-provider">pxt_image.b64_encode(thumbnail(frame))</div>
+              </div>
+            </div>
+            <div class="col-item border-emerald">
+              <div class="col-icon bg-emerald">&#x1F50D;</div>
+              <div>
+                <div class="col-name">detr_seg <span class="call-count call-local">local GPU</span></div>
+                <div class="col-desc">DETR panoptic segmentation &mdash; object labels, bounding masks, confidence scores</div>
+                <div class="col-provider">huggingface.detr_for_segmentation(frame, 'facebook/detr-resnet-50-panoptic')</div>
+              </div>
+            </div>
+            <div class="col-item border-emerald">
+              <div class="col-icon bg-emerald">&#x1F3A8;</div>
+              <div>
+                <div class="col-name">segmentation_overlay_b64 <span class="call-count call-local">local</span></div>
+                <div class="col-desc">Colorized segmentation overlay with contours, 480px thumbnail, base64-encoded</div>
+                <div class="col-provider">vision.overlay_segmentation &rarr; thumbnail &rarr; b64_encode</div>
+              </div>
+            </div>
+            <div class="col-item border-amber">
+              <div class="col-icon bg-amber">&#x1F9F2;</div>
+              <div>
+                <div class="col-name">embedding index <span class="call-count call-api">gemini</span></div>
+                <div class="col-desc">Multimodal image embedding &mdash; enables text &harr; image &harr; video cross-modal search</div>
+                <div class="col-provider">gemini.embed_content('gemini-embedding-2-preview')</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SEGMENTS BRANCH -->
+      <div class="section open" data-section>
+        <div class="section-header" onclick="toggle(this)">
+          <div class="section-icon bg-orange">&#x1F39E;</div>
+          <div>
+            <div class="section-title">video_segments</div>
+            <div class="section-subtitle">video_splitter 10s / 2s overlap</div>
+          </div>
+          <span class="toggle-icon">&#x25B6;</span>
+        </div>
+        <div class="section-body">
+          <div class="columns">
+            <div class="col-item border-orange">
+              <div class="col-icon bg-purple">&#x1F4CA;</div>
+              <div>
+                <div class="col-name">segment_analysis <span class="call-count call-api">gemini &times;1</span></div>
+                <div class="col-desc"><strong>The master Gemini call.</strong> Sends 10s video clip + SEGMENT_ANALYSIS_PROMPT. Returns JSON:
+                  <code style="display:block;margin-top:4px;font-size:9px;color:var(--accent-cyan);line-height:1.5;">{ description, severity, severity_reason,<br>&nbsp; ppe_status, ppe_details,<br>&nbsp; equipment[], hazards[] }</code>
+                </div>
+                <div class="col-provider">gemini.generate_content([video_segment, SEGMENT_ANALYSIS_PROMPT])</div>
+              </div>
+            </div>
+            <div class="col-item border-amber">
+              <div class="col-icon bg-amber">&#x1F9F2;</div>
+              <div>
+                <div class="col-name">embedding index <span class="call-count call-api">gemini</span></div>
+                <div class="col-desc">Multimodal video embedding &mdash; enables video &harr; text &harr; audio cross-modal search</div>
+                <div class="col-provider">gemini.embed_content('gemini-embedding-2-preview')</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AUDIO BRANCH -->
+      <div class="section open" data-section>
+        <div class="section-header" onclick="toggle(this)">
+          <div class="section-icon bg-pink">&#x1F50A;</div>
+          <div>
+            <div class="section-title">audio pipeline</div>
+            <div class="section-subtitle">split &rarr; transcribe &rarr; sentences</div>
+          </div>
+          <span class="toggle-icon">&#x25B6;</span>
+        </div>
+        <div class="section-body">
+          <div class="columns">
+            <div class="col-item border-pink">
+              <div class="col-icon bg-pink">&#x2702;</div>
+              <div>
+                <div class="col-name">audio_chunks <span class="call-count call-local">iterator</span></div>
+                <div class="col-desc">30-second audio segments via audio_splitter</div>
+                <div class="col-provider">audio.audio_splitter(audio=videos.audio, duration=30)</div>
+              </div>
+            </div>
+            <div class="col-item border-pink">
+              <div class="col-icon bg-red">&#x1F4AC;</div>
+              <div>
+                <div class="col-name">transcription <span class="call-count call-local">local</span></div>
+                <div class="col-desc">Whisper speech-to-text, runs locally</div>
+                <div class="col-provider">whisper.transcribe(model='base.en')</div>
+              </div>
+            </div>
+            <div class="col-item border-pink">
+              <div class="col-icon bg-red">&#x1F4D6;</div>
+              <div>
+                <div class="col-name">video_sentences <span class="call-count call-local">iterator</span></div>
+                <div class="col-desc">Split transcripts into sentences (filtered: transcription != None)</div>
+                <div class="col-provider">string.string_splitter(separators='sentence')</div>
+              </div>
+            </div>
+            <div class="col-item border-amber">
+              <div class="col-icon bg-amber">&#x1F9F2;</div>
+              <div>
+                <div class="col-name">embedding index <span class="call-count call-api">gemini</span></div>
+                <div class="col-desc">Text embedding for transcript similarity search</div>
+                <div class="col-provider">gemini.embed_content('gemini-embedding-2-preview')</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="connector"><div class="arrow-head"></div></div>
+
+    <!-- ========== STAGE 4: API ========== -->
+    <div class="section open" data-section>
+      <div class="section-header" onclick="toggle(this)">
+        <div class="section-icon bg-emerald">&#x26A1;</div>
+        <div>
+          <div class="section-title">Stage 4 &mdash; FastAPI REST Layer</div>
+          <div class="section-subtitle">4 routers &middot; pure reads &mdash; all AI runs in Pixeltable computed columns</div>
+        </div>
+        <span class="section-badge badge-emerald">API</span>
+        <span class="toggle-icon">&#x25B6;</span>
+      </div>
+      <div class="section-body">
+        <div class="api-grid">
+          <div class="api-card">
+            <span class="api-method method-post">POST</span>
+            <div class="api-path">/api/videos/upload</div>
+            <div class="api-desc">Upload file &rarr; pxt.insert &rarr; triggers all computed columns</div>
+          </div>
+          <div class="api-card">
+            <span class="api-method method-post">POST</span>
+            <div class="api-path">/api/search</div>
+            <div class="api-desc">Text query &rarr; .similarity() on segments + frames + transcripts</div>
+          </div>
+          <div class="api-card">
+            <span class="api-method method-post">POST</span>
+            <div class="api-path">/api/search/by-image</div>
+            <div class="api-desc">Image &rarr; matching frames + segments (cross-modal)</div>
+          </div>
+          <div class="api-card">
+            <span class="api-method method-post">POST</span>
+            <div class="api-path">/api/search/by-video</div>
+            <div class="api-desc">Video clip &rarr; matching segments + frames</div>
+          </div>
+          <div class="api-card">
+            <span class="api-method method-get">GET</span>
+            <div class="api-path">/api/browse/segments</div>
+            <div class="api-desc">Segment clips + parsed JSON analysis (severity, PPE, equipment, hazards)</div>
+          </div>
+          <div class="api-card">
+            <span class="api-method method-get">GET</span>
+            <div class="api-path">/api/browse/detections</div>
+            <div class="api-desc">DETR segmentation overlays from video_frames</div>
+          </div>
+          <div class="api-card">
+            <span class="api-method method-get">GET</span>
+            <div class="api-path">/api/dashboard/stats</div>
+            <div class="api-desc">Severity counts from segments, DETR labels, ROI metrics</div>
+          </div>
+          <div class="api-card">
+            <span class="api-method method-get">GET</span>
+            <div class="api-path">/api/dashboard/alerts</div>
+            <div class="api-desc">Segments where severity = CRITICAL or WARNING</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><div class="arrow-head"></div></div>
+
+    <!-- ========== STAGE 5: FRONTEND ========== -->
+    <div class="section open" data-section>
+      <div class="section-header" onclick="toggle(this)">
+        <div class="section-icon bg-amber">&#x1F5A5;</div>
+        <div>
+          <div class="section-title">Stage 5 &mdash; React Frontend</div>
+          <div class="section-subtitle">Vite + TypeScript + TailwindCSS &middot; served from FastAPI static</div>
+        </div>
+        <span class="section-badge badge-amber">UI</span>
+        <span class="toggle-icon">&#x25B6;</span>
+      </div>
+      <div class="section-body">
+        <div class="ui-grid">
+          <div class="ui-card">
+            <div class="ui-card-icon">&#x1F4CA;</div>
+            <div class="ui-card-name">Dashboard</div>
+            <div class="ui-card-desc">ROI stats, severity bars, DETR labels, alerts, activity</div>
+          </div>
+          <div class="ui-card">
+            <div class="ui-card-icon">&#x1F4F9;</div>
+            <div class="ui-card-name">Videos</div>
+            <div class="ui-card-desc">Upload, list, detail + Gemini video summary</div>
+          </div>
+          <div class="ui-card">
+            <div class="ui-card-icon">&#x1F50D;</div>
+            <div class="ui-card-name">Search</div>
+            <div class="ui-card-desc">Cross-modal: text, image, video, audio queries</div>
+          </div>
+          <div class="ui-card">
+            <div class="ui-card-icon">&#x1F5C2;</div>
+            <div class="ui-card-name">Browse</div>
+            <div class="ui-card-desc">5 tabs: Detections, Frames, Segments (AI), Scenes, Audio</div>
+          </div>
+          <div class="ui-card">
+            <div class="ui-card-icon">&#x1F6A8;</div>
+            <div class="ui-card-name">Alerts</div>
+            <div class="ui-card-desc">CRITICAL/WARNING segments + work order generation</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- LEGEND -->
+  <div class="legend">
+    <div class="legend-title">Provider &amp; Cost Legend</div>
+    <div class="legend-items">
+      <span><span class="legend-dot" style="background:var(--accent-purple);"></span> Gemini generate_content <span class="legend-note">(API &mdash; ~5 calls/video)</span></span>
+      <span><span class="legend-dot" style="background:var(--accent-amber);"></span> Gemini embed_content <span class="legend-note">(API &mdash; ~49 calls/video)</span></span>
+      <span><span class="legend-dot" style="background:var(--accent-emerald);"></span> DETR / Whisper / PySceneDetect <span class="legend-note">(local &mdash; $0)</span></span>
+      <span><span class="legend-dot" style="background:var(--accent-cyan);"></span> Pixeltable built-in functions <span class="legend-note">(local &mdash; image/video/string ops)</span></span>
+    </div>
+  </div>
+
+  <!-- PIXELTABLE TABLES SUMMARY -->
+  <div class="legend" style="margin-top:12px;">
+    <div class="legend-title">Pixeltable Schema &mdash; surveillance.*</div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-family:'JetBrains Mono',monospace; font-size:11px;">
+      <div style="padding:6px 10px; background:var(--surface-2); border-radius:6px; border-left:3px solid var(--accent-blue);">
+        <strong>videos</strong> <span style="color:var(--text-muted);">TABLE</span><br>
+        <span style="color:var(--text-dim); font-size:9px;">video, site_name, camera_id, location, asset_id, gps_*, tags, uuid, timestamp, duration, metadata, video_summary, scene_cuts, audio</span>
+      </div>
+      <div style="padding:6px 10px; background:var(--surface-2); border-radius:6px; border-left:3px solid var(--accent-cyan);">
+        <strong>video_frames</strong> <span style="color:var(--text-muted);">VIEW</span><br>
+        <span style="color:var(--text-dim); font-size:9px;">frame, pos, frame_thumbnail, detr_seg, segmentation_overlay_b64 + embedding index</span>
+      </div>
+      <div style="padding:6px 10px; background:var(--surface-2); border-radius:6px; border-left:3px solid var(--accent-orange);">
+        <strong>video_segments</strong> <span style="color:var(--text-muted);">VIEW</span><br>
+        <span style="color:var(--text-dim); font-size:9px;">video_segment, segment_start, segment_end, segment_analysis + embedding index</span>
+      </div>
+      <div style="padding:6px 10px; background:var(--surface-2); border-radius:6px; border-left:3px solid var(--accent-pink);">
+        <strong>audio_chunks</strong> <span style="color:var(--text-muted);">VIEW</span> &rarr; <strong>video_sentences</strong> <span style="color:var(--text-muted);">VIEW</span><br>
+        <span style="color:var(--text-dim); font-size:9px;">audio_segment, transcription.text &rarr; sentences + embedding index</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function toggle(header) {
+  header.closest('[data-section]').classList.toggle('open');
+}
+</script>
+</body>
+</html>

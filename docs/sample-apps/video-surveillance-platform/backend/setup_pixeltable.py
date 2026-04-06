@@ -50,15 +50,8 @@ videos = pxt.create_table(
     if_exists='ignore',
 )
 
-videos.add_computed_column(
-    duration=get_duration(videos.video),
-    if_exists='ignore',
-)
-
-videos.add_computed_column(
-    metadata=get_metadata(videos.video),
-    if_exists='ignore',
-)
+videos.add_computed_column(duration=get_duration(videos.video), if_exists='ignore')
+videos.add_computed_column(metadata=get_metadata(videos.video), if_exists='ignore')
 
 videos.add_computed_column(
     video_summary=generate_content(
@@ -68,9 +61,11 @@ videos.add_computed_column(
     if_exists='ignore',
 )
 
-print('  Videos: table + duration + metadata + Gemini video summary')
+print('  Videos: table + duration + metadata + Gemini video summary (1 call/video)')
 
 # -- 2. Video frames view ---------------------------------------------------
+#    Frames are for: DETR segmentation + multimodal embedding search.
+#    No per-frame Gemini calls — analysis happens at the segment level.
 
 video_frames = pxt.create_view(
     f'{config.APP_NAMESPACE}.video_frames',
@@ -86,30 +81,6 @@ video_frames.add_computed_column(
     if_exists='ignore',
 )
 
-video_frames.add_computed_column(
-    frame_description=generate_content(
-        [video_frames.frame, config.FRAME_DESCRIPTION_PROMPT],
-        model=config.GEMINI_MODEL,
-    ),
-    if_exists='ignore',
-)
-
-video_frames.add_computed_column(
-    severity=generate_content(
-        [video_frames.frame, config.SEVERITY_PROMPT],
-        model=config.GEMINI_MODEL,
-    ),
-    if_exists='ignore',
-)
-
-video_frames.add_computed_column(
-    ppe_assessment=generate_content(
-        [video_frames.frame, config.PPE_ASSESSMENT_PROMPT],
-        model=config.GEMINI_MODEL,
-    ),
-    if_exists='ignore',
-)
-
 # DETR panoptic segmentation — automatic on every frame
 video_frames.add_computed_column(
     detr_seg=detr_for_segmentation(
@@ -120,7 +91,7 @@ video_frames.add_computed_column(
     if_exists='ignore',
 )
 
-# Segmentation overlay visualization (b64 thumbnail for API display)
+# Segmentation overlay visualization
 video_frames.add_computed_column(
     segmentation_overlay_b64=pxt_image.b64_encode(
         pxt_image.thumbnail(
@@ -145,9 +116,10 @@ video_frames.add_embedding_index(
     if_exists='ignore',
 )
 
-print('  Frames: view + Gemini description/severity/PPE + DETR panoptic + overlay + embedding')
+print('  Frames: view + DETR panoptic + overlay + multimodal embedding (0 Gemini generate calls)')
 
-# -- 3. Video segments view (for multimodal video search) -------------------
+# -- 3. Video segments view -------------------------------------------------
+#    One Gemini call per segment: description + severity + PPE as JSON.
 
 video_segments = pxt.create_view(
     f'{config.APP_NAMESPACE}.video_segments',
@@ -162,22 +134,30 @@ video_segments = pxt.create_view(
     if_exists='ignore',
 )
 
+video_segments.add_computed_column(
+    segment_analysis=generate_content(
+        [video_segments.video_segment, config.SEGMENT_ANALYSIS_PROMPT],
+        model=config.GEMINI_MODEL,
+    ),
+    if_exists='ignore',
+)
+
 video_segments.add_embedding_index(
     'video_segment',
     embedding=gemini_embed,
     if_exists='ignore',
 )
 
-print('  Segments: view + Gemini multimodal video embedding (cross-modal search)')
+print('  Segments: view + Gemini analysis JSON (1 call/segment) + video embedding')
 
-# -- 4. Scene detection (computed column on videos) -------------------------
+# -- 4. Scene detection -----------------------------------------------------
 
 videos.add_computed_column(
     scene_cuts=videos.video.scene_detect_content(),
     if_exists='ignore',
 )
 
-print('  Scenes: computed column with content-based scene detection')
+print('  Scenes: content-based scene detection')
 
 # -- 5. Audio transcription pipeline ----------------------------------------
 
@@ -217,3 +197,5 @@ video_sentences.add_embedding_index(
 print('  Audio: extraction -> Whisper transcription -> sentence embedding')
 
 print('\nSchema setup complete.')
+print('  Gemini generate_content: 1/video + ~4/video (segments) = ~5 per video')
+print('  Previously: 1 + 3×N frames ≈ 121 per video')

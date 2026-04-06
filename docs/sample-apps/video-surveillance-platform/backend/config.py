@@ -52,33 +52,24 @@ VIDEO_SUMMARY_PROMPT = (
     'Be specific and concise. Reference visible equipment types by name.'
 )
 
-FRAME_DESCRIPTION_PROMPT = (
-    'Analyze this surveillance frame from a utility/energy site. Report on:\n'
-    '- EQUIPMENT: condition (corrosion, discoloration, leaks, damage), '
-    'switch positions, gauge readings, indicator lights, asset type\n'
-    '- WORKERS: count, PPE status (hardhat, vest, gloves, safety glasses), '
-    'proximity to hazards\n'
-    '- ENVIRONMENT: vegetation encroachment, water pooling, debris, '
-    'wildlife/animal presence\n'
-    '- SECURITY: unauthorized access, perimeter breach, open gates\n'
-    '- SEVERITY: rate as CRITICAL / WARNING / INFO with one-line justification\n'
-    'Be concise. Use utility industry terminology.'
-)
-
-SEVERITY_PROMPT = (
-    'Classify this surveillance frame into exactly one severity level:\n'
-    '- CRITICAL: fire, smoke, active sparking, equipment failure, fallen lines, '
-    'active safety hazard, unauthorized person in restricted area, flood/water contact with equipment\n'
-    '- WARNING: corrosion, vegetation encroachment, missing PPE, equipment degradation, '
-    'water pooling near equipment, open access panels, wildlife near lines\n'
-    '- INFO: normal operations, no issues detected, routine activity\n'
-    'Respond with ONLY one word: CRITICAL, WARNING, or INFO'
-)
-
-PPE_ASSESSMENT_PROMPT = (
-    'If workers are visible in this frame, assess PPE compliance:\n'
-    '- List each visible person and whether they wear: hardhat, safety vest, safety glasses, gloves\n'
-    '- Rate overall: COMPLIANT, PARTIAL, NON-COMPLIANT, or N/A (no workers visible)\n'
-    'Be concise. If no workers visible, respond "N/A - no workers visible."'
+SEGMENT_ANALYSIS_PROMPT = (
+    'Analyze this surveillance video segment from a utility/energy site. '
+    'Return ONLY a JSON object (no markdown, no code fences) with this structure:\n'
+    '{\n'
+    '  "description": "2-3 sentence assessment of what is visible",\n'
+    '  "severity": "CRITICAL" or "WARNING" or "INFO",\n'
+    '  "severity_reason": "one-line justification",\n'
+    '  "ppe_status": "COMPLIANT" or "PARTIAL" or "NON_COMPLIANT" or "N_A",\n'
+    '  "ppe_details": "PPE details or N/A if no workers",\n'
+    '  "equipment": ["list", "of", "visible", "equipment"],\n'
+    '  "hazards": ["list", "of", "identified", "hazards"]\n'
+    '}\n\n'
+    'Severity criteria:\n'
+    '- CRITICAL: fire, smoke, sparking, equipment failure, fallen lines, '
+    'flood/water contact, active safety hazard\n'
+    '- WARNING: corrosion, vegetation encroachment, missing PPE, degradation, '
+    'water pooling, wildlife near lines\n'
+    '- INFO: normal operations, no issues detected\n\n'
+    'Respond with ONLY the JSON object.'
 )
 

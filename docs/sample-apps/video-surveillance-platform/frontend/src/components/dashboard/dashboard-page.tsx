@@ -6,7 +6,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { StatCard } from '@/components/ui/stat-card'
 import { SeverityBadge } from '@/components/ui/severity-badge'
-import { toDataUrl } from '@/lib/utils'
+
 import * as api from '@/lib/api'
 import type { DashboardStats, AlertItem, ActivityItem } from '@/types'
 
@@ -111,7 +111,7 @@ export function DashboardPage() {
                               : 'bg-blue-500'
                         }`}
                         style={{
-                          width: `${stats.total_frames > 0 ? (count / stats.total_frames) * 100 : 0}%`,
+                          width: `${stats.total_segments > 0 ? (count / stats.total_segments) * 100 : 0}%`,
                         }}
                       />
                     </div>
@@ -195,13 +195,7 @@ export function DashboardPage() {
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {alerts.slice(0, 10).map((alert, i) => (
                 <div key={i} className="flex items-start gap-2 p-2 rounded bg-muted/50">
-                  {alert.frame && (
-                    <img
-                      src={toDataUrl(alert.frame)}
-                      alt="alert frame"
-                      className="w-12 h-8 object-cover rounded shrink-0"
-                    />
-                  )}
+                  <ShieldAlert className="h-3.5 w-3.5 mt-0.5 shrink-0 text-red-500" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
                       <SeverityBadge severity={alert.severity} />
@@ -209,10 +203,13 @@ export function DashboardPage() {
                         <span className="text-[10px] text-muted-foreground">{alert.site_name}</span>
                       )}
                     </div>
-                    {alert.segment_labels.length > 0 && (
+                    {alert.frame_description && (
                       <p className="text-xs text-muted-foreground truncate mt-0.5">
-                        {alert.segment_labels.join(', ')}
+                        {alert.frame_description}
                       </p>
+                    )}
+                    {alert.severity_reason && (
+                      <p className="text-[10px] text-muted-foreground/70 truncate">{alert.severity_reason}</p>
                     )}
                   </div>
                 </div>

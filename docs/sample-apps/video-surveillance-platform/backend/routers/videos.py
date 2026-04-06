@@ -10,7 +10,7 @@ from fastapi import APIRouter, Form, HTTPException, UploadFile, File
 import pixeltable as pxt
 
 import config
-from functions import gemini_text, parse_severity
+from functions import gemini_text, parse_segment_analysis, severity_from_analysis
 from models import (
     AlertItem,
     AlertsResponse,
@@ -204,19 +204,13 @@ def get_frames(video_uuid: str, limit: int = 24):
         frames_view = pxt.get_table(f'{config.APP_NAMESPACE}.video_frames')
         rows = list(
             frames_view.where(frames_view.uuid == UUID(video_uuid))
-            .select(
-                frame=frames_view.frame_thumbnail,
-                frame_description=frames_view.frame_description,
-            )
+            .select(frame=frames_view.frame_thumbnail)
             .limit(limit)
             .collect()
         )
         items: list[dict] = []
         for r in rows:
-            items.append({
-                'frame': r.get('frame', ''),
-                'frame_description': gemini_text(r.get('frame_description')) or None,
-            })
+            items.append({'frame': r.get('frame', '')})
         return FramesResponse(uuid=video_uuid, frames=items, total=len(items))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -301,28 +295,31 @@ def get_transcription(video_uuid: str):
 @router.get('/{video_uuid}/alerts', response_model=AlertsResponse)
 def get_video_alerts(video_uuid: str, limit: int = 50):
     try:
-        frames_view = pxt.get_table(f'{config.APP_NAMESPACE}.video_frames')
+        segs = pxt.get_table(f'{config.APP_NAMESPACE}.video_segments')
         rows = list(
-            frames_view.where(frames_view.uuid == UUID(video_uuid))
+            segs.where(segs.uuid == UUID(video_uuid))
             .select(
-                uuid=frames_view.uuid,
-                frame=frames_view.frame_thumbnail,
-                frame_description=frames_view.frame_description,
-                severity=frames_view.severity,
+                uuid=segs.uuid,
+                segment_analysis=segs.segment_analysis,
+                site_name=segs.site_name,
+                camera_id=segs.camera_id,
             )
             .limit(limit * 3)
             .collect()
         )
         items = []
         for r in rows:
-            sev = parse_severity(r.get('severity'))
+            analysis = parse_segment_analysis(r.get('segment_analysis'))
+            sev = severity_from_analysis(analysis)
             if sev == 'info':
                 continue
             items.append({
                 'uuid': str(r.get('uuid', '')),
-                'frame': r.get('frame', ''),
-                'segment_labels': [],
+                'frame': '',
+                'segment_labels': analysis.get('equipment', []),
                 'severity': sev,
+                'frame_description': analysis.get('description', ''),
+                'severity_reason': analysis.get('severity_reason', ''),
             })
             if len(items) >= limit:
                 break
