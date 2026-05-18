@@ -235,7 +235,6 @@ from datetime import datetime
 import pixeltable as pxt
 
 app = FastAPI()
-docs_table = pxt.get_table('myapp/documents')  # Has computed columns: embedding, summary
 
 class SearchResult(BaseModel):
     document: str
@@ -244,6 +243,7 @@ class SearchResult(BaseModel):
 
 @app.post("/documents/upload")
 def upload_document(file: UploadFile):
+    docs_table = pxt.get_table('myapp/documents')
     status = docs_table.insert([{
         'document': file.filename,
         'uploaded_at': datetime.now()
@@ -252,6 +252,7 @@ def upload_document(file: UploadFile):
 
 @app.get("/documents/search")
 def search_documents(query: str, limit: int = 10) -> list[SearchResult]:
+    docs_table = pxt.get_table('myapp/documents')
     sim = docs_table.embedding.similarity(string=query)
     results = docs_table.select(
         docs_table.document,
@@ -263,12 +264,13 @@ def search_documents(query: str, limit: int = 10) -> list[SearchResult]:
 
 @app.get("/documents/{doc_id}")
 def get_document(doc_id: int):
+    docs_table = pxt.get_table('myapp/documents')
     result = docs_table.where(docs_table._rowid == doc_id).collect()
     return result[0] if len(result) > 0 else {"error": "Not found"}
 ```
 
 <Tip>
-**Use sync (`def`) endpoints, not `async def`.** FastAPI dispatches sync endpoints to a thread pool, giving each request its own thread. Pixeltable is thread-safe and handles concurrent requests automatically. Using `async def` would block the event loop and serialize all requests. See [Production Operations](/howto/deployment/operations) for details.
+**Use sync (`def`) endpoints, not `async def`.** FastAPI dispatches sync endpoints to a thread pool, giving each request its own thread. Using `async def` would block the event loop and serialize all requests. **Important:** `Table` objects are bound to the thread that created them — always call `pxt.get_table()` inside each endpoint function rather than storing a module-level reference. See [Production Operations](/howto/deployment/operations) for details.
 </Tip>
 
 ## Get Started
