@@ -1,0 +1,97 @@
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { createServer } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { setTimeout as delay } from 'node:timers/promises';
+import { createClient, multipartBody, PixeltableHttpError } from '../dist/index.js';
+
+if (!process.env.PXT_TEST_PYTHON)
+  throw new Error('Set PXT_TEST_PYTHON to a Python executable with pixeltable[serve] installed');
+const root = fileURLToPath(new URL('../../', import.meta.url));
+const temp = await mkdtemp(join(tmpdir(), 'pxt-sdk-integration-'));
+const portProbe = createServer().listen(0, '127.0.0.1');
+await once(portProbe, 'listening');
+const port = portProbe.address().port;
+await new Promise((resolve) => portProbe.close(resolve));
+const service = spawn(process.env.PXT_TEST_PYTHON, ['typescript-sdk/tests/service.py', '--port', String(port)], {
+  cwd: root,
+  env: { ...process.env, PIXELTABLE_HOME: join(temp, 'home'), PYTHONPATH: root },
+  stdio: ['ignore', 'pipe', 'pipe'],
+});
+const exited = once(service, 'exit');
+let logs = '';
+service.stdout.on('data', (chunk) => {
+  logs += chunk;
+});
+service.stderr.on('data', (chunk) => {
+  logs += chunk;
+});
+const baseUrl = `http://127.0.0.1:${port}`;
+try {
+  const deadline = Date.now() + 90_000;
+  let schema;
+  while (Date.now() < deadline) {
+    if (service.exitCode !== null) throw new Error(logs);
+    try {
+      const response = await fetch(`${baseUrl}/openapi.json`, { signal: AbortSignal.timeout(1000) });
+      if (response.ok) {
+        schema = await response.json();
+        break;
+      }
+    } catch {
+      /* Wait for the service to bind its socket. */
+    }
+    await delay(200);
+  }
+  assert.ok(schema, `Service did not start:\n${logs}`);
+  const expectedSchema = JSON.parse(await readFile(new URL('./fixtures/openapi.json', import.meta.url), 'utf8'));
+  assert.deepEqual(schema, expectedSchema);
+  const { api, job } = createClient({ baseUrl });
+  assert.deepEqual((await api.POST('/docs', { body: { id: 1, title: 'hello' } })).data, {
+    id: 1,
+    title_upper: 'HELLO',
+  });
+  assert.deepEqual((await api.GET('/lookup', { params: { query: { id: 1 } } })).data, {
+    rows: [{ id: 1, title_upper: 'HELLO' }],
+  });
+  assert.deepEqual((await api.POST('/preview', { body: { id: 3, title: 'preview' } })).data, {
+    title_upper: 'PREVIEW',
+  });
+  assert.deepEqual((await api.GET('/lookup', { params: { query: { id: 3 } } })).data, { rows: [] });
+  assert.deepEqual((await api.POST('/edit', { body: { id: 1, title: 'updated' } })).data, {
+    id: 1,
+    title_upper: 'UPDATED',
+  });
+  const { data: ticket } = await api.POST('/background', { body: { id: 4, title: 'job' } });
+  assert.deepEqual(await job(ticket).wait({ timeoutMs: 20_000, pollIntervalMs: 20 }), { title_upper: 'JOB' });
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aT1kAAAAASUVORK5CYII=',
+    'base64',
+  );
+  assert.deepEqual(
+    (
+      await api.POST('/upload', {
+        body: { id: 2, title: 'image', image: new Blob([png], { type: 'image/png' }) },
+        bodySerializer: multipartBody,
+      })
+    ).data,
+    { id: 2, title_upper: 'IMAGE' },
+  );
+  await assert.rejects(
+    api.POST('/docs', { body: { id: 'invalid' } }),
+    (error) => error instanceof PixeltableHttpError && error.status === 422,
+  );
+  assert.deepEqual((await api.POST('/remove', { body: { id: 1 } })).data, { num_rows: 1 });
+  assert.deepEqual((await api.GET('/lookup', { params: { query: { id: 1 } } })).data, { rows: [] });
+  console.log(
+    'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation.',
+  );
+} finally {
+  if (service.exitCode === null) service.kill('SIGTERM');
+  await exited;
+  await rm(temp, { recursive: true, force: true });
+}
