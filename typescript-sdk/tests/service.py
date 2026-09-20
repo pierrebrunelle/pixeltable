@@ -1,0 +1,48 @@
+import argparse
+import json
+from pathlib import Path
+
+import fastapi
+import uvicorn
+
+import pixeltable as pxt
+import pixeltable.functions as pxtf
+from pixeltable.serving import FastAPIRouter
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--schema', type=Path)
+parser.add_argument('--port', type=int, default=8765)
+args = parser.parse_args()
+
+pxt.create_dir('sdk_test', if_exists='ignore')
+docs = pxt.create_table(
+    'sdk_test.docs',
+    {'id': pxt.Int, 'title': pxt.String, 'image': pxt.Image | None},
+    primary_key='id',
+    if_exists='ignore',
+)
+docs.add_computed_column(title_upper=pxtf.string.upper(docs.title), if_exists='ignore')
+
+
+@pxt.query
+def lookup(id: int) -> pxt.Query:
+    return docs.where(docs.id == id).select(docs.id, docs.title_upper)
+
+
+router = FastAPIRouter(name='sdk-test')
+router.add_query_route(path='/lookup', query=lookup, method='get')
+router.add_insert_route(docs, path='/docs', inputs=['id', 'title'], outputs=['id', 'title_upper'])
+router.add_compute_route(docs, path='/preview', inputs=['id', 'title'], outputs=['title_upper'])
+router.add_compute_route(docs, path='/background', inputs=['id', 'title'], outputs=['title_upper'], background=True)
+router.add_update_route(docs, path='/edit', inputs=['title'], outputs=['id', 'title_upper'])
+router.add_delete_route(docs, path='/remove')
+router.add_insert_route(
+    docs, path='/upload', inputs=['id', 'title'], uploadfile_inputs=['image'], outputs=['id', 'title_upper']
+)
+app = fastapi.FastAPI()
+app.include_router(router)
+
+if args.schema:
+    args.schema.write_text(json.dumps(app.openapi(), indent=2) + '\n')
+else:
+    uvicorn.run(app, host='127.0.0.1', port=args.port)
