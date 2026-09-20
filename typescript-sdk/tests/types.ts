@@ -1,4 +1,6 @@
-import { createClient, multipartBody } from '../src/index.js';
+import { createClient, defineQuery, multipartBody } from '../src/index.js';
+import type { JobHandle } from '../src/index.js';
+import { usePixeltableQuery, usePixeltableMutation, usePixeltableJob } from '../src/react.js';
 import type { paths } from './fixtures/service.js';
 
 const client = createClient<paths>({ baseUrl: 'http://localhost:8000' });
@@ -29,4 +31,23 @@ export async function checkTypes(): Promise<void> {
   await client.api.GET('/lookup');
   // @ts-expect-error Upload inputs must be binary.
   await client.api.POST('/upload', { body: { id: 1, title: 'image', image: 'file.png' } });
+}
+
+export function checkHookTypes(job: JobHandle): void {
+  const query = defineQuery(['service', 'session', 'lookup'], async (id: number) => ({ id, title: 'title' }));
+  const result = usePixeltableQuery(query, 1);
+  const title: string | undefined = result.data?.title;
+  void title;
+  // @ts-expect-error Query input types come from the handle.
+  usePixeltableQuery(query, '1');
+  // @ts-expect-error Query output types come from the handle.
+  const invalidTitle: number | undefined = result.data?.title;
+  void invalidTitle;
+  const mutation = usePixeltableMutation(async (input: { id: number }) => input.id, { invalidate: [query] });
+  mutation.mutate({ id: 1 });
+  // @ts-expect-error Mutation inputs retain their declared type.
+  mutation.mutate({ id: '1' });
+  usePixeltableJob(job, { scope: ['service', 'session'] });
+  // @ts-expect-error Jobs require an explicit cache scope.
+  usePixeltableJob(job, {});
 }

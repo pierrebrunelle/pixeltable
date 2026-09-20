@@ -2,7 +2,7 @@
 
 Call a running Pixeltable service from Node.js 22 or newer. Generate types from the service's OpenAPI document, then call the routes declared in its Python application file.
 
-This is the first implementation phase, packaged separately within this checkout so it can move to its own repository. It is unpublished and marked private. Python still defines tables, computed columns, indexes, and routes. The SDK supports service requests, multipart uploads, HTTP errors, and background-job polling.
+The SDK is packaged separately within this checkout so it can move to its own repository. It is unpublished and marked private. Python still defines tables, computed columns, indexes, and routes. The SDK supports service requests, multipart uploads, HTTP errors, background-job polling, and optional React hooks.
 
 ## Install locally
 
@@ -107,6 +107,61 @@ try {
 Non-success HTTP responses throw `PixeltableHttpError`, preserving the response body, headers, and any machine-readable `errorCode`. Validation details remain available in `body`. Network failures and cancellation keep their native fetch errors. Requests are not retried, because replaying writes could duplicate rows or paid computation.
 
 The default transport rejects redirects and URLs outside the configured service's origin and path prefix. Pass `headers` for application-specific authentication or `fetch` for an alternate transport. A custom transport must honor the `signal` and `redirect` fetch options. The SDK does not implement tenant authorization; your service must enforce it. Hosted services must expose the same HTTP contract to work with this client. Hosted control-plane APIs and the Python catalog proxy protocol are outside this release.
+
+## React queries, mutations, and jobs
+
+Install the optional React dependencies in your application:
+
+```bash
+npm install react @tanstack/react-query
+```
+
+Wrap the component tree in TanStack Query's `QueryClientProvider`. Create one `QueryClient` for the browser session. Use a separate instance for each server-rendered request and clear the browser cache on logout or account changes.
+
+Define a query with a stable key and a typed function:
+
+```typescript
+import { createClient, defineQuery } from '@pixeltable/sdk';
+import type { paths } from './pxt.js';
+
+// This URL belongs to your authenticated application backend.
+const client = createClient<paths>({ baseUrl: applicationUrl });
+const lookup = defineQuery([applicationUrl, sessionId, 'lookup'], async (id: number, options) => {
+  const { data } = await client.api.GET('/lookup', {
+    params: { query: { id } },
+    ...options,
+  });
+  if (!data) throw new Error('Expected query rows');
+  return data.rows;
+});
+```
+
+The application backend must authenticate the user, authorize access to the route and data, then call the Pixeltable service using server-held credentials. The hooks do not create this backend or enforce tenancy. Do not give a browser the credential-bearing service client. The example requires the application backend to expose the same generated route shapes.
+
+```typescript
+import { usePixeltableQuery, usePixeltableMutation, usePixeltableJob } from '@pixeltable/sdk/react';
+
+// Inside a React component:
+const rows = usePixeltableQuery(lookup, documentId);
+const rename = usePixeltableMutation(
+  async (input: { id: number; title: string }) => {
+    await client.api.POST('/edit', { body: input });
+  },
+  { invalidate: [lookup] },
+);
+const job = usePixeltableJob(jobHandleOrNull, {
+  scope: [applicationUrl, sessionId],
+  invalidate: [lookup],
+});
+```
+
+`usePixeltableQuery` returns TanStack Query's result, including `data`, `error`, `isPending`, and `refetch`. Inputs join the handle's key in the cache. Keys must be JSON-serializable and identify the endpoint, session or tenant, and query. Define handles outside render or memoize them. A query must return a defined value; use null for an empty result. Forward the supplied signal to the request so changes and unmounting can cancel obsolete reads. Options support `enabled`, `staleTime`, and `refetchInterval`.
+
+`usePixeltableMutation` accepts an async function, including an application Server Action. It never retries writes, even if the provider has a retry default. On success it invalidates all input variants of the specified handles and waits for active queries to refresh. Failed writes do not invalidate reads. Use `mutate` for event handlers or `mutateAsync` when the caller needs the result.
+
+`usePixeltableJob` accepts a job handle or null while waiting for a ticket. Its required `scope` separates services and sessions in the cache. It polls once a second while mounted, stops on `done`, `error`, or a failed polling request, and invalidates selected query handles once per observed completion. Change the interval with `pollIntervalMs`; `enabled: false` pauses polling. Computation failures appear in `data` as `{ status: 'error', error }`; failed HTTP requests appear in the hook's `error`. Call `refetch()` to retry a failed status request. Query and job requests have retries disabled by these hooks.
+
+Reactivity uses polling and cache invalidation. It provides no cross-query snapshot or transaction guarantee. Queries may also refresh according to your TanStack Query provider defaults. The source checkout includes a compiled example in `examples/react.ts`. Named handles are currently authored with `defineQuery`; automatic generation of application handles remains a subsequent step.
 
 ## Verify
 
