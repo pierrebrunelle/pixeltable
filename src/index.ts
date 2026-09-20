@@ -201,3 +201,6 @@ export function multipartBody(fields: Record<string, string | number | boolean |
   }
   return form;
 }
+
+export { defineQuery } from './handles.js';
+export type { QueryHandle, QueryReference } from './handles.js';

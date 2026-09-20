@@ -26,7 +26,9 @@ Remaining release gates: select the standalone GitHub repository and npm owner; 
 
 ## Phase 2: application handles and React
 
-Generate named query and mutation handles from explicit serving metadata. Add `usePixeltableQuery`, `usePixeltableMutation`, and `usePixeltableJob`, with documented polling and invalidation. Browser code calls an authenticated application backend. Service/catalog credentials remain on the server.
+Implemented: `defineQuery`, `usePixeltableQuery`, `usePixeltableMutation`, and `usePixeltableJob`, using TanStack Query with documented polling, cancellation, cache scopes, and invalidation.
+
+Remaining: generate named query and mutation handles from explicit serving metadata and supply a tested authenticated application-backend example. Browser code calls an authenticated application backend. Service/catalog credentials remain on the server.
 
 Required server contracts: stable route identity, public/internal visibility, final background-result schemas, tenant authorization, and any presigned upload flow. Preserve current route methods and media representations. Do not infer a table's identity or permissions from a URL.
 
