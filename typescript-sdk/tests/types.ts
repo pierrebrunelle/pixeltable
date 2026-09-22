@@ -474,3 +474,32 @@ export async function checkBatchUpdateTypes(): Promise<void> {
   // @ts-expect-error Batch updates require declared primary keys.
   await unkeyed.batchUpdate([{ id: 1 }]);
 }
+
+export async function checkJsonPathTypes(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.openTable('items', { payload: { type: 'json' }, id: { type: 'int' } });
+  const score = table.columns.payload.jsonPath('score').asType({ type: 'float', nullable: true });
+  table.query().orderBy(score);
+  score.add(table.columns.id);
+  table.columns.id.add(score);
+  const rows = await table
+    .query()
+    .selectExpressions({ score, required: table.columns.id.asType({ type: 'float', nullable: true }) })
+    .collect();
+  const nullable: number | null = rows[0]!.score;
+  const required: number = rows[0]!.required;
+  void [nullable, required];
+  // @ts-expect-error JSON field access is nullable even for a required JSON column.
+  const missing: number = rows[0]!.score;
+  void missing;
+  // @ts-expect-error Scalar columns do not support JSON paths.
+  table.columns.id.jsonPath('key');
+  // @ts-expect-error Path slices have numeric bounds.
+  table.columns.payload.jsonPath({ start: '1' });
+  // @ts-expect-error Cast targets must be supported column types.
+  table.columns.payload.asType({ type: 'object' });
+  const computed = await table.addComputedColumn('score', score);
+  const computedRows = await computed.collect();
+  const computedValue: number | null = computedRows[0]!.score;
+  void computedValue;
+}

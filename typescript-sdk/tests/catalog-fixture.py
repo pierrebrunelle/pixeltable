@@ -135,3 +135,19 @@ serialized = json.dumps({name: expression.as_dict() for name, expression in expr
 Path(__file__).with_name('fixtures').joinpath('catalog-membership.json').write_text(
     json.dumps(json.loads(serialized), indent=2) + '\n'
 )
+
+
+json_table = pxt.create_table('inspect/json_paths', {'payload': pxt.Json, 'required': pxt.Int})
+expressions = {
+    'nested': json_table.payload['items'][0]['name'],
+    'wildcard': json_table.payload['items']['*']['name'],
+    'slice': json_table.payload['items'][::-1]['name'],
+    'cast': json_table.payload['score'].astype(pxt.Float | None),
+    'required_cast': json_table.required.astype(pxt.Float | None),
+}
+serialized = json.dumps({name: expression.as_dict() for name, expression in expressions.items()}).replace(
+    str(json_table._id), '12345678-1234-5678-1234-567812345678'
+)
+Path(__file__).with_name('fixtures').joinpath('catalog-json-path.json').write_text(
+    json.dumps(json.loads(serialized), indent=2) + '\n'
+)

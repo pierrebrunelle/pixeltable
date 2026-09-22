@@ -42,6 +42,9 @@ type NumericOperand<T> = Exclude<T, null> extends number ? number | ColumnExpres
 type ArithmeticValue<T, O> =
   number | Extract<T, null> | (O extends ColumnExpression<infer V> ? Extract<V, null> : never);
 
+export type CatalogJsonPathElement = string | number | { start?: number; stop?: number; step?: number };
+export type CatalogCastType = Pick<CatalogColumn, 'type' | 'nullable'>;
+
 class ColumnExpression<T> {
   declare readonly [expressionValue]: T;
   constructor(
@@ -49,6 +52,53 @@ class ColumnExpression<T> {
     private readonly column: CatalogColumn,
     private readonly expression: Wire,
   ) {}
+  jsonPath(...path: JsonValue extends T | null ? CatalogJsonPathElement[] : never): ColumnExpression<JsonValue> {
+    if (this.column.type !== 'json') throw new TypeError('JSON paths require a JSON expression');
+    if (path.length === 0) throw new TypeError('A JSON path requires at least one element');
+    const elements = Array.from(path, (element) => {
+      if (typeof element === 'string') return element;
+      if (typeof element === 'number' && Number.isSafeInteger(element)) return element;
+      if (
+        typeof element !== 'object' ||
+        element === null ||
+        Array.isArray(element) ||
+        ![Object.prototype, null].includes(Object.getPrototypeOf(element))
+      )
+        throw new TypeError('JSON path elements must be keys, integer indices, or slices');
+      if (Object.keys(element).some((key) => !['start', 'stop', 'step'].includes(key)))
+        throw new TypeError('Unsupported JSON slice option');
+      const values = [element.start, element.stop, element.step];
+      if (values.some((value) => value !== undefined && !Number.isSafeInteger(value)) || element.step === 0)
+        throw new TypeError('JSON slice bounds must be safe integers and step cannot be zero');
+      return values.map((value) => value ?? null);
+    });
+    const isPath = this.expression._classname === 'JsonPath';
+    return new ColumnExpression(
+      this.tableId,
+      { type: 'json', nullable: true },
+      {
+        _classname: 'JsonPath',
+        path_elements: [...(isPath ? (this.expression.path_elements as unknown[]) : []), ...elements],
+        root_type: null,
+        components: isPath ? this.expression.components : [this.expression],
+      },
+    );
+  }
+  asType<const C extends CatalogCastType>(
+    target: C,
+  ): ColumnExpression<
+    null extends T ? CatalogRow<{ result: C }>['result'] : Exclude<CatalogRow<{ result: C }>['result'], null>
+  > {
+    if (Object.keys(target).some((key) => !['type', 'nullable'].includes(key)))
+      throw new TypeError('Cast types only accept type and nullable');
+    const column = copySchema({ result: target }).result;
+    const result = { type: column.type, nullable: Boolean(this.column.nullable && column.nullable) };
+    return new ColumnExpression(this.tableId, result, {
+      _classname: 'TypeCast',
+      new_type: { _classname: columnClasses[result.type], nullable: result.nullable },
+      components: [this.expression],
+    });
+  }
   get errorType(): ColumnExpression<string | null> {
     return this.errorProperty(0);
   }
@@ -328,14 +378,15 @@ export function callCatalogFunction<P extends CatalogSchema, C extends CatalogCo
   });
 }
 
-export type CatalogProjection<E extends Record<string, CatalogExpression<unknown>>> = {
-  [K in keyof E & string]: E[K] extends CatalogExpression<infer T> ? T : never;
+type ProjectionExpression = { readonly [expressionValue]: unknown };
+export type CatalogProjection<E extends Record<string, ProjectionExpression>> = {
+  [K in keyof E & string]: E[K][typeof expressionValue];
 };
 
 export interface CatalogQuery<S extends CatalogSchema, R = CatalogRow<S>> {
   where(predicate: CatalogPredicate): CatalogQuery<S, R>;
   select<const C extends readonly ColumnName<S>[]>(...columns: C): CatalogQuery<S, Pick<CatalogRow<S>, C[number]>>;
-  selectExpressions<const E extends Record<string, CatalogExpression<unknown>>>(
+  selectExpressions<const E extends Record<string, ProjectionExpression>>(
     expressions: E,
   ): CatalogQuery<S, CatalogProjection<E>>;
   orderBy(
