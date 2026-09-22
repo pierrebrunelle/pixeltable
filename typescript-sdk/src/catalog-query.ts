@@ -36,12 +36,69 @@ class Predicate {
 }
 export type CatalogPredicate = Predicate;
 
+declare const expressionValue: unique symbol;
+
 class ColumnExpression<T> {
+  declare readonly [expressionValue]: T;
   constructor(
     private readonly tableId: string,
     private readonly column: CatalogColumn,
     private readonly expression: Wire,
   ) {}
+  toUpdateWire(tableId: string, target: CatalogColumn): Wire {
+    if (tableId !== this.tableId) throw new TypeError('An expression must belong to the updated table');
+    if (
+      (this.column.type !== target.type && !(this.column.type === 'int' && target.type === 'float')) ||
+      (this.column.nullable && !target.nullable)
+    )
+      throw new TypeError('Update expression type does not match the target column');
+    return { $pxt: 'Expr', v: this.expression };
+  }
+  add(value: Exclude<T, null> extends number ? number : never): ColumnExpression<T> {
+    return this.arithmetic(0, value);
+  }
+  subtract(value: Exclude<T, null> extends number ? number : never): ColumnExpression<T> {
+    return this.arithmetic(1, value);
+  }
+  multiply(value: Exclude<T, null> extends number ? number : never): ColumnExpression<T> {
+    return this.arithmetic(2, value);
+  }
+  divide(value: Exclude<T, null> extends number ? number : never): ColumnExpression<T> {
+    return this.arithmetic(3, value);
+  }
+  modulo(value: Exclude<T, null> extends number ? number : never): ColumnExpression<T> {
+    return this.arithmetic(4, value);
+  }
+  floorDivide(value: Exclude<T, null> extends number ? number : never): ColumnExpression<T> {
+    return this.arithmetic(5, value);
+  }
+  pow(value: Exclude<T, null> extends number ? number : never): ColumnExpression<T> {
+    return this.arithmetic(6, value);
+  }
+  private arithmetic(operator: number, value: number): ColumnExpression<T> {
+    if (!['int', 'float'].includes(this.column.type)) throw new TypeError('Arithmetic requires numeric columns');
+    columnValue(value, { type: 'float' }, true);
+    const type =
+      this.column.type === 'float' || !Number.isInteger(value) || operator === 3 || (operator === 6 && value < 0)
+        ? 'float'
+        : 'int';
+    return new ColumnExpression(
+      this.tableId,
+      { type, nullable: this.column.nullable ?? false },
+      {
+        _classname: 'ArithmeticExpr',
+        operator,
+        components: [
+          this.expression,
+          {
+            _classname: 'Literal',
+            val: value,
+            col_type: { _classname: Number.isInteger(value) ? 'IntType' : 'FloatType', nullable: false },
+          },
+        ],
+      },
+    );
+  }
   eq(value: T): Predicate {
     return value === null ? this.isNull() : this.compare(2, value);
   }
@@ -83,6 +140,14 @@ class ColumnExpression<T> {
 export type CatalogColumns<S extends CatalogSchema> = {
   readonly [K in keyof S & string]: ColumnExpression<CatalogRow<S>[K]>;
 };
+
+export type CatalogUpdateRow<S extends CatalogSchema> = {
+  [K in keyof S & string]?: CatalogRow<S>[K] | ColumnExpression<CatalogRow<S>[K]>;
+};
+
+export function updateValue(value: unknown, column: CatalogColumn, tableId: string): unknown {
+  return value instanceof ColumnExpression ? value.toUpdateWire(tableId, column) : columnValue(value, column, true);
+}
 
 export interface CatalogQuery<S extends CatalogSchema, K extends ColumnName<S> = ColumnName<S>> {
   where(predicate: CatalogPredicate): CatalogQuery<S, K>;

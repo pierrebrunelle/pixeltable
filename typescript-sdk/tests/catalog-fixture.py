@@ -37,3 +37,19 @@ serialized = json.dumps(query.as_dict()).replace(str(table._id), '12345678-1234-
 Path(__file__).with_name('fixtures').joinpath('catalog-query.json').write_text(
     json.dumps(json.loads(serialized), indent=2) + '\n'
 )
+
+expressions = {
+    'add': table.id + 2,
+    'subtract': table.id - 2,
+    'multiply': table.id * 2,
+    'divide': table.id / 2,
+    'modulo': table.id % 2,
+    'floorDivide': table.id // 2,
+    'pow': table.id**2,
+}
+serialized = json.dumps({name: expr.as_dict() for name, expr in expressions.items()}).replace(
+    str(table._id), '12345678-1234-5678-1234-567812345678'
+)
+Path(__file__).with_name('fixtures').joinpath('catalog-arithmetic.json').write_text(
+    json.dumps(json.loads(serialized), indent=2) + '\n'
+)
