@@ -11,7 +11,7 @@ import { createClient, multipartBody, PixeltableHttpError } from '../dist/index.
 
 import { loadGeneratedClient, loadTypeScriptModule } from './load-generated.mjs';
 
-import { createCatalogClient, CatalogError } from '../dist/catalog.js';
+import { createCatalogClient, CatalogError, defineCatalogFunction } from '../dist/catalog.js';
 
 if (!process.env.PXT_TEST_PYTHON)
   throw new Error('Set PXT_TEST_PYTHON to a Python executable with pixeltable[serve] installed');
@@ -407,6 +407,75 @@ try {
       .where(nestedView.columns.id.eq(1))
       .collect(),
     [{ label: 1, total: 30 }],
+  );
+  const functionsTable = await catalog.createTable('typescript_catalog/functions', { text: { type: 'string' } });
+  await functionsTable.insert([{ text: 'hello' }]);
+  const decorate = defineCatalogFunction(
+    'udf_fixture.decorate',
+    {
+      text: { type: 'string' },
+      prefix: { type: 'string' },
+    },
+    { type: 'string' },
+  );
+  const upper = defineCatalogFunction(
+    'pixeltable.functions.string.upper',
+    {
+      self: { type: 'string' },
+    },
+    { type: 'string' },
+  );
+  const decorated = functionsTable.callFunction(decorate, { text: functionsTable.columns.text, prefix: 'Hi ' });
+  assert.deepEqual(await functionsTable.query().selectExpressions({ result: decorated }).collect(), [
+    { result: 'Hi hello' },
+  ]);
+  const withFunction = await functionsTable.addComputedColumn(
+    'upper_text',
+    functionsTable.callFunction(upper, { self: decorated }),
+  );
+  assert.deepEqual(await withFunction.collect(), [{ text: 'hello', upper_text: 'HI HELLO' }]);
+  await withFunction.insert([{ text: 'world' }]);
+  assert.deepEqual(await withFunction.query().select('upper_text').orderBy('text').collect(), [
+    { upper_text: 'HI HELLO' },
+    { upper_text: 'HI WORLD' },
+  ]);
+  const missing = defineCatalogFunction('udf_fixture.missing', { text: { type: 'string' } }, { type: 'string' });
+  await assert.rejects(
+    withFunction
+      .query()
+      .selectExpressions({
+        bad: withFunction.callFunction(missing, { text: withFunction.columns.text }),
+      })
+      .collect(),
+    CatalogError,
+  );
+  const incompatible = defineCatalogFunction(
+    'udf_fixture.decorate',
+    {
+      text: { type: 'string' },
+      prefix: { type: 'string' },
+    },
+    { type: 'int' },
+  );
+  await assert.rejects(
+    withFunction
+      .query()
+      .selectExpressions({
+        bad: withFunction.callFunction(incompatible, { text: 'hello', prefix: 'Hi ' }),
+      })
+      .collect(),
+    (error) => error instanceof CatalogError && error.detail.error_code === 'FUNCTION_NOT_FOUND',
+  );
+  const constant = defineCatalogFunction('udf_fixture.constant', {}, { type: 'int' });
+  assert.deepEqual(
+    await withFunction
+      .query()
+      .selectExpressions({
+        answer: withFunction.callFunction(constant, {}),
+      })
+      .limit(1)
+      .collect(),
+    [{ answer: 42 }],
   );
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',

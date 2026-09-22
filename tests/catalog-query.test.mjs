@@ -186,3 +186,26 @@ test('named expression projections match Python and retain immutable query branc
   assert.throws(() => base.selectExpressions({ 'invalid-name': columns.id }), /Column names/);
   assert.throws(() => base.selectExpressions({ foreign: setup('other').columns.id }), /belong to the table/);
 });
+
+test('registered scalar function calls match Python and validate arguments locally', async () => {
+  const { defineCatalogFunction, callCatalogFunction } = await import('../dist/catalog-query.js');
+  const { columns } = setup();
+  const decorate = defineCatalogFunction(
+    'udf_fixture.decorate',
+    {
+      text: { type: 'string' },
+      prefix: { type: 'string' },
+    },
+    { type: 'string' },
+  );
+  const expression = callCatalogFunction(tableId, decorate, { text: columns.title, prefix: 'Hi ' });
+  const python = JSON.parse(await readFile(new URL('./fixtures/catalog-function.json', import.meta.url), 'utf8'));
+  assert.deepEqual(expression.computedDefinition(tableId).wire.v, python);
+  assert.throws(() => callCatalogFunction(tableId, decorate, { text: columns.title }), /match the declared/);
+  assert.throws(() => callCatalogFunction(tableId, decorate, { text: columns.id, prefix: 'Hi ' }), /expression type/);
+  assert.throws(
+    () => callCatalogFunction(tableId, decorate, { text: setup('other').columns.title, prefix: 'Hi ' }),
+    /belong/,
+  );
+  assert.throws(() => defineCatalogFunction('invalid', { value: { type: 'int' } }, { type: 'int' }), /import path/);
+});

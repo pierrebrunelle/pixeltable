@@ -9,8 +9,11 @@ import type {
   ComputedSchema,
   CatalogColumns,
   CatalogQuery,
+  CatalogFunction,
+  CatalogFunctionArgs,
 } from './catalog-query.js';
-import { createTableQueries, updateValue } from './catalog-query.js';
+import { createTableQueries, updateValue, callCatalogFunction } from './catalog-query.js';
+export { defineCatalogFunction } from './catalog-query.js';
 export type {
   CatalogQuery,
   CatalogColumns,
@@ -18,6 +21,8 @@ export type {
   CatalogUpdateRow,
   CatalogExpression,
   CatalogProjection,
+  CatalogFunction,
+  CatalogFunctionArgs,
 } from './catalog-query.js';
 import { columnClasses, columnValue, copySchema } from './catalog-schema.js';
 import type { CatalogColumn, CatalogSchema, CatalogInsertRow, CatalogRow } from './catalog-schema.js';
@@ -44,6 +49,10 @@ export interface CatalogTable<S extends CatalogSchema> {
   readonly path: string;
   readonly schema: S;
   readonly columns: CatalogColumns<S>;
+  callFunction<P extends CatalogSchema, C extends CatalogColumn>(
+    fn: CatalogFunction<P, C>,
+    args: CatalogFunctionArgs<P>,
+  ): CatalogExpression<CatalogRow<{ result: C }>['result']>;
   query(): CatalogQuery<S>;
   insert(rows: readonly CatalogInsertRow<S>[], options?: { signal?: AbortSignal }): Promise<{ insertedRows: number }>;
   update(
@@ -89,6 +98,7 @@ export interface CatalogView<S extends CatalogSchema> extends Pick<
   | 'schema'
   | 'columns'
   | 'query'
+  | 'callFunction'
   | 'collect'
   | 'count'
   | 'createView'
@@ -355,6 +365,9 @@ export function createCatalogClient(options: ClientOptions) {
       path,
       schema,
       ...queries,
+      callFunction(fn, args) {
+        return callCatalogFunction(id, fn, args);
+      },
       async createView(viewPath, options = {}): Promise<CatalogView<S>> {
         if (!viewPath) throw new TypeError('A view path is required');
         const result = tagged(
@@ -623,6 +636,7 @@ export function createCatalogClient(options: ClientOptions) {
       schema: table.schema,
       columns: table.columns,
       query: table.query,
+      callFunction: table.callFunction,
       collect: table.collect,
       count: table.count,
       createView: table.createView,

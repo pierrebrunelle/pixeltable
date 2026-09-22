@@ -1,4 +1,4 @@
-import { createCatalogClient } from '@pixeltable/sdk/experimental/catalog';
+import { createCatalogClient, defineCatalogFunction } from '@pixeltable/sdk/experimental/catalog';
 import { createServiceClient } from './fixtures/client.js';
 import { createClient, defineQuery, multipartBody } from '../src/index.js';
 import type { JobHandle } from '../src/index.js';
@@ -321,4 +321,24 @@ export async function checkProjectionTypes(): Promise<void> {
   rows[0]!.score;
   // @ts-expect-error Projection values must be catalog expressions.
   table.query().selectExpressions({ total: 2 });
+}
+
+export async function checkFunctionTypes(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.createTable('base', { title: { type: 'string' }, id: { type: 'int' } });
+  const upper = defineCatalogFunction(
+    'pixeltable.functions.string.upper',
+    { self: { type: 'string' } },
+    { type: 'string' },
+  );
+  const result = table.callFunction(upper, { self: table.columns.title });
+  const rows = await table.query().selectExpressions({ uppercase: result }).collect();
+  const text: string = rows[0]!.uppercase;
+  void text;
+  // @ts-expect-error Function parameters retain their declared type.
+  table.callFunction(upper, { self: table.columns.id });
+  // @ts-expect-error Function parameters are required.
+  table.callFunction(upper, {});
+  // @ts-expect-error Function parameters must match declared names.
+  table.callFunction(upper, { wrong: 'hello' });
 }

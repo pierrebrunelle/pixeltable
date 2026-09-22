@@ -1,0 +1,70 @@
+{
+  "_classname": "FunctionCall",
+  "fn": {
+    "_classpath": "pixeltable.func.callable_function.CallableFunction",
+    "path": "udf_fixture.decorate",
+    "signatures": [
+      {
+        "return_type": {
+          "_classname": "StringType",
+          "nullable": false
+        },
+        "parameters": [
+          {
+            "name": "text",
+            "col_type": {
+              "_classname": "StringType",
+              "nullable": false
+            },
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "is_batched": false,
+            "default": null
+          },
+          {
+            "name": "prefix",
+            "col_type": {
+              "_classname": "StringType",
+              "nullable": false
+            },
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "is_batched": false,
+            "default": null
+          }
+        ],
+        "is_batched": false
+      }
+    ]
+  },
+  "return_type": {
+    "_classname": "StringType",
+    "nullable": false
+  },
+  "arg_idxs": [],
+  "kwarg_idxs": {
+    "text": 0,
+    "prefix": 1
+  },
+  "group_by_start_idx": 0,
+  "group_by_stop_idx": 0,
+  "order_by_start_idx": 2,
+  "is_method_call": false,
+  "components": [
+    {
+      "_classname": "ColumnRef",
+      "tbl_id": "12345678-1234-5678-1234-567812345678",
+      "effective_version": null,
+      "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+      "col_tbl_effective_version": null,
+      "col_id": 1,
+      "perform_validation": false
+    },
+    {
+      "_classname": "Literal",
+      "val": "Hi ",
+      "col_type": {
+        "_classname": "StringType",
+        "nullable": false
+      }
+    }
+  ]
+}
