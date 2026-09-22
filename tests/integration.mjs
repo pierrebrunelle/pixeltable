@@ -307,6 +307,21 @@ try {
   await chained.dropIndex('tripled_idx', { ifNotExists: 'ignore' });
   await chained.update({ score: 7 }, { where: chained.columns.id.eq(4) });
   assert.equal(await chained.query().where(chained.columns.tripled.eq(21)).count(), 1);
+  const history = await chained.getVersions({ limit: 2 });
+  assert.equal(history.length, 2);
+  assert.equal(history[0].updates, 1);
+  assert.equal(history[0].changeType, 'data');
+  assert.ok(Number.isFinite(Date.parse(history[0].createdAt)));
+  await assert.rejects(restored.revert(restored.schema), { name: 'CatalogStaleError' });
+  const reverted = await chained.revert(chained.schema);
+  assert.equal((await reverted.getVersions({ limit: 1 }))[0].version, history[1].version);
+  assert.equal(await reverted.query().where(reverted.columns.tripled.eq(18)).count(), 1);
+  assert.equal(await reverted.query().where(reverted.columns.tripled.eq(21)).count(), 0);
+  const withExtra = await reverted.addComputedColumn('extra', reverted.columns.id.add(1));
+  const withoutExtra = await withExtra.revert(reverted.schema);
+  assert.deepEqual(Object.keys(withoutExtra.schema), Object.keys(reverted.schema));
+  await withoutExtra.insert([{ id: 5, score: 1 }]);
+  assert.equal(await withoutExtra.query().where(withoutExtra.columns.id.eq(5)).count(), 1);
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );

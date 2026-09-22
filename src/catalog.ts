@@ -26,6 +26,18 @@ export type BtreeColumn<S extends CatalogSchema> = {
   [K in keyof S & string]: S[K]['type'] extends 'int' | 'float' | 'string' ? K : never;
 }[keyof S & string];
 
+export interface CatalogVersion {
+  version: number;
+  createdAt: string;
+  user: string | null;
+  changeType: 'data' | 'schema';
+  inserts: number;
+  updates: number;
+  deletes: number;
+  errors: number;
+  schemaChange: string | null;
+}
+
 export interface CatalogTable<S extends CatalogSchema> {
   readonly id: string;
   readonly path: string;
@@ -40,6 +52,8 @@ export interface CatalogTable<S extends CatalogSchema> {
   delete(options?: { where?: CatalogPredicate; signal?: AbortSignal }): Promise<{ deletedRows: number }>;
   collect(options?: { limit?: number; signal?: AbortSignal }): Promise<CatalogRow<S>[]>;
   count(options?: { signal?: AbortSignal }): Promise<number>;
+  getVersions(options?: { limit?: number; signal?: AbortSignal }): Promise<CatalogVersion[]>;
+  revert<const R extends CatalogSchema>(schema: R, options?: { signal?: AbortSignal }): Promise<CatalogTable<R>>;
   addBtreeIndex(
     column: BtreeColumn<S>,
     options?: { name?: string; ifExists?: 'error' | 'ignore'; signal?: AbortSignal },
@@ -258,6 +272,58 @@ export function createCatalogClient(options: ClientOptions) {
       path,
       schema,
       ...queries,
+      async getVersions(options = {}): Promise<CatalogVersion[]> {
+        if (options.limit !== undefined && (!Number.isSafeInteger(options.limit) || options.limit < 1))
+          throw new TypeError('Version limit must be a positive safe integer');
+        const { result } = await rpc('get_versions', { n: options.limit ?? null }, options.signal, {
+          class_name: 'Table',
+          path_key: pathKey,
+          snapshot_path_key: { tbl_version: { id, effective_version: state.version }, base: null },
+        });
+        if (!Array.isArray(result)) throw new TypeError('Invalid version history');
+        return result.map((value: unknown) => {
+          const version = record(value);
+          for (const name of ['version', 'inserts', 'updates', 'deletes', 'errors']) {
+            const count = version[name];
+            if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0)
+              throw new TypeError('Invalid version count');
+          }
+          const createdAt = tagged(version.created_at, 'datetime');
+          if (typeof createdAt !== 'string' || !Number.isFinite(Date.parse(createdAt)))
+            throw new TypeError('Invalid version timestamp');
+          if (
+            (version.user !== null && typeof version.user !== 'string') ||
+            (version.schema_change !== null && typeof version.schema_change !== 'string') ||
+            (version.change_type !== 'data' && version.change_type !== 'schema')
+          )
+            throw new TypeError('Invalid version metadata');
+          return {
+            version: version.version as number,
+            createdAt,
+            user: version.user as string | null,
+            changeType: version.change_type as 'data' | 'schema',
+            inserts: version.inserts as number,
+            updates: version.updates as number,
+            deletes: version.deletes as number,
+            errors: version.errors as number,
+            schemaChange: version.schema_change as string | null,
+          };
+        });
+      },
+      async revert<const R extends CatalogSchema>(
+        definition: R,
+        options: { signal?: AbortSignal } = {},
+      ): Promise<CatalogTable<R>> {
+        const nextSchema = copySchema(definition);
+        const response = await rpc('revert', {}, options.signal, {
+          class_name: 'Table',
+          path_key: pathKey,
+          snapshot_path_key: { tbl_version: { id, effective_version: state.version }, base: null },
+        });
+        const reverted = tableHandle(path, nextSchema, response.current_md);
+        if (reverted.id !== id) throw new TypeError('Table identity changed');
+        return reverted;
+      },
       async addBtreeIndex(column, options = {}): Promise<void> {
         if (!Object.hasOwn(schema, column) || !['int', 'float', 'string'].includes(schema[column]!.type))
           throw new TypeError('B-tree indexes require an integer, float, or string column');

@@ -316,3 +316,56 @@ test('index operations use version checks and validate columns before sending', 
   await assert.rejects(table.dropIndex('id_idx', { ifNotExists: 'replace' }), /Invalid ifNotExists/);
   assert.equal(requests.length, 3);
 });
+
+test('version history validates metadata and rejects invalid limits before transport', async () => {
+  const requests = [];
+  const version = {
+    version: 1,
+    created_at: { $pxt: 'datetime', v: '2026-09-21T12:00:00+00:00' },
+    user: null,
+    change_type: 'data',
+    inserts: 2,
+    updates: 0,
+    deletes: 0,
+    errors: 0,
+    schema_change: null,
+  };
+  let history = [version];
+  const catalog = createCatalogClient({
+    baseUrl: 'https://catalog.test',
+    fetch: async (request) => {
+      const head = JSON.parse(decoder.decode(decodeProxyFrame(new Uint8Array(await request.arrayBuffer())).head));
+      requests.push(head);
+      return response(head.method === 'get_table' ? tableResponse.result.v[0] : history);
+    },
+  });
+  const table = await catalog.openTable('docs', schemaDefinition);
+  assert.deepEqual(await table.getVersions({ limit: 1 }), [
+    {
+      version: 1,
+      createdAt: '2026-09-21T12:00:00+00:00',
+      user: null,
+      changeType: 'data',
+      inserts: 2,
+      updates: 0,
+      deletes: 0,
+      errors: 0,
+      schemaChange: null,
+    },
+  ]);
+  assert.deepEqual(requests[1].args, { n: 1 });
+  for (const limit of [0, -1, 1.5, Infinity])
+    await assert.rejects(table.getVersions({ limit }), /positive safe integer/);
+  assert.equal(requests.length, 2);
+  for (const patch of [
+    { version: -1 },
+    { inserts: '2' },
+    { created_at: { $pxt: 'datetime', v: 'invalid' } },
+    { change_type: 'other' },
+    { change_type: ['data'] },
+    { schema_change: {} },
+  ]) {
+    history = [{ ...version, ...patch }];
+    await assert.rejects(table.getVersions(), TypeError);
+  }
+});
