@@ -170,3 +170,16 @@ serialized = json.dumps(aggregated.as_dict()).replace(str(table._id), '12345678-
 Path(__file__).with_name('fixtures').joinpath('catalog-aggregate.json').write_text(
     json.dumps(json.loads(serialized), indent=2) + '\n'
 )
+
+
+window_query = table.select(
+    id=table.id,
+    running=sum(table.score, group_by=table.title, order_by=table.id),
+    seen=count(table.score, order_by=table.id),
+    minimum=min(table.score, group_by=table.title),
+    maximum=max(table.score, group_by=table.title, order_by=table.id),
+)
+serialized = json.dumps(window_query.as_dict()).replace(str(table._id), '12345678-1234-5678-1234-567812345678')
+Path(__file__).with_name('fixtures').joinpath('catalog-window.json').write_text(
+    json.dumps(json.loads(serialized), indent=2) + '\n'
+)

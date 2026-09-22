@@ -352,3 +352,23 @@ test('grouped aggregate queries match Python and preserve immutable query branch
   assert.throws(() => columns.payload.aggregate('max'), /scalar/);
   assert.throws(() => columns.id.aggregate('median'), /Unsupported/);
 });
+
+test('aggregate windows match Python partition and ordering serialization', async () => {
+  const { columns, query, calls } = setup();
+  await query()
+    .selectExpressions({
+      id: columns.id,
+      running: columns.score.aggregate('sum', { partitionBy: columns.title, orderBy: columns.id }),
+      seen: columns.score.aggregate('count', { orderBy: columns.id }),
+      minimum: columns.score.aggregate('min', { partitionBy: columns.title }),
+      maximum: columns.score.aggregate('max', { partitionBy: columns.title, orderBy: columns.id }),
+    })
+    .collect();
+  const python = JSON.parse(await readFile(new URL('./fixtures/catalog-window.json', import.meta.url), 'utf8'));
+  assert.deepEqual(calls[0].wire, python);
+  assert.throws(() => columns.score.aggregate('mean', { orderBy: columns.id }), /not supported/);
+  assert.throws(() => columns.score.aggregate('sum', {}), /requires/);
+  assert.throws(() => columns.score.aggregate('sum', { orderBy: 'id' }), /expressions/);
+  assert.throws(() => columns.score.aggregate('sum', { orderBy: setup('other').columns.id }), /belong/);
+  assert.throws(() => columns.score.aggregate('sum', { orderBy: columns.id, descending: true }), /requires/);
+});

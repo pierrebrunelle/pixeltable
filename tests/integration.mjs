@@ -988,6 +988,61 @@ try {
       .selectExpressions({ nested: summaries.total.aggregate('sum') })
       .collect(),
   );
+  const events = await catalog.createTable('sdk_test/window_events', {
+    id: { type: 'int' },
+    category: { type: 'string' },
+    amount: { type: 'int', nullable: true },
+  });
+  await events.insert([
+    { id: 4, category: 'b', amount: 7 },
+    { id: 2, category: 'a', amount: null },
+    { id: 3, category: 'a', amount: 5 },
+    { id: 1, category: 'a', amount: 2 },
+    { id: 5, category: 'b', amount: 1 },
+  ]);
+  const window = { partitionBy: events.columns.category, orderBy: events.columns.id };
+  const running = events.columns.amount.aggregate('sum', window);
+  const runningQuery = events
+    .query()
+    .selectExpressions({
+      id: events.columns.id,
+      running,
+      seen: events.columns.amount.aggregate('count', window),
+      low: events.columns.amount.aggregate('min', window),
+      high: events.columns.amount.aggregate('max', window),
+    })
+    .orderBy('category')
+    .orderBy('id');
+  await assert.rejects(events.query().selectExpressions({ running }).orderBy('id').collect(), /Incompatible ordering/);
+  assert.deepEqual(await runningQuery.collect(), [
+    { id: 1, running: 2, seen: 1, low: 2, high: 2 },
+    { id: 2, running: 2, seen: 1, low: 2, high: 2 },
+    { id: 3, running: 7, seen: 2, low: 2, high: 5 },
+    { id: 4, running: 7, seen: 1, low: 7, high: 7 },
+    { id: 5, running: 8, seen: 2, low: 1, high: 7 },
+  ]);
+  assert.deepEqual(
+    await events
+      .query()
+      .selectExpressions({
+        id: events.columns.id,
+        running: events.columns.amount.aggregate('sum', { orderBy: events.columns.id }),
+      })
+      .orderBy('id')
+      .collect(),
+    [
+      { id: 1, running: 2 },
+      { id: 2, running: 2 },
+      { id: 3, running: 7 },
+      { id: 4, running: 14 },
+      { id: 5, running: 15 },
+    ],
+  );
+  assert.deepEqual(await runningQuery.where(events.columns.id.gt(2)).collect(), [
+    { id: 3, running: 5, seen: 1, low: 5, high: 5 },
+    { id: 4, running: 7, seen: 1, low: 7, high: 7 },
+    { id: 5, running: 8, seen: 2, low: 1, high: 7 },
+  ]);
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );
