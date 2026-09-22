@@ -917,6 +917,77 @@ try {
       })
       .collect(),
   );
+  const sales = await catalog.createTable('sdk_test/sales', {
+    category: { type: 'string' },
+    amount: { type: 'int', nullable: true },
+  });
+  await sales.insert([
+    { category: 'a', amount: 2 },
+    { category: 'a', amount: 4 },
+    { category: 'a', amount: null },
+    { category: 'b', amount: 9 },
+    { category: 'c', amount: null },
+  ]);
+  const summaries = {
+    category: sales.columns.category,
+    total: sales.columns.amount.aggregate('sum'),
+    average: sales.columns.amount.aggregate('mean'),
+    lowest: sales.columns.amount.aggregate('min'),
+    highest: sales.columns.amount.aggregate('max'),
+    present: sales.columns.amount.aggregate('count'),
+  };
+  const grouped = sales.query().groupBy('category').selectExpressions(summaries).orderBy('category');
+  assert.deepEqual(await grouped.collect(), [
+    { category: 'a', total: 6, average: 3, lowest: 2, highest: 4, present: 2 },
+    { category: 'b', total: 9, average: 9, lowest: 9, highest: 9, present: 1 },
+    { category: 'c', total: null, average: null, lowest: null, highest: null, present: 0 },
+  ]);
+  assert.equal(await grouped.count(), 3);
+  assert.deepEqual(await grouped.limit(1).offset(1).collect(), [
+    { category: 'b', total: 9, average: 9, lowest: 9, highest: 9, present: 1 },
+  ]);
+  assert.deepEqual(
+    await sales
+      .query()
+      .where(sales.columns.category.eq('absent'))
+      .selectExpressions({
+        total: summaries.total,
+        present: summaries.present,
+      })
+      .collect(),
+    [{ total: null, present: 0 }],
+  );
+  assert.deepEqual(await sales.query().selectExpressions({ total: summaries.total }).collect(), [{ total: 15 }]);
+  assert.deepEqual(
+    await sales
+      .query()
+      .groupBy(sales.columns.category)
+      .where(sales.columns.amount.gt(2))
+      .selectExpressions({ category: sales.columns.category, total: summaries.total })
+      .orderBy('category')
+      .collect(),
+    [
+      { category: 'a', total: 4 },
+      { category: 'b', total: 9 },
+    ],
+  );
+  assert.deepEqual(
+    await sales
+      .query()
+      .selectExpressions({
+        first: sales.columns.category.aggregate('min'),
+        last: sales.columns.category.aggregate('max'),
+      })
+      .collect(),
+    [{ first: 'a', last: 'c' }],
+  );
+  await assert.rejects(sales.query().groupBy('category').select('amount').collect());
+  await assert.rejects(
+    sales
+      .query()
+      .selectExpressions({ nested: summaries.total.aggregate('sum') })
+      .collect(),
+  );
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );

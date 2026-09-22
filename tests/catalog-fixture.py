@@ -8,6 +8,7 @@ from udf_fixture import decorate, text_embedding
 
 import pixeltable as pxt
 from pixeltable.env import Env
+from pixeltable.functions import count, max, mean, min, sum
 from pixeltable.runtime import get_runtime
 from pixeltable.service import proxy_protocol
 
@@ -149,5 +150,23 @@ serialized = json.dumps({name: expression.as_dict() for name, expression in expr
     str(json_table._id), '12345678-1234-5678-1234-567812345678'
 )
 Path(__file__).with_name('fixtures').joinpath('catalog-json-path.json').write_text(
+    json.dumps(json.loads(serialized), indent=2) + '\n'
+)
+
+
+aggregated = (
+    table.group_by(table.title)
+    .select(
+        title=table.title,
+        total=sum(table.score),
+        average=mean(table.score),
+        minimum=min(table.score),
+        maximum=max(table.score),
+        present=count(table.score),
+    )
+    .order_by(table.title)
+)
+serialized = json.dumps(aggregated.as_dict()).replace(str(table._id), '12345678-1234-5678-1234-567812345678')
+Path(__file__).with_name('fixtures').joinpath('catalog-aggregate.json').write_text(
     json.dumps(json.loads(serialized), indent=2) + '\n'
 )
