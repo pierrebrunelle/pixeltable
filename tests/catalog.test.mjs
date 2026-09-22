@@ -369,3 +369,35 @@ test('version history validates metadata and rejects invalid limits before trans
     await assert.rejects(table.getVersions(), TypeError);
   }
 });
+
+test('view mutations send concrete versions for the entire base chain', async () => {
+  const base = structuredClone(tableResponse.result.v[0][0]);
+  base.v.version_md.version = 3;
+  const view = structuredClone(base);
+  view.v.tbl_md.tbl_id = '23456789-2345-6789-2345-678923456789';
+  view.v.tbl_md.view_md = { is_snapshot: false, include_base_columns: true, iterator_call: null };
+  view.v.schema_version_md.columns = {};
+  view.v.version_md.version = 1;
+  const requests = [];
+  const catalog = createCatalogClient({
+    baseUrl: 'https://catalog.test',
+    fetch: async (request) => {
+      const head = JSON.parse(decoder.decode(decodeProxyFrame(new Uint8Array(await request.arrayBuffer())).head));
+      requests.push(head);
+      if (head.method === 'get_table') return response([view, base]);
+      view.v.version_md.version++;
+      return new Response(
+        encodeProxyFrame(encoder.encode(JSON.stringify({ result: null, current_md: [view, base] })), []),
+      );
+    },
+  });
+  const handle = await catalog.openView('filtered', schemaDefinition);
+  await handle.addBtreeIndex('title', { name: 'title_idx' });
+  assert.deepEqual(requests[1].snapshot_path_key, {
+    tbl_version: { id: view.v.tbl_md.tbl_id, effective_version: 1 },
+    base: { tbl_version: { id: base.v.tbl_md.tbl_id, effective_version: 3 }, base: null },
+  });
+  await handle.dropIndex('title_idx');
+  assert.equal(requests[2].snapshot_path_key.tbl_version.effective_version, 2);
+  assert.equal(requests[2].snapshot_path_key.base.tbl_version.effective_version, 3);
+});

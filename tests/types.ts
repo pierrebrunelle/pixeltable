@@ -263,3 +263,16 @@ export async function checkViewTypes(): Promise<void> {
   // @ts-expect-error View handles do not expose base-table writes.
   await view.update({ title: 'no' });
 }
+
+export async function checkViewAuthoringTypes(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.createTable('base', { id: { type: 'int' } });
+  const view = await table.createView('filtered');
+  const enriched = await view.addComputedColumn('next', view.columns.id.add(1));
+  await enriched.addBtreeIndex('next');
+  const nested = await enriched.createView('nested', { where: enriched.columns.next.gt(5) });
+  const value: number | undefined = (await nested.collect())[0]?.next;
+  void value;
+  // @ts-expect-error Adding computed columns must not expose base-row insertion.
+  await enriched.insert([{ id: 1 }]);
+}

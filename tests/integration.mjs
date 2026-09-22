@@ -342,6 +342,29 @@ try {
   await assert.rejects(catalog.openTable('typescript_catalog/filtered', withoutExtra.schema), TypeError);
   await assert.rejects(catalog.openView('typescript_catalog/computed', withoutExtra.schema), TypeError);
   await assert.rejects(withoutExtra.createView('typescript_catalog/filtered'), CatalogError);
+  await assert.rejects(openedView.addBtreeIndex('score', { name: 'old_view_idx' }), { name: 'CatalogStaleError' });
+  const currentView = await catalog.openView('typescript_catalog/filtered', withoutExtra.schema);
+  const enrichedView = await currentView.addComputedColumn('adjusted', currentView.columns.tripled.add(2));
+  assert.deepEqual(await enrichedView.query().select('id', 'adjusted').orderBy('id').collect(), [
+    { id: 1, adjusted: 14 },
+    { id: 4, adjusted: 20 },
+  ]);
+  assert.equal(typeof enrichedView.insert, 'undefined');
+  await enrichedView.addBtreeIndex('adjusted', { name: 'adjusted_idx' });
+  await enrichedView.dropIndex('adjusted_idx');
+  const nestedView = await enrichedView.createView('typescript_catalog/nested', {
+    where: enrichedView.columns.adjusted.gte(15),
+  });
+  assert.deepEqual(await nestedView.query().select('id', 'adjusted').collect(), [{ id: 4, adjusted: 20 }]);
+  await withoutExtra.update({ score: 9 }, { where: withoutExtra.columns.id.eq(1) });
+  assert.deepEqual(await nestedView.query().select('id', 'adjusted').orderBy('id').collect(), [
+    { id: 1, adjusted: 29 },
+    { id: 4, adjusted: 20 },
+  ]);
+  await assert.rejects(enrichedView.addComputedColumn('stale_column', enrichedView.columns.id.add(1)), {
+    name: 'CatalogStaleError',
+  });
+  assert.ok((await enrichedView.getVersions({ limit: 1 }))[0].version > 0);
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );
