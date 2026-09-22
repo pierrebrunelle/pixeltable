@@ -12,10 +12,10 @@ type AllowsNull<C extends CatalogColumn> = 'nullable' extends keyof C
     : false
   : false;
 type ColumnValue<C extends CatalogColumn> = ValueTypes[C['type']] | (AllowsNull<C> extends true ? null : never);
-export type CatalogRow<S extends CatalogSchema> = { [K in keyof S]: ColumnValue<S[K]> };
+export type CatalogRow<S extends CatalogSchema> = { [K in keyof S & string]: ColumnValue<S[K]> };
 export type CatalogInsertRow<S extends CatalogSchema> = {
-  [K in keyof S as AllowsNull<S[K]> extends true ? never : K]: ColumnValue<S[K]>;
-} & { [K in keyof S as AllowsNull<S[K]> extends true ? K : never]?: ColumnValue<S[K]> };
+  [K in keyof S & string as AllowsNull<S[K]> extends true ? never : K]: ColumnValue<S[K]>;
+} & { [K in keyof S & string as AllowsNull<S[K]> extends true ? K : never]?: ColumnValue<S[K]> };
 
 export const columnClasses = {
   int: 'IntType',

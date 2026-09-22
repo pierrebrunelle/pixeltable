@@ -26,3 +26,14 @@ for field in ('tbl_md', 'version_md', 'schema_version_md'):
     value[field]['tbl_id'] = '12345678-1234-5678-1234-567812345678'
 value['version_md']['created_at'] = 0
 Path(__file__).with_name('fixtures').joinpath('catalog-table.json').write_text(json.dumps(response, indent=2) + '\n')
+
+query = (
+    table.where((table.id > 1) & ((table.score == None) | (table.title != 'skip')))
+    .select(table.id, table.title)
+    .order_by(table.id, asc=False)
+    .limit(2, offset=1)
+)
+serialized = json.dumps(query.as_dict()).replace(str(table._id), '12345678-1234-5678-1234-567812345678')
+Path(__file__).with_name('fixtures').joinpath('catalog-query.json').write_text(
+    json.dumps(json.loads(serialized), indent=2) + '\n'
+)

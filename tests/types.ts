@@ -114,3 +114,34 @@ export async function checkCatalogTypes(): Promise<void> {
   // @ts-expect-error Creation cannot replace existing tables.
   await catalog.createTable('docs', { id: { type: 'int' } }, { ifExists: 'replace' });
 }
+
+export async function checkCatalogQueryTypes(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.createTable('query_types', {
+    id: { type: 'int' },
+    title: { type: 'string' },
+    score: { type: 'float', nullable: true },
+    active: { type: 'bool' },
+    payload: { type: 'json' },
+  });
+  const rows = await table
+    .query()
+    .where(table.columns.id.gt(1).and(table.columns.score.ne(null)))
+    .select('id', 'title')
+    .orderBy('id', 'desc')
+    .collect();
+  const title: string | undefined = rows[0]?.title;
+  void title;
+  // @ts-expect-error Projection removes unselected columns.
+  rows[0]?.score;
+  // @ts-expect-error Predicates retain the column's type.
+  table.columns.id.eq('1');
+  // @ts-expect-error Ordering comparisons do not accept boolean columns.
+  table.columns.active.gt(true);
+  // @ts-expect-error JSON columns cannot be sorted.
+  table.query().orderBy('payload');
+  // @ts-expect-error Selected columns must exist.
+  table.query().select('missing');
+  // @ts-expect-error Non-nullable fields do not accept null equality inputs.
+  table.columns.title.eq(null);
+}

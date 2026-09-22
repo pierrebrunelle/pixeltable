@@ -4,6 +4,7 @@ Run package commands in `typescript-sdk/`. The package has its own dependency lo
 
 - `src/index.ts`: named client exports, service-scoped transport, HTTP errors, multipart serialization, job polling.
 - `src/catalog.ts`: experimental direct-HTTP catalog operations, typed table handles, metadata verification, and version checks.
+- `src/catalog-query.ts`: immutable typed query builders and Python-compatible expression serialization.
 - `src/catalog-schema.ts`: scalar schema inference, runtime value validation, and reserved JSON key encoding.
 - `src/proxy-protocol.ts`: protocol version constants and binary framing; tagged JSON stays opaque.
 - `src/handles.ts`: framework-independent typed query handles and cache identities.
@@ -35,4 +36,4 @@ Generated client fixtures are typechecked with the package. Runtime tests transp
 
 Regenerate the catalog framing fixture with `PYTHONPATH=.. /path/to/python tests/proxy-fixture.py` from `typescript-sdk/`. Match the Python protocol and metadata versions before extending the experimental catalog adapter. The live test mounts the existing proxy daemon app only inside its temporary loopback fixture with `--catalog`; production application services are unchanged.
 
-`tests/catalog-fixture.py` creates a scalar table and captures Python metadata. Run it with `PIXELTABLE_HOME` set to a new temporary directory and `PYTHONPATH` set to the checkout. It normalizes table IDs and timestamps for reproducibility. Typed handles support base tables only; preserve schema verification and reject stale writes before adding broader expression support.
+`tests/catalog-fixture.py` creates a scalar table and captures Python metadata and query serialization. Run it with `PIXELTABLE_HOME` set to a new temporary directory and `PYTHONPATH` set to the checkout. It normalizes table IDs and timestamps for reproducibility. Typed handles support base tables only; preserve schema verification and reject stale writes when extending expression support. The query fixture verifies wire compatibility; live tests verify filtering, null checks, JSON equality, projection, ordering, and pagination.
