@@ -106,6 +106,10 @@ export interface CatalogTable<S extends CatalogSchema> {
   delete(options?: { where?: CatalogPredicate; signal?: AbortSignal }): Promise<{ deletedRows: number }>;
   collect(options?: { limit?: number; signal?: AbortSignal }): Promise<CatalogRow<S>[]>;
   count(options?: { signal?: AbortSignal }): Promise<number>;
+  createSnapshot(
+    path: string,
+    options?: { where?: CatalogPredicate; signal?: AbortSignal },
+  ): Promise<CatalogSnapshot<S>>;
   createView(path: string, options?: { where?: CatalogPredicate; signal?: AbortSignal }): Promise<CatalogView<S>>;
   getVersions(options?: { limit?: number; signal?: AbortSignal }): Promise<CatalogVersion[]>;
   revert<const R extends CatalogSchema>(schema: R, options?: { signal?: AbortSignal }): Promise<CatalogTable<R>>;
@@ -136,6 +140,11 @@ export interface CatalogTable<S extends CatalogSchema> {
   ): Promise<CatalogTable<S & ComputedSchema<N, T>>>;
 }
 
+export type CatalogSnapshot<S extends CatalogSchema> = Pick<
+  CatalogTable<S>,
+  'id' | 'path' | 'schema' | 'columns' | 'query' | 'callFunction' | 'collect' | 'count' | 'createSnapshot'
+>;
+
 export interface CatalogView<S extends CatalogSchema> extends Pick<
   CatalogTable<S>,
   | 'id'
@@ -148,6 +157,7 @@ export interface CatalogView<S extends CatalogSchema> extends Pick<
   | 'collect'
   | 'count'
   | 'createView'
+  | 'createSnapshot'
   | 'addBtreeIndex'
   | 'addEmbeddingIndex'
   | 'dropIndex'
@@ -270,6 +280,7 @@ export function createCatalogClient(options: ClientOptions) {
     schema: S,
     metadata: unknown,
     isView = false,
+    isSnapshot = false,
   ): CatalogTable<S> {
     function readMetadata(value: unknown): {
       id: string;
@@ -284,6 +295,8 @@ export function createCatalogClient(options: ClientOptions) {
       const table = record(levels[0]!.tbl_md);
       if (typeof table.tbl_id !== 'string' || (table.view_md !== null) !== isView)
         throw new TypeError(isView ? 'Expected a view' : 'Expected a base table');
+      if (isView && (record(table.view_md).is_snapshot === true) !== isSnapshot)
+        throw new TypeError(isSnapshot ? 'Expected a snapshot' : 'Expected a live view');
       const version = record(levels[0]!.version_md).version;
       if (typeof version !== 'number' || !Number.isSafeInteger(version) || version < 0)
         throw new TypeError('Invalid table version');
@@ -296,14 +309,24 @@ export function createCatalogClient(options: ClientOptions) {
         if (typeof owner.tbl_id !== 'string') throw new TypeError('Invalid table identity');
         if (owner.view_md !== null) {
           const view = record(owner.view_md);
-          if (view.is_snapshot || !view.include_base_columns || view.iterator_call !== null)
-            throw new TypeError('Only live views with inherited columns are supported');
+          if ((!isSnapshot && view.is_snapshot) || !view.include_base_columns || view.iterator_call !== null)
+            throw new TypeError('Only views with inherited columns are supported');
         }
         const concreteVersion = record(level.version_md).version;
         if (typeof concreteVersion !== 'number' || !Number.isSafeInteger(concreteVersion) || concreteVersion < 0)
           throw new TypeError('Invalid base version');
         snapshotKey = { tbl_version: { id: owner.tbl_id, effective_version: concreteVersion }, base: snapshotKey };
-        pathKey = { tbl_version: { id: owner.tbl_id, effective_version: null }, base: pathKey };
+        const view = owner.view_md === null ? null : record(owner.view_md);
+        const pureSnapshot =
+          view?.is_snapshot === true &&
+          view.sample_clause === null &&
+          view.predicate === null &&
+          Object.keys(record(owner.column_md)).length === 0;
+        if (!pureSnapshot)
+          pathKey = {
+            tbl_version: { id: owner.tbl_id, effective_version: isSnapshot ? concreteVersion : null },
+            base: pathKey,
+          };
         for (const [id, raw] of Object.entries(record(record(level.schema_version_md).columns))) {
           const column = record(raw);
           if (column.name === null) continue;
@@ -415,6 +438,38 @@ export function createCatalogClient(options: ClientOptions) {
     function predicateWire(where?: CatalogPredicate): unknown {
       return where === undefined ? null : { $pxt: 'Expr', v: where.toWire(id) };
     }
+    async function createDerived(
+      viewPath: string,
+      options: { where?: CatalogPredicate; signal?: AbortSignal },
+      snapshot: boolean,
+    ): Promise<unknown> {
+      if (!viewPath) throw new TypeError('A view path is required');
+      const result = tagged(
+        await call(
+          'create_view',
+          {
+            path: pathValue(viewPath),
+            base: { $pxt: 'TablePathKey', v: pathKey },
+            select_list: null,
+            where: predicateWire(options.where),
+            sample_clause: null,
+            additional_columns: {},
+            is_snapshot: snapshot,
+            has_default_idxs: false,
+            iterator: null,
+            comment: null,
+            custom_metadata: null,
+            media_validation: { $pxt: 'MediaValidation', v: 'ON_WRITE' },
+            if_exists: { $pxt: 'IfExistsParam', v: 'ERROR' },
+          },
+          options.signal,
+        ),
+        'tuple',
+      );
+      if (!Array.isArray(result) || result.length !== 2 || typeof result[1] !== 'boolean')
+        throw new TypeError('Invalid create-view response');
+      return result[0];
+    }
     return {
       id,
       path,
@@ -424,32 +479,10 @@ export function createCatalogClient(options: ClientOptions) {
         return callCatalogFunction(id, fn, args);
       },
       async createView(viewPath, options = {}): Promise<CatalogView<S>> {
-        if (!viewPath) throw new TypeError('A view path is required');
-        const result = tagged(
-          await call(
-            'create_view',
-            {
-              path: pathValue(viewPath),
-              base: { $pxt: 'TablePathKey', v: pathKey },
-              select_list: null,
-              where: predicateWire(options.where),
-              sample_clause: null,
-              additional_columns: {},
-              is_snapshot: false,
-              has_default_idxs: false,
-              iterator: null,
-              comment: null,
-              custom_metadata: null,
-              media_validation: { $pxt: 'MediaValidation', v: 'ON_WRITE' },
-              if_exists: { $pxt: 'IfExistsParam', v: 'ERROR' },
-            },
-            options.signal,
-          ),
-          'tuple',
-        );
-        if (!Array.isArray(result) || result.length !== 2 || typeof result[1] !== 'boolean')
-          throw new TypeError('Invalid create-view response');
-        return viewHandle(viewPath, schema, result[0]);
+        return viewHandle(viewPath, schema, await createDerived(viewPath, options, false));
+      },
+      async createSnapshot(snapshotPath, options = {}): Promise<CatalogSnapshot<S>> {
+        return snapshotHandle(snapshotPath, schema, await createDerived(snapshotPath, options, true));
       },
       async getVersions(options = {}): Promise<CatalogVersion[]> {
         if (options.limit !== undefined && (!Number.isSafeInteger(options.limit) || options.limit < 1))
@@ -750,6 +783,20 @@ export function createCatalogClient(options: ClientOptions) {
       },
     };
   }
+  function snapshotHandle<S extends CatalogSchema>(path: string, schema: S, metadata: unknown): CatalogSnapshot<S> {
+    const table = tableHandle(path, schema, metadata, true, true);
+    return {
+      id: table.id,
+      path: table.path,
+      schema: table.schema,
+      columns: table.columns,
+      query: table.query,
+      callFunction: table.callFunction,
+      collect: table.collect,
+      count: table.count,
+      createSnapshot: table.createSnapshot,
+    };
+  }
   function viewHandle<S extends CatalogSchema>(path: string, schema: S, metadata: unknown): CatalogView<S> {
     return asView(tableHandle(path, schema, metadata, true));
   }
@@ -765,6 +812,7 @@ export function createCatalogClient(options: ClientOptions) {
       collect: table.collect,
       count: table.count,
       createView: table.createView,
+      createSnapshot: table.createSnapshot,
       addBtreeIndex: table.addBtreeIndex,
       addEmbeddingIndex: table.addEmbeddingIndex,
       dropIndex: table.dropIndex,
@@ -879,6 +927,19 @@ export function createCatalogClient(options: ClientOptions) {
         options.signal,
       );
       return tableHandle(path, schema, result);
+    },
+    async openSnapshot<const S extends CatalogSchema>(
+      path: string,
+      definition: S,
+      options: { signal?: AbortSignal } = {},
+    ) {
+      const schema = copySchema(definition);
+      const result = await call(
+        'get_table',
+        { path: pathValue(path), if_not_exists: { $pxt: 'IfNotExistsParam', v: 'ERROR' } },
+        options.signal,
+      );
+      return snapshotHandle(path, schema, result);
     },
     async openView<const S extends CatalogSchema>(path: string, definition: S, options: { signal?: AbortSignal } = {}) {
       const schema = copySchema(definition);

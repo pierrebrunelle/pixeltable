@@ -655,6 +655,51 @@ try {
     ingestView.callFunction(parseNumber, { text: ingestView.columns.text }),
   );
   assert.deepEqual(await ingest.insert([{ text: 'bad_again' }], { onError: 'ignore' }), { insertedRows: 1, errors: 2 });
+  const snapshotSchema = { id: { type: 'int' }, text: { type: 'string' } };
+  const snapshotSource = await catalog.createTable('sdk_test/snapshot_source', snapshotSchema);
+  await snapshotSource.insert([
+    { id: 1, text: 'before' },
+    { id: 2, text: 'two' },
+  ]);
+  const frozen = await snapshotSource.createSnapshot('sdk_test/frozen');
+  const filteredFrozen = await snapshotSource.createSnapshot('sdk_test/filtered_frozen', {
+    where: snapshotSource.columns.id.eq(1),
+  });
+  assert.notEqual(frozen.id, snapshotSource.id);
+  assert.equal('insert' in frozen, false);
+  assert.equal('recomputeColumns' in frozen, false);
+  assert.deepEqual(await filteredFrozen.collect(), [{ id: 1, text: 'before' }]);
+  await snapshotSource.update({ text: 'after' });
+  await snapshotSource.delete({ where: snapshotSource.columns.id.eq(2) });
+  await snapshotSource.insert([{ id: 3, text: 'new' }]);
+  assert.deepEqual(await frozen.query().orderBy('id').collect(), [
+    { id: 1, text: 'before' },
+    { id: 2, text: 'two' },
+  ]);
+  assert.deepEqual(await filteredFrozen.collect(), [{ id: 1, text: 'before' }]);
+  const reopenedFrozen = await catalog.openSnapshot('sdk_test/frozen', snapshotSchema);
+  assert.equal(reopenedFrozen.id, frozen.id);
+  assert.equal(await reopenedFrozen.count(), 2);
+  assert.throws(() => frozen.query().where(snapshotSource.columns.id.eq(1)), TypeError);
+  await assert.rejects(catalog.openView('sdk_test/frozen', snapshotSchema), /live view/);
+  await assert.rejects(catalog.openSnapshot('sdk_test/snapshot_source', snapshotSchema), TypeError);
+  const secondFrozen = await frozen.createSnapshot('sdk_test/second_frozen');
+  assert.deepEqual(await secondFrozen.query().where(secondFrozen.columns.id.eq(2)).collect(), [{ id: 2, text: 'two' }]);
+  const sourceView = await snapshotSource.createView('sdk_test/snapshot_view');
+  const derivedView = await sourceView.addComputedColumn('twice', sourceView.columns.id.multiply(2));
+  const frozenView = await derivedView.createSnapshot('sdk_test/frozen_view');
+  await snapshotSource.update({ id: 4 }, { where: snapshotSource.columns.id.eq(1) });
+  assert.deepEqual(await frozenView.query().select('id', 'twice').orderBy('id').collect(), [
+    { id: 1, twice: 2 },
+    { id: 3, twice: 6 },
+  ]);
+  await assert.rejects(catalog.dropTable('sdk_test/snapshot_view'), CatalogError);
+  await catalog.dropTable('sdk_test/snapshot_view', { force: true });
+  await assert.rejects(frozenView.count(), CatalogError);
+  await snapshotSource.renameColumn('text', 'renamed_text');
+  assert.deepEqual(await (await catalog.openSnapshot('sdk_test/filtered_frozen', snapshotSchema)).collect(), [
+    { id: 1, text: 'before' },
+  ]);
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );
