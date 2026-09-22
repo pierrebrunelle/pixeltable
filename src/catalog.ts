@@ -25,8 +25,21 @@ export type {
   CatalogFunctionArgs,
 } from './catalog-query.js';
 import { columnClasses, columnValue, copySchema } from './catalog-schema.js';
-import type { CatalogColumn, CatalogSchema, CatalogInsertRow, CatalogRow } from './catalog-schema.js';
-export type { CatalogColumn, CatalogSchema, CatalogRow, CatalogInsertRow, JsonValue } from './catalog-schema.js';
+import type {
+  CatalogColumn,
+  CatalogSchema,
+  CatalogInsertRow,
+  CatalogRow,
+  CatalogBatchUpdateRow,
+} from './catalog-schema.js';
+export type {
+  CatalogColumn,
+  CatalogSchema,
+  CatalogRow,
+  CatalogInsertRow,
+  CatalogBatchUpdateRow,
+  JsonValue,
+} from './catalog-schema.js';
 
 export type BtreeColumn<S extends CatalogSchema> = {
   [K in keyof S & string]: S[K]['type'] extends 'int' | 'float' | 'string' ? K : never;
@@ -115,6 +128,14 @@ export interface CatalogTable<S extends CatalogSchema> {
     rows: readonly CatalogInsertRow<S>[],
     options?: CatalogInsertOptions,
   ): Promise<{ insertedRows: number; errors: number }>;
+  batchUpdate(
+    rows: readonly CatalogBatchUpdateRow<S>[],
+    options?: {
+      ifNotExists?: 'error' | 'ignore' | 'insert';
+      cascade?: boolean;
+      signal?: AbortSignal;
+    },
+  ): Promise<{ updatedRows: number; insertedRows: number; errors: number }>;
   update(
     values: CatalogUpdateRow<S>,
     options?: { where?: CatalogPredicate; signal?: AbortSignal },
@@ -795,6 +816,47 @@ export function createCatalogClient(options: ClientOptions) {
         const own = record(status.row_count_stats);
         const cascaded = record(status.cascade_row_count_stats);
         return { insertedRows: statusCount([own.ins_rows]), errors: statusCount([own.num_excs, cascaded.num_excs]) };
+      },
+      async batchUpdate(rows, options = {}): Promise<{ updatedRows: number; insertedRows: number; errors: number }> {
+        const keys = Object.entries(schema)
+          .filter(([, column]) => column.primaryKey)
+          .map(([name]) => name);
+        if (keys.length === 0) throw new TypeError('Batch updates require a primary key');
+        if (!Array.isArray(rows) || rows.length === 0) throw new TypeError('Batch updates require a nonempty array');
+        if (options.ifNotExists !== undefined && !['error', 'ignore', 'insert'].includes(options.ifNotExists))
+          throw new TypeError('Invalid ifNotExists policy');
+        if (options.cascade !== undefined && typeof options.cascade !== 'boolean')
+          throw new TypeError('Cascade must be boolean');
+        const encoded = Array.from(rows, (row) => {
+          const values = record(row);
+          if (keys.some((key) => !Object.hasOwn(values, key)))
+            throw new TypeError('Every row requires all primary key columns');
+          return Object.fromEntries(
+            Object.entries(values).map(([name, value]) => {
+              if (!Object.hasOwn(schema, name) || schema[name]!.computed)
+                throw new TypeError('Unknown or computed update column');
+              return [name, columnValue(value, schema[name]!, true)];
+            }),
+          );
+        });
+        const result = await mutateMetadata(
+          'batch_update',
+          {
+            rows: encoded,
+            cascade: options.cascade ?? true,
+            if_not_exists: options.ifNotExists ?? 'error',
+            return_rows: false,
+          },
+          options.signal,
+        );
+        const status = record(tagged(result, 'UpdateStatus'));
+        const own = record(status.row_count_stats);
+        const cascaded = record(status.cascade_row_count_stats);
+        return {
+          updatedRows: statusCount([own.upd_rows, cascaded.upd_rows]),
+          insertedRows: statusCount([own.ins_rows, cascaded.ins_rows]),
+          errors: statusCount([own.num_excs, cascaded.num_excs]),
+        };
       },
       async update(
         values: CatalogUpdateRow<S>,

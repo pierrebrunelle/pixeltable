@@ -21,6 +21,13 @@ export type CatalogInsertRow<S extends CatalogSchema> = {
   [K in WritableColumn<S> as AllowsNull<S[K]> extends true ? never : K]: ColumnValue<S[K]>;
 } & { [K in WritableColumn<S> as AllowsNull<S[K]> extends true ? K : never]?: ColumnValue<S[K]> };
 
+type PrimaryKeyColumn<S extends CatalogSchema> = {
+  [K in keyof S & string]: S[K] extends { primaryKey: true } ? K : never;
+}[keyof S & string];
+export type CatalogBatchUpdateRow<S extends CatalogSchema> = [PrimaryKeyColumn<S>] extends [never]
+  ? never
+  : Pick<CatalogRow<S>, PrimaryKeyColumn<S>> & Partial<Pick<CatalogRow<S>, WritableColumn<S>>>;
+
 export const columnClasses = {
   int: 'IntType',
   float: 'FloatType',
