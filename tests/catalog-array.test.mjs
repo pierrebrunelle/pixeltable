@@ -92,3 +92,30 @@ test('array schemas preserve dtype and shape and validate metadata and cell valu
   ])
     assert.throws(() => copySchema({ value: invalid }));
 });
+
+test('typed reads convert byte and memory order and preserve integer precision', async () => {
+  const fixtures = JSON.parse(await readFile(new URL('./fixtures/catalog-npy.json', import.meta.url), 'utf8'));
+  for (const [name, fixture] of Object.entries(fixtures)) {
+    const array = CatalogArray.fromNpy(Buffer.from(fixture.npy, 'base64'));
+    const typed = array.toTypedArray();
+    const expected = fixture.flat.map((value) => (value === 'True' ? '1' : value === 'False' ? '0' : value));
+    const actual = Array.from(typed, String);
+    // Python float strings retain .0; compare numeric floats separately from exact integers.
+    if (fixture.descr.includes('f')) assert.deepEqual(Array.from(typed), expected.map(Number), name);
+    else assert.deepEqual(actual, expected, name);
+    const original = array.data;
+    typed.fill(typeof typed[0] === 'bigint' ? 0n : 0);
+    assert.deepEqual(array.data, original);
+  }
+});
+
+test('half precision typed reads handle signed zero, subnormals, infinities and NaN', () => {
+  const bytes = new Uint8Array(14);
+  const view = new DataView(bytes.buffer);
+  [0, 0x8000, 1, 0x7bff, 0x7c00, 0xfc00, 0x7e01].forEach((value, index) => view.setUint16(index * 2, value, false));
+  const array = new CatalogArray({ descr: '>f2', shape: [7], fortranOrder: false, data: bytes });
+  const values = array.toTypedArray();
+  assert.ok(values instanceof Float32Array);
+  assert.deepEqual(Array.from(values), [0, -0, 2 ** -24, 65504, Infinity, -Infinity, NaN]);
+  assert.deepEqual(array.data, bytes);
+});

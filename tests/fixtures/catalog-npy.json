@@ -7,6 +7,12 @@
     ],
     "fortranOrder": false,
     "data": "AADAPwAAAMAAAAAAAABQQA==",
+    "flat": [
+      "1.5",
+      "-2.0",
+      "0.0",
+      "3.25"
+    ],
     "npy": "k05VTVBZAQB2AHsnZGVzY3InOiAnPGY0JywgJ2ZvcnRyYW5fb3JkZXInOiBGYWxzZSwgJ3NoYXBlJzogKDIsIDIpLCB9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoAAMA/AAAAwAAAAAAAAFBA"
   },
   "matrix_v2": {
@@ -17,6 +23,12 @@
     ],
     "fortranOrder": false,
     "data": "AADAPwAAAMAAAAAAAABQQA==",
+    "flat": [
+      "1.5",
+      "-2.0",
+      "0.0",
+      "3.25"
+    ],
     "npy": "k05VTVBZAgB0AAAAeydkZXNjcic6ICc8ZjQnLCAnZm9ydHJhbl9vcmRlcic6IEZhbHNlLCAnc2hhcGUnOiAoMiwgMiksIH0gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoAAMA/AAAAwAAAAAAAAFBA"
   },
   "matrix_v3": {
@@ -27,6 +39,12 @@
     ],
     "fortranOrder": false,
     "data": "AADAPwAAAMAAAAAAAABQQA==",
+    "flat": [
+      "1.5",
+      "-2.0",
+      "0.0",
+      "3.25"
+    ],
     "npy": "k05VTVBZAwB0AAAAeydkZXNjcic6ICc8ZjQnLCAnZm9ydHJhbl9vcmRlcic6IEZhbHNlLCAnc2hhcGUnOiAoMiwgMiksIH0gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoAAMA/AAAAwAAAAAAAAFBA"
   },
   "fortran_v1": {
@@ -37,6 +55,12 @@
     ],
     "fortranOrder": true,
     "data": "AQADAAIABAA=",
+    "flat": [
+      "1",
+      "2",
+      "3",
+      "4"
+    ],
     "npy": "k05VTVBZAQB2AHsnZGVzY3InOiAnPGkyJywgJ2ZvcnRyYW5fb3JkZXInOiBUcnVlLCAnc2hhcGUnOiAoMiwgMiksIH0gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoBAAMAAgAEAA=="
   },
   "fortran_v2": {
@@ -47,6 +71,12 @@
     ],
     "fortranOrder": true,
     "data": "AQADAAIABAA=",
+    "flat": [
+      "1",
+      "2",
+      "3",
+      "4"
+    ],
     "npy": "k05VTVBZAgB0AAAAeydkZXNjcic6ICc8aTInLCAnZm9ydHJhbl9vcmRlcic6IFRydWUsICdzaGFwZSc6ICgyLCAyKSwgfSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoBAAMAAgAEAA=="
   },
   "fortran_v3": {
@@ -57,6 +87,12 @@
     ],
     "fortranOrder": true,
     "data": "AQADAAIABAA=",
+    "flat": [
+      "1",
+      "2",
+      "3",
+      "4"
+    ],
     "npy": "k05VTVBZAwB0AAAAeydkZXNjcic6ICc8aTInLCAnZm9ydHJhbl9vcmRlcic6IFRydWUsICdzaGFwZSc6ICgyLCAyKSwgfSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoBAAMAAgAEAA=="
   },
   "big_endian_v1": {
@@ -66,6 +102,10 @@
     ],
     "fortranOrder": false,
     "data": "AAAAAf////4=",
+    "flat": [
+      "1",
+      "-2"
+    ],
     "npy": "k05VTVBZAQB2AHsnZGVzY3InOiAnPmk0JywgJ2ZvcnRyYW5fb3JkZXInOiBGYWxzZSwgJ3NoYXBlJzogKDIsKSwgfSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoAAAAB/////g=="
   },
   "big_endian_v2": {
@@ -75,6 +115,10 @@
     ],
     "fortranOrder": false,
     "data": "AAAAAf////4=",
+    "flat": [
+      "1",
+      "-2"
+    ],
     "npy": "k05VTVBZAgB0AAAAeydkZXNjcic6ICc+aTQnLCAnZm9ydHJhbl9vcmRlcic6IEZhbHNlLCAnc2hhcGUnOiAoMiwpLCB9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoAAAAB/////g=="
   },
   "big_endian_v3": {
@@ -84,6 +128,10 @@
     ],
     "fortranOrder": false,
     "data": "AAAAAf////4=",
+    "flat": [
+      "1",
+      "-2"
+    ],
     "npy": "k05VTVBZAwB0AAAAeydkZXNjcic6ICc+aTQnLCAnZm9ydHJhbl9vcmRlcic6IEZhbHNlLCAnc2hhcGUnOiAoMiwpLCB9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoAAAAB/////g=="
   },
   "int64_v1": {
@@ -93,6 +141,10 @@
     ],
     "fortranOrder": false,
     "data": "AAAAAAAAAID/////////fw==",
+    "flat": [
+      "-9223372036854775808",
+      "9223372036854775807"
+    ],
     "npy": "k05VTVBZAQB2AHsnZGVzY3InOiAnPGk4JywgJ2ZvcnRyYW5fb3JkZXInOiBGYWxzZSwgJ3NoYXBlJzogKDIsKSwgfSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoAAAAAAAAAgP////////9/"
   },
   "int64_v2": {
@@ -102,6 +154,10 @@
     ],
     "fortranOrder": false,
     "data": "AAAAAAAAAID/////////fw==",
+    "flat": [
+      "-9223372036854775808",
+      "9223372036854775807"
+    ],
     "npy": "k05VTVBZAgB0AAAAeydkZXNjcic6ICc8aTgnLCAnZm9ydHJhbl9vcmRlcic6IEZhbHNlLCAnc2hhcGUnOiAoMiwpLCB9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoAAAAAAAAAgP////////9/"
   },
   "int64_v3": {
@@ -111,6 +167,10 @@
     ],
     "fortranOrder": false,
     "data": "AAAAAAAAAID/////////fw==",
+    "flat": [
+      "-9223372036854775808",
+      "9223372036854775807"
+    ],
     "npy": "k05VTVBZAwB0AAAAeydkZXNjcic6ICc8aTgnLCAnZm9ydHJhbl9vcmRlcic6IEZhbHNlLCAnc2hhcGUnOiAoMiwpLCB9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoAAAAAAAAAgP////////9/"
   },
   "uint64_v1": {
@@ -120,6 +180,10 @@
     ],
     "fortranOrder": false,
     "data": "AAAAAAAAAAD//////////w==",
+    "flat": [
+      "0",
+      "18446744073709551615"
+    ],
     "npy": "k05VTVBZAQB2AHsnZGVzY3InOiAnPHU4JywgJ2ZvcnRyYW5fb3JkZXInOiBGYWxzZSwgJ3NoYXBlJzogKDIsKSwgfSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoAAAAAAAAAAP//////////"
   },
   "uint64_v2": {
@@ -129,6 +193,10 @@
     ],
     "fortranOrder": false,
     "data": "AAAAAAAAAAD//////////w==",
+    "flat": [
+      "0",
+      "18446744073709551615"
+    ],
     "npy": "k05VTVBZAgB0AAAAeydkZXNjcic6ICc8dTgnLCAnZm9ydHJhbl9vcmRlcic6IEZhbHNlLCAnc2hhcGUnOiAoMiwpLCB9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoAAAAAAAAAAP//////////"
   },
   "uint64_v3": {
@@ -138,6 +206,10 @@
     ],
     "fortranOrder": false,
     "data": "AAAAAAAAAAD//////////w==",
+    "flat": [
+      "0",
+      "18446744073709551615"
+    ],
     "npy": "k05VTVBZAwB0AAAAeydkZXNjcic6ICc8dTgnLCAnZm9ydHJhbl9vcmRlcic6IEZhbHNlLCAnc2hhcGUnOiAoMiwpLCB9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoAAAAAAAAAAP//////////"
   },
   "half_v1": {
@@ -147,6 +219,10 @@
     ],
     "fortranOrder": false,
     "data": "AD4AwA==",
+    "flat": [
+      "1.5",
+      "-2.0"
+    ],
     "npy": "k05VTVBZAQB2AHsnZGVzY3InOiAnPGYyJywgJ2ZvcnRyYW5fb3JkZXInOiBGYWxzZSwgJ3NoYXBlJzogKDIsKSwgfSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoAPgDA"
   },
   "half_v2": {
@@ -156,6 +232,10 @@
     ],
     "fortranOrder": false,
     "data": "AD4AwA==",
+    "flat": [
+      "1.5",
+      "-2.0"
+    ],
     "npy": "k05VTVBZAgB0AAAAeydkZXNjcic6ICc8ZjInLCAnZm9ydHJhbl9vcmRlcic6IEZhbHNlLCAnc2hhcGUnOiAoMiwpLCB9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoAPgDA"
   },
   "half_v3": {
@@ -165,7 +245,122 @@
     ],
     "fortranOrder": false,
     "data": "AD4AwA==",
+    "flat": [
+      "1.5",
+      "-2.0"
+    ],
     "npy": "k05VTVBZAwB0AAAAeydkZXNjcic6ICc8ZjInLCAnZm9ydHJhbl9vcmRlcic6IEZhbHNlLCAnc2hhcGUnOiAoMiwpLCB9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoAPgDA"
+  },
+  "tensor_v1": {
+    "descr": ">i4",
+    "shape": [
+      2,
+      3,
+      4
+    ],
+    "fortranOrder": true,
+    "data": "AAAAAAAAAAwAAAAEAAAAEAAAAAgAAAAUAAAAAQAAAA0AAAAFAAAAEQAAAAkAAAAVAAAAAgAAAA4AAAAGAAAAEgAAAAoAAAAWAAAAAwAAAA8AAAAHAAAAEwAAAAsAAAAX",
+    "flat": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18",
+      "19",
+      "20",
+      "21",
+      "22",
+      "23"
+    ],
+    "npy": "k05VTVBZAQB2AHsnZGVzY3InOiAnPmk0JywgJ2ZvcnRyYW5fb3JkZXInOiBUcnVlLCAnc2hhcGUnOiAoMiwgMywgNCksIH0gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoAAAAAAAAADAAAAAQAAAAQAAAACAAAABQAAAABAAAADQAAAAUAAAARAAAACQAAABUAAAACAAAADgAAAAYAAAASAAAACgAAABYAAAADAAAADwAAAAcAAAATAAAACwAAABc="
+  },
+  "tensor_v2": {
+    "descr": ">i4",
+    "shape": [
+      2,
+      3,
+      4
+    ],
+    "fortranOrder": true,
+    "data": "AAAAAAAAAAwAAAAEAAAAEAAAAAgAAAAUAAAAAQAAAA0AAAAFAAAAEQAAAAkAAAAVAAAAAgAAAA4AAAAGAAAAEgAAAAoAAAAWAAAAAwAAAA8AAAAHAAAAEwAAAAsAAAAX",
+    "flat": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18",
+      "19",
+      "20",
+      "21",
+      "22",
+      "23"
+    ],
+    "npy": "k05VTVBZAgB0AAAAeydkZXNjcic6ICc+aTQnLCAnZm9ydHJhbl9vcmRlcic6IFRydWUsICdzaGFwZSc6ICgyLCAzLCA0KSwgfSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoAAAAAAAAADAAAAAQAAAAQAAAACAAAABQAAAABAAAADQAAAAUAAAARAAAACQAAABUAAAACAAAADgAAAAYAAAASAAAACgAAABYAAAADAAAADwAAAAcAAAATAAAACwAAABc="
+  },
+  "tensor_v3": {
+    "descr": ">i4",
+    "shape": [
+      2,
+      3,
+      4
+    ],
+    "fortranOrder": true,
+    "data": "AAAAAAAAAAwAAAAEAAAAEAAAAAgAAAAUAAAAAQAAAA0AAAAFAAAAEQAAAAkAAAAVAAAAAgAAAA4AAAAGAAAAEgAAAAoAAAAWAAAAAwAAAA8AAAAHAAAAEwAAAAsAAAAX",
+    "flat": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18",
+      "19",
+      "20",
+      "21",
+      "22",
+      "23"
+    ],
+    "npy": "k05VTVBZAwB0AAAAeydkZXNjcic6ICc+aTQnLCAnZm9ydHJhbl9vcmRlcic6IFRydWUsICdzaGFwZSc6ICgyLCAzLCA0KSwgfSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoAAAAAAAAADAAAAAQAAAAQAAAACAAAABQAAAABAAAADQAAAAUAAAARAAAACQAAABUAAAACAAAADgAAAAYAAAASAAAACgAAABYAAAADAAAADwAAAAcAAAATAAAACwAAABc="
   },
   "bool_v1": {
     "descr": "|b1",
@@ -174,6 +369,10 @@
     ],
     "fortranOrder": false,
     "data": "AQA=",
+    "flat": [
+      "True",
+      "False"
+    ],
     "npy": "k05VTVBZAQB2AHsnZGVzY3InOiAnfGIxJywgJ2ZvcnRyYW5fb3JkZXInOiBGYWxzZSwgJ3NoYXBlJzogKDIsKSwgfSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoBAA=="
   },
   "bool_v2": {
@@ -183,6 +382,10 @@
     ],
     "fortranOrder": false,
     "data": "AQA=",
+    "flat": [
+      "True",
+      "False"
+    ],
     "npy": "k05VTVBZAgB0AAAAeydkZXNjcic6ICd8YjEnLCAnZm9ydHJhbl9vcmRlcic6IEZhbHNlLCAnc2hhcGUnOiAoMiwpLCB9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoBAA=="
   },
   "bool_v3": {
@@ -192,6 +395,10 @@
     ],
     "fortranOrder": false,
     "data": "AQA=",
+    "flat": [
+      "True",
+      "False"
+    ],
     "npy": "k05VTVBZAwB0AAAAeydkZXNjcic6ICd8YjEnLCAnZm9ydHJhbl9vcmRlcic6IEZhbHNlLCAnc2hhcGUnOiAoMiwpLCB9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoBAA=="
   },
   "scalar_v1": {
@@ -199,6 +406,9 @@
     "shape": [],
     "fortranOrder": false,
     "data": "AAAAAAAADEA=",
+    "flat": [
+      "3.5"
+    ],
     "npy": "k05VTVBZAQB2AHsnZGVzY3InOiAnPGY4JywgJ2ZvcnRyYW5fb3JkZXInOiBGYWxzZSwgJ3NoYXBlJzogKCksIH0gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoAAAAAAAAMQA=="
   },
   "scalar_v2": {
@@ -206,6 +416,9 @@
     "shape": [],
     "fortranOrder": false,
     "data": "AAAAAAAADEA=",
+    "flat": [
+      "3.5"
+    ],
     "npy": "k05VTVBZAgB0AAAAeydkZXNjcic6ICc8ZjgnLCAnZm9ydHJhbl9vcmRlcic6IEZhbHNlLCAnc2hhcGUnOiAoKSwgfSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoAAAAAAAAMQA=="
   },
   "scalar_v3": {
@@ -213,6 +426,9 @@
     "shape": [],
     "fortranOrder": false,
     "data": "AAAAAAAADEA=",
+    "flat": [
+      "3.5"
+    ],
     "npy": "k05VTVBZAwB0AAAAeydkZXNjcic6ICc8ZjgnLCAnZm9ydHJhbl9vcmRlcic6IEZhbHNlLCAnc2hhcGUnOiAoKSwgfSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAoAAAAAAAAMQA=="
   },
   "empty_v1": {
@@ -224,6 +440,7 @@
     ],
     "fortranOrder": false,
     "data": "",
+    "flat": [],
     "npy": "k05VTVBZAQB2AHsnZGVzY3InOiAnPHUyJywgJ2ZvcnRyYW5fb3JkZXInOiBGYWxzZSwgJ3NoYXBlJzogKDIsIDAsIDMpLCB9ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAo="
   },
   "empty_v2": {
@@ -235,6 +452,7 @@
     ],
     "fortranOrder": false,
     "data": "",
+    "flat": [],
     "npy": "k05VTVBZAgB0AAAAeydkZXNjcic6ICc8dTInLCAnZm9ydHJhbl9vcmRlcic6IEZhbHNlLCAnc2hhcGUnOiAoMiwgMCwgMyksIH0gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAo="
   },
   "empty_v3": {
@@ -246,6 +464,7 @@
     ],
     "fortranOrder": false,
     "data": "",
+    "flat": [],
     "npy": "k05VTVBZAwB0AAAAeydkZXNjcic6ICc8dTInLCAnZm9ydHJhbl9vcmRlcic6IEZhbHNlLCAnc2hhcGUnOiAoMiwgMCwgMyksIH0gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAo="
   }
 }

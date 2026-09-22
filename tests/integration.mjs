@@ -1293,6 +1293,8 @@ try {
   await arrayTable.insert([{ id: 1, vector, loose: large }]);
   const arrayRows = await arrayTable.collect();
   assert.deepEqual(arrayRows[0].vector.data, vector.data);
+  assert.deepEqual(arrayRows[0].vector.toTypedArray(), new Float32Array([1.5, -2]));
+  assert.deepEqual(arrayRows[0].loose.toTypedArray(), new BigInt64Array([-(2n ** 63n), 2n ** 63n - 1n]));
   assert.deepEqual(arrayRows[0].loose.data, large.data);
   await assert.rejects(arrayTable.insert([{ id: 2, vector: catalogArray(new Float32Array(3)) }]), /shape/);
   await assert.rejects(arrayTable.insert([{ id: 2, vector: catalogArray(new Float64Array(2)) }]), /dtype/);

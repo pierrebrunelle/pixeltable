@@ -1,4 +1,5 @@
 export { CatalogArray, catalogArray } from './catalog-array.js';
+export type { CatalogNumericArray } from './catalog-array.js';
 export { catalogUuid } from './catalog-uuid.js';
 export type { CatalogUuid } from './catalog-uuid.js';
 import { encodeBinaryParts, decodeBinaryParts } from './catalog-binary.js';
