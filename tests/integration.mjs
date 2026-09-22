@@ -7,6 +7,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
+import { CatalogArray } from '../dist/catalog-array.js';
+import { encodeBinaryParts } from '../dist/catalog-binary.js';
 import { decodeNpy, encodeNpy } from '../dist/catalog-npy.js';
 import { createClient, multipartBody, PixeltableHttpError } from '../dist/index.js';
 
@@ -33,6 +35,7 @@ const npyRoundTrip = spawnSync(
     `
 import base64, io, json, sys
 import numpy as np
+from pixeltable.service import proxy_protocol
 for case in json.load(sys.stdin):
     original = np.load(io.BytesIO(base64.b64decode(case['original'])), allow_pickle=False)
     encoded = np.load(io.BytesIO(base64.b64decode(case['encoded'])), allow_pickle=False)
@@ -40,14 +43,24 @@ for case in json.load(sys.stdin):
     assert original.shape == encoded.shape
     assert original.tobytes(order='A') == encoded.tobytes(order='A')
     assert original.flags.f_contiguous == encoded.flags.f_contiguous
+    transported = proxy_protocol.deserialize_value(case['wire'], [base64.b64decode(part) for part in case['parts']])
+    assert original.dtype == transported.dtype
+    assert original.shape == transported.shape
+    assert original.tobytes(order='A') == transported.tobytes(order='A')
 `,
   ],
   {
     input: JSON.stringify(
-      Object.values(npyFixtures).map((fixture) => ({
-        original: fixture.npy,
-        encoded: Buffer.from(encodeNpy(decodeNpy(Buffer.from(fixture.npy, 'base64')))).toString('base64'),
-      })),
+      Object.values(npyFixtures).map((fixture) => {
+        const parts = [];
+        const wire = encodeBinaryParts(CatalogArray.fromNpy(Buffer.from(fixture.npy, 'base64')), parts);
+        return {
+          original: fixture.npy,
+          encoded: Buffer.from(encodeNpy(decodeNpy(Buffer.from(fixture.npy, 'base64')))).toString('base64'),
+          wire,
+          parts: parts.map((part) => Buffer.from(part).toString('base64')),
+        };
+      }),
     ),
     encoding: 'utf8',
     timeout: 30000,
