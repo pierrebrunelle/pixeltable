@@ -617,3 +617,19 @@ export async function checkDistinctTypes(): Promise<void> {
   const id = rows[0]!.id;
   void [label, id];
 }
+
+export async function checkBinaryTypes(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.openTable('binary', { content: { type: 'binary' } });
+  await table.insert([{ content: new Uint8Array([0, 255]) }]);
+  // @ts-expect-error Binary values are bytes, not base64 strings.
+  await table.insert([{ content: 'AP8=' }]);
+  const copy = await table.addComputedColumn('copy', table.columns.content);
+  const rows = await copy.collect();
+  const bytes: Uint8Array = rows[0]!.copy;
+  // @ts-expect-error Binary sorting is not supported.
+  table.query().orderBy('content');
+  // @ts-expect-error Binary membership lists are not supported.
+  table.columns.content.isIn([bytes]);
+  void bytes;
+}

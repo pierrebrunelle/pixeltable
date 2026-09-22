@@ -1180,6 +1180,32 @@ try {
     on: ({ left, right }) => left.key.eq(right.key),
   });
   assert.deepEqual(await snapshotJoin.query().select('right_amount').collect(), [{ right_amount: 20 }]);
+  const binary = await catalog.createTable('sdk_test/binary_values', {
+    id: { type: 'int', primaryKey: true },
+    content: { type: 'binary' },
+    optional: { type: 'binary', nullable: true },
+  });
+  const bytes = new Uint8Array([7, 0, 255, 16, 8]).subarray(1, 4);
+  await binary.insert([
+    { id: 1, content: bytes },
+    { id: 2, content: new Uint8Array(), optional: bytes },
+  ]);
+  assert.deepEqual(await binary.query().orderBy('id').collect(), [
+    { id: 1, content: bytes, optional: null },
+    { id: 2, content: new Uint8Array(), optional: bytes },
+  ]);
+  assert.equal(await binary.query().where(binary.columns.content.eq(bytes)).count(), 1);
+  const binaryCopy = await binary.addComputedColumn('copy', binary.columns.content);
+  assert.deepEqual((await binaryCopy.query().where(binaryCopy.columns.id.eq(1)).collect())[0].copy, bytes);
+  await binaryCopy.update({ content: new Uint8Array([42]) }, { where: binaryCopy.columns.id.eq(1) });
+  assert.deepEqual(
+    (await binaryCopy.query().where(binaryCopy.columns.id.eq(1)).collect())[0].copy,
+    new Uint8Array([42]),
+  );
+  await binaryCopy.batchUpdate([{ id: 2, content: bytes }]);
+  assert.deepEqual((await binaryCopy.compute([{ id: 3, content: bytes }]))[0].values.copy, bytes);
+  const openedBinary = await catalog.openTable('sdk_test/binary_values', binaryCopy.schema);
+  assert.equal(await openedBinary.query().where(openedBinary.columns.content.eq(bytes)).count(), 1);
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );

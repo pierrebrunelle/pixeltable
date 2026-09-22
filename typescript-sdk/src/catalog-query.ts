@@ -6,7 +6,7 @@ type Wire = Record<string, unknown>;
 type OrderedValue<T> = Exclude<T, null> extends string | number ? Exclude<T, null> : never;
 type ColumnName<S extends CatalogSchema> = keyof S & string;
 type SortableName<S extends CatalogSchema> = {
-  [K in ColumnName<S>]: S[K]['type'] extends 'json' ? never : K;
+  [K in ColumnName<S>]: S[K]['type'] extends 'json' | 'binary' ? never : K;
 }[ColumnName<S>];
 
 class Predicate {
@@ -119,7 +119,7 @@ class ColumnExpression<T> {
     if (!['count', 'sum', 'mean', 'min', 'max'].includes(kind)) throw new TypeError('Unsupported aggregate');
     if (['sum', 'mean'].includes(kind) && !['int', 'float'].includes(this.column.type))
       throw new TypeError('Sum and mean require numeric expressions');
-    if (['min', 'max'].includes(kind) && ['json', 'date'].includes(this.column.type))
+    if (['min', 'max'].includes(kind) && ['json', 'date', 'binary'].includes(this.column.type))
       throw new TypeError('Min and max require ordered scalar expressions');
     if (
       window !== undefined &&
@@ -289,7 +289,7 @@ class ColumnExpression<T> {
   isIn(
     values: Exclude<T, null> extends string | number | boolean ? readonly T[] | ColumnExpression<JsonValue> : never,
   ): Predicate {
-    if (this.column.type === 'json') throw new TypeError('Membership requires a scalar expression');
+    if (['json', 'binary'].includes(this.column.type)) throw new TypeError('Membership requires a scalar expression');
     if (values instanceof ColumnExpression) {
       if (values.tableId !== this.tableId || values.column.type !== 'json')
         throw new TypeError('Membership values must be a JSON expression from the same table');
@@ -354,17 +354,19 @@ export type CatalogExpression<T> = ColumnExpression<T>;
 export type ComputedSchema<N extends string, T> = Record<
   N,
   {
-    type: Exclude<T, null> extends CatalogDate
-      ? 'date'
-      : Exclude<T, null> extends CatalogTimestamp
-        ? 'timestamp'
-        : Exclude<T, null> extends number
-          ? 'int' | 'float'
-          : Exclude<T, null> extends string
-            ? 'string'
-            : Exclude<T, null> extends boolean
-              ? 'bool'
-              : 'json';
+    type: Exclude<T, null> extends Uint8Array
+      ? 'binary'
+      : Exclude<T, null> extends CatalogDate
+        ? 'date'
+        : Exclude<T, null> extends CatalogTimestamp
+          ? 'timestamp'
+          : Exclude<T, null> extends number
+            ? 'int' | 'float'
+            : Exclude<T, null> extends string
+              ? 'string'
+              : Exclude<T, null> extends boolean
+                ? 'bool'
+                : 'json';
     nullable: null extends T ? true : false;
     computed: true;
   }
@@ -595,7 +597,7 @@ export function createTableQueries<S extends CatalogSchema>(
         const definition = name instanceof ColumnExpression ? name.computedDefinition(tableId) : null;
         const reference = definition ? definition.wire.v : columnReference(name as string);
         const column = definition ? definition.column : schema[name as string]!;
-        if (column.type === 'json') throw new TypeError('JSON columns cannot be sorted');
+        if (['json', 'binary'].includes(column.type)) throw new TypeError('JSON and binary columns cannot be sorted');
         return build<R>(selected, predicate, [...order, [reference, direction === 'asc']], limit, offset, grouping);
       },
       distinct() {
