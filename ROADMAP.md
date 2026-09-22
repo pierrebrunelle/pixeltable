@@ -26,7 +26,7 @@ Remaining release gates: select the standalone GitHub repository and npm owner; 
 
 ## Phase 2: application handles and React
 
-Implemented: `defineQuery`, `usePixeltableQuery`, `usePixeltableMutation`, and `usePixeltableJob`, using TanStack Query with documented polling, cancellation, cache scopes, and invalidation.
+Implemented: named calls generated from OpenAPI operation IDs with automatic JSON/multipart serialization, `defineQuery`, `usePixeltableQuery`, `usePixeltableMutation`, and `usePixeltableJob`, using TanStack Query with documented polling, cancellation, cache scopes, and invalidation.
 
 Remaining: generate named query and mutation handles from explicit serving metadata and supply a tested authenticated application-backend example. Browser code calls an authenticated application backend. Service/catalog credentials remain on the server.
 

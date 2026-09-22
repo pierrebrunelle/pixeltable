@@ -52,6 +52,28 @@ console.log(data);
 
 The SDK uses [openapi-fetch](https://openapi-ts.dev/openapi-fetch/api) for typed request methods and [openapi-typescript](https://openapi-ts.dev/node) for generation. Their types provide compile-time checks; they do not validate every response at runtime. JSON numbers remain JavaScript numbers: values beyond the safe integer range require a string representation in your Python route.
 
+## Generate named calls
+
+Use `--client` with a `.ts` output to generate a client factory as well as types:
+
+```bash
+npx pxt-generate-ts openapi.json --client --output src/pxt.ts
+```
+
+```typescript
+import { createServiceClient } from './pxt.js';
+import { defineQuery } from '@pixeltable/sdk';
+
+const service = createServiceClient({ baseUrl: applicationUrl });
+const inserted = await service.operations.insert_docs_docs_post({ id: 1, title: 'Hello' });
+const lookup = defineQuery([applicationUrl, sessionId, 'lookup'], service.operations.query_lookup_lookup_get);
+const rows = await lookup.run({ id: inserted.id });
+```
+
+Names come directly from the service's `operationId` fields. Calls accept typed input and an optional `{ signal }`, serialize the request, and return the JSON result. Upload calls supply the multipart serializer automatically. `service.api` and `service.job` remain available. Pass a generated write function to `usePixeltableMutation`; use `defineQuery` to explicitly identify reads.
+
+Named generation currently supports query parameters or a required JSON/flat multipart body, with one JSON 200 response. It rejects missing or duplicate operation IDs, path/header/cookie parameters, optional bodies, and other response formats before replacing the output. For other routes, generate declarations and use `client.api`. Keep operation IDs stable in Python if application code depends on their names. Generation does not infer permissions or distinguish reads from writes.
+
 ## Upload a file
 
 For a route declared with `uploadfile_inputs`, pass a `File` or `Blob` with `multipartBody` as the serializer:
@@ -161,7 +183,7 @@ const job = usePixeltableJob(jobHandleOrNull, {
 
 `usePixeltableJob` accepts a job handle or null while waiting for a ticket. Its required `scope` separates services and sessions in the cache. It polls once a second while mounted, stops on `done`, `error`, or a failed polling request, and invalidates selected query handles once per observed completion. Change the interval with `pollIntervalMs`; `enabled: false` pauses polling. Computation failures appear in `data` as `{ status: 'error', error }`; failed HTTP requests appear in the hook's `error`. Call `refetch()` to retry a failed status request. Query and job requests have retries disabled by these hooks.
 
-Reactivity uses polling and cache invalidation. It provides no cross-query snapshot or transaction guarantee. Queries may also refresh according to your TanStack Query provider defaults. The source checkout includes a compiled example in `examples/react.ts`. Named handles are currently authored with `defineQuery`; automatic generation of application handles remains a subsequent step.
+Reactivity uses polling and cache invalidation. It provides no cross-query snapshot or transaction guarantee. Queries may also refresh according to your TanStack Query provider defaults. The source checkout includes a compiled example in `examples/react.ts`. Generated named calls can be wrapped with `defineQuery`; semantic query and mutation metadata remains a subsequent step.
 
 ## Verify
 

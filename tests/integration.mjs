@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createClient, multipartBody, PixeltableHttpError } from '../dist/index.js';
 
+import { loadGeneratedClient } from './load-generated.mjs';
+
 if (!process.env.PXT_TEST_PYTHON)
   throw new Error('Set PXT_TEST_PYTHON to a Python executable with pixeltable[serve] installed');
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -51,6 +53,12 @@ try {
   const expectedSchema = JSON.parse(await readFile(new URL('./fixtures/openapi.json', import.meta.url), 'utf8'));
   assert.deepEqual(schema, expectedSchema);
   const { api, job } = createClient({ baseUrl });
+  const { createServiceClient } = await loadGeneratedClient();
+  const named = createServiceClient({ baseUrl }).operations;
+  assert.deepEqual(await named.insert_docs_docs_post({ id: 10, title: 'named' }), { id: 10, title_upper: 'NAMED' });
+  assert.deepEqual(await named.query_lookup_lookup_get({ id: 10 }), { rows: [{ id: 10, title_upper: 'NAMED' }] });
+  assert.deepEqual(await named.update_edit_edit_post({ id: 10, title: 'renamed' }), { id: 10, title_upper: 'RENAMED' });
+  assert.deepEqual(await named.delete_remove_remove_post({ id: 10 }), { num_rows: 1 });
   assert.deepEqual((await api.POST('/docs', { body: { id: 1, title: 'hello' } })).data, {
     id: 1,
     title_upper: 'HELLO',
@@ -71,6 +79,14 @@ try {
   const png = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aT1kAAAAASUVORK5CYII=',
     'base64',
+  );
+  assert.deepEqual(
+    await named.insert_upload_upload_post({
+      id: 11,
+      title: 'named image',
+      image: new Blob([png], { type: 'image/png' }),
+    }),
+    { id: 11, title_upper: 'NAMED IMAGE' },
   );
   assert.deepEqual(
     (
