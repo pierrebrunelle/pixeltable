@@ -1310,11 +1310,18 @@ try {
     (await arrayCopy.query().selectExpressions({ cast: castArray }).collect())[0].cast.data,
     vector.data,
   );
-  const arrayOpened = await catalog.openTable('sdk_test/arrays', arrayCopy.schema);
+  const reverseVector = arrayCopy.columns.vector.arraySlice({ step: -1 });
+  assert.deepEqual(
+    (await arrayCopy.query().selectExpressions({ reversed: reverseVector }).collect())[0].reversed.toTypedArray(),
+    new Float32Array([-2, 1.5]),
+  );
+  const slicedCopy = await arrayCopy.addComputedColumn('slice_tail', arrayCopy.columns.vector.arraySlice({ start: 1 }));
+  assert.deepEqual((await slicedCopy.collect())[0].slice_tail.toTypedArray(), new Float32Array([-2]));
+  const arrayOpened = await catalog.openTable('sdk_test/arrays', slicedCopy.schema);
   assert.deepEqual((await arrayOpened.collect())[0].vector.data, vector.data);
   await assert.rejects(
     catalog.openTable('sdk_test/arrays', {
-      ...arrayCopy.schema,
+      ...slicedCopy.schema,
       vector: { type: 'array', dtype: 'float32', shape: [3] },
     }),
     /Schema mismatch/,

@@ -660,3 +660,23 @@ export async function checkArrayTypes(): Promise<void> {
   const array: InstanceType<typeof CatalogArray> = (await copy.collect())[0]!.copy;
   void array;
 }
+
+export async function checkArraySliceTypes(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.openTable('slices', {
+    value: { type: 'array', nullable: true },
+    label: { type: 'string' },
+  });
+  const rows = await table
+    .query()
+    .selectExpressions({ sliced: table.columns.value.arraySlice({ step: -1 }) })
+    .collect();
+  const value: import('@pixeltable/sdk/experimental/catalog').CatalogArray | null = rows[0]!.sliced;
+  // @ts-expect-error Slicing preserves nullable array values.
+  const required: import('@pixeltable/sdk/experimental/catalog').CatalogArray = rows[0]!.sliced;
+  // @ts-expect-error String columns cannot be sliced as arrays.
+  table.columns.label.arraySlice({});
+  // @ts-expect-error Integer indexing is separate from dimension-preserving slicing.
+  table.columns.value.arraySlice(1);
+  void [value, required];
+}

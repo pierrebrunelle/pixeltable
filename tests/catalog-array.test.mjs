@@ -1,3 +1,4 @@
+import { createTableQueries } from '../dist/catalog-query.js';
 import { copySchema, columnValue, columnWire, matchesColumn } from '../dist/catalog-schema.js';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -118,4 +119,29 @@ test('half precision typed reads handle signed zero, subnormals, infinities and 
   assert.ok(values instanceof Float32Array);
   assert.deepEqual(Array.from(values), [0, -0, 2 ** -24, 65504, Infinity, -Infinity, NaN]);
   assert.deepEqual(array.data, bytes);
+});
+
+test('array slice expressions and inferred shapes match Python', async () => {
+  const id = '12345678-1234-5678-1234-567812345678';
+  const { columns } = createTableQueries(
+    id,
+    { value: { type: 'array', dtype: 'float32', shape: [3, 4] } },
+    { value: 0 },
+    async () => [],
+    async () => 0,
+  );
+  const cases = {
+    reverse: columns.value.arraySlice({ step: -1 }, { start: 1, step: 2 }),
+    empty: columns.value.arraySlice({ start: 2, stop: 1 }),
+    clamped: columns.value.arraySlice({ start: -100, stop: 100, step: 2 }, { step: -1 }),
+    negative_stop: columns.value.arraySlice({ stop: -1, step: -1 }),
+  };
+  const python = JSON.parse(await readFile(new URL('./fixtures/catalog-array-slice.json', import.meta.url), 'utf8'));
+  for (const [name, expression] of Object.entries(cases)) {
+    const definition = expression.computedDefinition(id);
+    assert.deepEqual(definition.wire.v, python[name].expression);
+    assert.deepEqual(columnWire(definition.column), python[name].type);
+  }
+  for (const args of [[], [1], [{ step: 0 }], [{ start: 0.5 }], [{ unknown: 1 }], [{}, {}, {}]])
+    assert.throws(() => columns.value.arraySlice(...args));
 });

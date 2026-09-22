@@ -45,6 +45,12 @@ type NumericOperand<T> = Exclude<T, null> extends number ? number | ColumnExpres
 type ArithmeticValue<T, O> =
   number | Extract<T, null> | (O extends ColumnExpression<infer V> ? Extract<V, null> : never);
 
+export interface CatalogArraySlice {
+  start?: number;
+  stop?: number;
+  step?: number;
+}
+
 export type CatalogJsonPathElement = string | number | { start?: number; stop?: number; step?: number };
 export type CatalogCastType = Pick<CatalogColumn, 'type' | 'nullable' | 'dtype' | 'shape'>;
 export type CatalogWindow =
@@ -58,6 +64,56 @@ class ColumnExpression<T> {
     private readonly column: CatalogColumn,
     private readonly expression: Wire,
   ) {}
+  arraySlice(
+    ...slices: Exclude<T, null> extends CatalogArray ? CatalogArraySlice[] : never
+  ): ColumnExpression<CatalogArray | Extract<T, null>> {
+    if (this.column.type !== 'array') throw new TypeError('Array slicing requires an array expression');
+    if (!slices.length) throw new TypeError('Specify at least one array slice');
+    if (this.column.shape && slices.length > this.column.shape.length) throw new TypeError('Too many array slices');
+    const index = slices.map((slice) => {
+      if (
+        typeof slice !== 'object' ||
+        slice === null ||
+        Array.isArray(slice) ||
+        ![Object.prototype, null].includes(Object.getPrototypeOf(slice)) ||
+        Object.keys(slice).some((key) => !['start', 'stop', 'step'].includes(key))
+      )
+        throw new TypeError('Array slices require start, stop, and step options');
+      const values = [slice.start, slice.stop, slice.step];
+      if (values.some((value) => value !== undefined && !Number.isSafeInteger(value)) || slice.step === 0)
+        throw new TypeError('Array slice bounds must be safe integers and step cannot be zero');
+      return values.map((value) => value ?? null);
+    });
+    const shape = this.column.shape?.map((dimension, axis) => {
+      const slice = index[axis];
+      if (dimension === null || !slice) return dimension;
+      const size = BigInt(dimension);
+      const step = BigInt(slice[2] ?? 1);
+      const positive = step > 0n;
+      const bound = (value: number | null | undefined, fallback: bigint): bigint => {
+        if (value === null || value === undefined) return fallback;
+        let result = BigInt(value);
+        if (result < 0n) result += size;
+        const lower = positive ? 0n : -1n;
+        const upper = positive ? size : size - 1n;
+        return result < lower ? lower : result > upper ? upper : result;
+      };
+      const start = bound(slice[0], positive ? 0n : size - 1n);
+      const stop = bound(slice[1], positive ? size : -1n);
+      const distance = positive ? stop - start : start - stop;
+      const stride = positive ? step : -step;
+      return distance <= 0n ? 0 : Number((distance + stride - 1n) / stride);
+    });
+    return new ColumnExpression(
+      this.tableId,
+      { ...this.column, ...(shape ? { shape } : {}) },
+      {
+        _classname: 'ArraySlice',
+        index,
+        components: [this.expression],
+      },
+    );
+  }
   jsonPath(...path: JsonValue extends T | null ? CatalogJsonPathElement[] : never): ColumnExpression<JsonValue> {
     if (this.column.type !== 'json') throw new TypeError('JSON paths require a JSON expression');
     if (path.length === 0) throw new TypeError('A JSON path requires at least one element');

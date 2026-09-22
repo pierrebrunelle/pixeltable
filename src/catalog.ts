@@ -5,7 +5,7 @@ export type { CatalogUuid } from './catalog-uuid.js';
 import { encodeBinaryParts, decodeBinaryParts } from './catalog-binary.js';
 export { catalogDate, catalogTimestamp } from './catalog-temporal.js';
 export type { CatalogDate, CatalogTimestamp } from './catalog-temporal.js';
-export type { CatalogJsonPathElement, CatalogCastType, CatalogWindow } from './catalog-query.js';
+export type { CatalogJsonPathElement, CatalogCastType, CatalogWindow, CatalogArraySlice } from './catalog-query.js';
 import { createClient } from './index.js';
 import type { ClientOptions } from './index.js';
 import { decodeProxyFrame, encodeProxyFrame, proxyProtocolVersion, proxySchemaVersion } from './proxy-protocol.js';
