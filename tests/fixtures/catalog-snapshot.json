@@ -1,0 +1,42 @@
+{
+  "_classname": "Query",
+  "from_clause": {
+    "tbls": [
+      {
+        "tbl_version": {
+          "id": "34567890-3456-7890-3456-789034567890",
+          "effective_version": 0
+        },
+        "base": {
+          "tbl_version": {
+            "id": "12345678-1234-5678-1234-567812345678",
+            "effective_version": 2
+          },
+          "base": null
+        }
+      }
+    ],
+    "join_clauses": []
+  },
+  "select_list": [
+    [
+      {
+        "_classname": "ColumnRef",
+        "tbl_id": "34567890-3456-7890-3456-789034567890",
+        "effective_version": 0,
+        "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+        "col_tbl_effective_version": 2,
+        "col_id": 0,
+        "perform_validation": false
+      },
+      null
+    ]
+  ],
+  "where_clause": null,
+  "group_by_clause": null,
+  "grouping_tbl": null,
+  "order_by_clause": null,
+  "limit_val": null,
+  "offset_val": null,
+  "sample_clause": null
+}

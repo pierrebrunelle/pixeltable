@@ -80,7 +80,7 @@ class ColumnExpression<T> {
       {
         _classname: 'SimilarityExpr',
         idx_name: indexName ?? null,
-        table_version_key: { id: this.tableId, effective_version: null },
+        table_version_key: { id: this.expression.tbl_id, effective_version: this.expression.effective_version },
         qcol_id: { tbl_id: this.expression.col_tbl_id, col_id: this.expression.col_id },
         components: [{ _classname: 'Literal', val: query, col_type: { _classname: 'StringType', nullable: false } }],
       },
@@ -333,15 +333,23 @@ export function createTableQueries<S extends CatalogSchema>(
   count: (query: Wire, signal?: AbortSignal) => Promise<number>,
   pathKey: Wire = { tbl_version: { id: tableId, effective_version: null }, base: null },
 ): { columns: CatalogColumns<S>; query: () => CatalogQuery<S> } {
+  const queryVersion = pathKey.tbl_version as { id: string; effective_version: number | null };
+  const ownerVersions = new Map<string, number | null>();
+  let current: Wire | null = pathKey;
+  while (current) {
+    const version = current.tbl_version as { id: string; effective_version: number | null };
+    ownerVersions.set(version.id, version.effective_version);
+    current = current.base as Wire | null;
+  }
   const references = Object.fromEntries(
     Object.entries(columnIds).map(([name, id]) => [
       name,
       {
         _classname: 'ColumnRef',
-        tbl_id: tableId,
-        effective_version: null,
+        tbl_id: queryVersion.id,
+        effective_version: queryVersion.effective_version,
         col_tbl_id: typeof id === 'number' ? tableId : id.tableId,
-        col_tbl_effective_version: null,
+        col_tbl_effective_version: ownerVersions.get(typeof id === 'number' ? tableId : id.tableId) ?? null,
         col_id: typeof id === 'number' ? id : id.id,
         perform_validation: false,
       },

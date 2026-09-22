@@ -281,7 +281,19 @@ const enabledDocuments = await documents.createView('documents/enabled', {
 const visible = await enabledDocuments.query().select('id', 'title').collect();
 ```
 
-Views inherit the base table's schema, including computed columns, and reflect inserts, updates, and deletes in the base. Use `openView(path, schema)` to reopen a live view with schema verification. View handles expose queries, history, computed-column creation, B-tree and text embedding indexes, and nested view creation. They do not expose row insertion, updates, or deletion. Creation fails if the destination exists. Add a view-specific computed column with `const enriched = await enabledDocuments.addComputedColumn('adjusted', enabledDocuments.columns.score.add(1))`, then use the returned handle. Computed values propagate through nested views when the base changes. Schema and index mutations validate versions for the complete base chain; reopen a view after base writes before modifying its schema. Snapshots, iterators, and projected views are not yet supported.
+Views inherit the base table's schema, including computed columns, and reflect inserts, updates, and deletes in the base. Use `openView(path, schema)` to reopen a live view with schema verification. View handles expose queries, history, computed-column creation, B-tree and text embedding indexes, and nested view creation. They do not expose row insertion, updates, or deletion. Creation fails if the destination exists. Add a view-specific computed column with `const enriched = await enabledDocuments.addComputedColumn('adjusted', enabledDocuments.columns.score.add(1))`, then use the returned handle. Computed values propagate through nested views when the base changes. Schema and index mutations validate versions for the complete base chain; reopen a view after base writes before modifying its schema. Iterators and projected views are not yet supported.
+
+Freeze a table or live view at its current state:
+
+```typescript
+const snapshot = await documents.createSnapshot('documents/frozen', {
+  where: documents.columns.id.gt(0),
+});
+const rows = await snapshot.query().select('id', 'title').collect();
+const reopened = await catalog.openSnapshot('documents/frozen', documents.schema);
+```
+
+The filter is optional. Snapshots retain frozen rows, computed values, and schemas when the source changes. Snapshot handles expose queries, scalar function calls, and further snapshot creation; they omit mutation methods. `openSnapshot()` checks the supplied schema against the frozen schema. A snapshot has its own public identity even when Python reads it directly through a frozen base version. Forced removal of a source can also remove dependent snapshots; snapshots are not independent backups. Creation captures the server's current state, without enforcing the source handle's last-observed version. Iterator and projected snapshots remain unsupported.
 
 Add stored computed columns from same-table expressions:
 

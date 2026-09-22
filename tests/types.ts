@@ -397,3 +397,18 @@ export async function checkInsertErrorPolicy(): Promise<void> {
   // @ts-expect-error Unknown error policies are rejected.
   await table.insert([{ text: 'hello' }], { onError: 'skip' });
 }
+
+export async function checkSnapshotTypes(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.openTable('source', { id: { type: 'int' } });
+  const snapshot = await table.createSnapshot('frozen');
+  const rows = await snapshot.query().select('id').collect();
+  const id: number = rows[0]!.id;
+  void id;
+  // @ts-expect-error Snapshots are read-only.
+  await snapshot.insert([{ id: 2 }]);
+  // @ts-expect-error Snapshot values cannot be recomputed.
+  await snapshot.recomputeColumns([]);
+  // @ts-expect-error Snapshot schemas cannot be modified.
+  await snapshot.addColumn('other', { type: 'int' });
+}

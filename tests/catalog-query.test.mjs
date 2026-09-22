@@ -248,3 +248,25 @@ test('computed error properties match Python and reject non-column expressions',
   assert.throws(() => columns.double_id.multiply(2).errorMessage, /stored computed/);
   assert.throws(() => setup('other').query().where(columns.double_id.errorType.ne(null)), /queried table/);
 });
+
+test('snapshot queries preserve frozen logical and physical versions', async () => {
+  const snapshotId = '34567890-3456-7890-3456-789034567890';
+  let actual;
+  const snapshot = createTableQueries(
+    snapshotId,
+    { id: { type: 'int' } },
+    { id: { id: 0, tableId } },
+    async (wire) => {
+      actual = wire;
+      return [];
+    },
+    async () => 0,
+    {
+      tbl_version: { id: snapshotId, effective_version: 0 },
+      base: { tbl_version: { id: tableId, effective_version: 2 }, base: null },
+    },
+  );
+  await snapshot.query().select('id').collect();
+  const expected = JSON.parse(await readFile(new URL('fixtures/catalog-snapshot.json', import.meta.url), 'utf8'));
+  assert.deepEqual(actual, expected);
+});

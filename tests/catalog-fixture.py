@@ -111,3 +111,14 @@ serialized = json.dumps(
 Path(__file__).with_name('fixtures').joinpath('catalog-errors.json').write_text(
     json.dumps(json.loads(serialized), indent=2) + '\n'
 )
+
+
+snapshot = pxt.create_snapshot('inspect/frozen', table.where(table.id > 0))
+serialized = (
+    json.dumps(snapshot.select(snapshot.id).as_dict())
+    .replace(str(table._id), '12345678-1234-5678-1234-567812345678')
+    .replace(str(snapshot._id), '34567890-3456-7890-3456-789034567890')
+)
+Path(__file__).with_name('fixtures').joinpath('catalog-snapshot.json').write_text(
+    json.dumps(json.loads(serialized), indent=2) + '\n'
+)
