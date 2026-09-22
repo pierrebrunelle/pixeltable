@@ -50,6 +50,8 @@ Acceptance: a TypeScript-defined pipeline and its Python equivalent produce the 
 
 ## Phase 4: lifecycle parity
 
+Implemented: typed version history and version-checked rollback of the latest data or schema change. Rollback returns a handle validated against the caller's expected prior schema.
+
 Extend the public server contract to cover snapshots, history, revert, row/column error inspection, recompute/backfill, deployment, observability, and typed agent tools. Document supported atomicity and job durability. Add hosted/local compatibility tests before claiming equivalent behavior.
 
 Acceptance: maintain a capability matrix against the Python public API, with runtime tests and explicit unsupported entries. Keep authoring, execution, and control-plane APIs separately versioned where their compatibility needs differ.

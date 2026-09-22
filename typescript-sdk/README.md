@@ -293,6 +293,15 @@ Numeric columns support `add`, `subtract`, `multiply`, `divide`, `modulo`, `floo
 
 Handles retain the catalog version for writes. A concurrent write or schema change can cause `CatalogStaleError` before insertion, update, or deletion. Reopen the table, review its schema, and explicitly retry if appropriate. The SDK never automatically replays a write. A network failure after submission can leave its outcome unknown. These operations apply immediately; previewing schema changes remains a subsequent phase.
 
+Inspect table history and revert the most recent change:
+
+```typescript
+const versions = await scored.getVersions({ limit: 5 });
+const previous = await scored.revert(scored.schema);
+```
+
+History is newest first, with version numbers, ISO timestamps, change descriptions, and row counts as reported by Python. `revert(schema)` removes the latest version permanently, matching Python. Pass the expected schema of the previous version; use the returned handle afterward. To undo adding a computed column, pass the schema saved before adding it. The schema is checked against the server response after rollback; an incorrect expected schema can therefore produce an error after the rollback has occurred. Stale handles cannot initiate a rollback, and the SDK never retries it automatically.
+
 ## Authenticated backend example
 
 The source checkout includes [an authenticated document backend](examples/AUTHENTICATED-BACKEND.md) with a Next.js Route Handler adapter. It selects a separate service for each verified tenant, keeps service credentials on the server, allows only the fixture's routes, and rewrites job tickets for authenticated polling. Supply your application's session verification and shared job store. Tests exercise the handler with both mocked services and the real Pixeltable fixture; a full Next.js deployment remains unverified.

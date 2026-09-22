@@ -238,3 +238,15 @@ export async function checkIndexTypes(): Promise<void> {
   // @ts-expect-error Index creation does not replace existing indexes.
   await table.addBtreeIndex('id', { ifExists: 'replace' });
 }
+
+export async function checkVersionTypes(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const original = await catalog.createTable('history', { id: { type: 'int' } });
+  const expanded = await original.addComputedColumn('next', original.columns.id.add(1));
+  const reverted = await expanded.revert(original.schema);
+  const version: number | undefined = (await reverted.getVersions({ limit: 1 }))[0]?.version;
+  void version;
+  // @ts-expect-error Reverted schema no longer exposes the computed column.
+  reverted.columns.next;
+  await reverted.insert([{ id: 1 }]);
+}
