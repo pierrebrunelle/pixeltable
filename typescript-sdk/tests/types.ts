@@ -575,3 +575,35 @@ export async function checkTemporalTypes(): Promise<void> {
   const date: import('@pixeltable/sdk/experimental/catalog').CatalogDate = rows[0]!.day;
   void [timestamp, date];
 }
+
+export async function checkJoinTypes(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const left = await catalog.openTable('left', { key: { type: 'int' }, label: { type: 'string' } });
+  const right = await catalog.openTable('right', { key: { type: 'int' }, amount: { type: 'int' } });
+  const joined = catalog.join(left, right, { how: 'left', on: ({ left, right }) => left.key.eq(right.key) });
+  const rows = await joined
+    .query()
+    .selectExpressions({ label: joined.columns.left.label, amount: joined.columns.right.amount })
+    .collect();
+  const label: string = rows[0]!.label;
+  const amount: number | null = rows[0]!.amount;
+  void [label, amount];
+  // @ts-expect-error The unmatched side of an outer join can be null.
+  const required: number = rows[0]!.amount;
+  void required;
+  const inner = catalog.join(left, right, { how: 'inner', on: ({ left, right }) => left.key.eq(right.key) });
+  const innerRows = await inner.query().collect();
+  const nonNullable: number = innerRows[0]!.right_amount;
+  void nonNullable;
+  const full = catalog.join(left, right, { how: 'full_outer', on: ({ left, right }) => left.key.eq(right.key) });
+  const fullRows = await full.query().collect();
+  // @ts-expect-error Both sides of a full join can be null.
+  const fullLabel: string = fullRows[0]!.left_label;
+  void fullLabel;
+  // @ts-expect-error A non-cross join requires a predicate.
+  catalog.join(left, right, { how: 'inner' });
+  // @ts-expect-error Cross joins do not have an on predicate.
+  catalog.join(left, right, { how: 'cross', on: ({ left, right }) => left.key.eq(right.key) });
+  // @ts-expect-error Python does not implement right joins.
+  catalog.join(left, right, { how: 'right' });
+}

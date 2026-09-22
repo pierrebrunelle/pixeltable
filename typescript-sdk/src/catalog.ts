@@ -112,6 +112,27 @@ export interface CatalogVersion {
   schemaChange: string | null;
 }
 
+export type CatalogJoinKind = 'inner' | 'left' | 'full_outer' | 'cross';
+type JoinSide<S extends CatalogSchema, Nullable extends boolean> = {
+  [K in keyof S]: Nullable extends true ? { type: S[K]['type']; nullable: true } : S[K];
+};
+export type CatalogJoinColumns<L extends CatalogSchema, R extends CatalogSchema, K extends CatalogJoinKind> = {
+  left: CatalogColumns<JoinSide<L, K extends 'full_outer' ? true : false>>;
+  right: CatalogColumns<JoinSide<R, K extends 'left' | 'full_outer' ? true : false>>;
+};
+export type CatalogJoinSchema<L extends CatalogSchema, R extends CatalogSchema, K extends CatalogJoinKind> = {
+  [N in keyof L & string as `left_${N}`]: JoinSide<L, K extends 'full_outer' ? true : false>[N];
+} & {
+  [N in keyof R & string as `right_${N}`]: JoinSide<R, K extends 'left' | 'full_outer' ? true : false>[N];
+};
+export type CatalogJoinOptions<L extends CatalogSchema, R extends CatalogSchema, K extends CatalogJoinKind> = {
+  how: K;
+} & (K extends 'cross' ? { on?: never } : { on: (columns: CatalogJoinColumns<L, R, K>) => CatalogPredicate });
+export interface CatalogJoin<L extends CatalogSchema, R extends CatalogSchema, K extends CatalogJoinKind> {
+  readonly columns: CatalogJoinColumns<L, R, K>;
+  query(): CatalogQuery<CatalogJoinSchema<L, R, K>>;
+}
+
 export interface CatalogTable<S extends CatalogSchema> {
   readonly id: string;
   readonly path: string;
@@ -281,6 +302,19 @@ function directoryEntries(value: unknown): DirectoryEntry[] {
 
 export function createCatalogClient(options: ClientOptions) {
   const client = createClient<ProxyPaths>(options);
+  const sources = new WeakMap<
+    object,
+    {
+      id: string;
+      pathKey: Record<string, unknown>;
+      schema: CatalogSchema;
+      references: Record<string, Record<string, unknown>>;
+    }
+  >();
+  function wrapSource<T extends object>(wrapped: T, source: object): T {
+    sources.set(wrapped, sources.get(source)!);
+    return wrapped;
+  }
   async function rpc(
     method: string,
     args: Record<string, unknown>,
@@ -315,6 +349,44 @@ export function createCatalogClient(options: ClientOptions) {
   }
   async function call(method: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
     return (await rpc(method, args, signal)).result;
+  }
+  async function collectQuery(
+    query: Record<string, unknown>,
+    selected: readonly string[],
+    signal?: AbortSignal,
+    outputSchema: CatalogSchema = {},
+  ): Promise<Record<string, unknown>[]> {
+    const response = await rpc('collect', { query }, signal, { class_name: 'Query' });
+    const result = record(response.result);
+    const columns = Object.entries(record(result.schema));
+    if (columns.length !== selected.length || columns.some(([name]) => !selected.includes(name)))
+      throw new TypeError('Query schema changed');
+    const joins = record(query.from_clause).join_clauses;
+    const outer =
+      Array.isArray(joins) && joins.some((join) => ['LEFT', 'FULL_OUTER'].includes(String(record(join).join_type)));
+    for (const [name, wrapped] of columns) {
+      const column = outputSchema[name];
+      const type = record(tagged(wrapped, 'ColumnType'));
+      if (
+        !column ||
+        type._classname !== columnClasses[column.type] ||
+        (type.nullable !== (column.nullable ?? false) && !(outer && column.nullable && type.nullable === false))
+      )
+        throw new TypeError('Query schema changed');
+    }
+    if (!Array.isArray(result.rows)) throw new TypeError('Invalid query rows');
+    return result.rows.map((row: unknown) => {
+      if (!Array.isArray(row) || row.length !== columns.length) throw new TypeError('Invalid query row');
+      return Object.fromEntries(
+        columns.map(([name], index) => [name, columnValue(row[index], outputSchema[name]!, false)]),
+      );
+    });
+  }
+  async function countQuery(query: Record<string, unknown>, signal?: AbortSignal): Promise<number> {
+    const { result } = await rpc('count', { query }, signal, { class_name: 'Query' });
+    if (typeof result !== 'number' || !Number.isSafeInteger(result) || result < 0)
+      throw new TypeError('Invalid row count');
+    return result;
   }
   function tableHandle<S extends CatalogSchema>(
     path: string,
@@ -401,37 +473,6 @@ export function createCatalogClient(options: ClientOptions) {
     const id = state.id;
     const pathKey = state.pathKey;
     const queries = createTableQueries(id, schema, state.columnIds, collectQuery, countQuery, pathKey);
-    async function collectQuery(
-      query: Record<string, unknown>,
-      selected: readonly string[],
-      signal?: AbortSignal,
-      outputSchema: CatalogSchema = schema,
-    ): Promise<Record<string, unknown>[]> {
-      const response = await rpc('collect', { query }, signal, { class_name: 'Query' });
-      const result = record(response.result);
-      const columns = Object.entries(record(result.schema));
-      if (columns.length !== selected.length || columns.some(([name]) => !selected.includes(name)))
-        throw new TypeError('Query schema changed');
-      for (const [name, wrapped] of columns) {
-        const column = outputSchema[name];
-        const type = record(tagged(wrapped, 'ColumnType'));
-        if (!column || type._classname !== columnClasses[column.type] || type.nullable !== (column.nullable ?? false))
-          throw new TypeError('Query schema changed');
-      }
-      if (!Array.isArray(result.rows)) throw new TypeError('Invalid query rows');
-      return result.rows.map((row: unknown) => {
-        if (!Array.isArray(row) || row.length !== columns.length) throw new TypeError('Invalid query row');
-        return Object.fromEntries(
-          columns.map(([name], index) => [name, columnValue(row[index], outputSchema[name]!, false)]),
-        );
-      });
-    }
-    async function countQuery(query: Record<string, unknown>, signal?: AbortSignal): Promise<number> {
-      const { result } = await rpc('count', { query }, signal, { class_name: 'Query' });
-      if (typeof result !== 'number' || !Number.isSafeInteger(result) || result < 0)
-        throw new TypeError('Invalid row count');
-      return result;
-    }
     async function mutateMetadata(
       method: string,
       args: Record<string, unknown>,
@@ -530,7 +571,7 @@ export function createCatalogClient(options: ClientOptions) {
         throw new TypeError('Invalid create-view response');
       return result[0];
     }
-    return {
+    const handle: CatalogTable<S> = {
       id,
       path,
       schema,
@@ -934,46 +975,64 @@ export function createCatalogClient(options: ClientOptions) {
         return queries.query().count(options);
       },
     };
+    sources.set(handle, {
+      id,
+      pathKey,
+      schema,
+      references: Object.fromEntries(
+        Object.entries(queries.columns).map(([name, expression]) => [
+          name,
+          expression.computedDefinition(id).wire.v as Record<string, unknown>,
+        ]),
+      ),
+    });
+    return handle;
   }
   function snapshotHandle<S extends CatalogSchema>(path: string, schema: S, metadata: unknown): CatalogSnapshot<S> {
     const table = tableHandle(path, schema, metadata, true, true);
-    return {
-      id: table.id,
-      path: table.path,
-      schema: table.schema,
-      columns: table.columns,
-      query: table.query,
-      callFunction: table.callFunction,
-      collect: table.collect,
-      count: table.count,
-      createSnapshot: table.createSnapshot,
-    };
+    return wrapSource(
+      {
+        id: table.id,
+        path: table.path,
+        schema: table.schema,
+        columns: table.columns,
+        query: table.query,
+        callFunction: table.callFunction,
+        collect: table.collect,
+        count: table.count,
+        createSnapshot: table.createSnapshot,
+      },
+      table,
+    );
   }
   function viewHandle<S extends CatalogSchema>(path: string, schema: S, metadata: unknown): CatalogView<S> {
     return asView(tableHandle(path, schema, metadata, true));
   }
   function asView<S extends CatalogSchema>(table: CatalogTable<S>): CatalogView<S> {
-    return {
-      id: table.id,
-      path: table.path,
-      schema: table.schema,
-      columns: table.columns,
-      query: table.query,
-      callFunction: table.callFunction,
-      recomputeColumns: table.recomputeColumns,
-      compute: table.compute,
-      collect: table.collect,
-      count: table.count,
-      createView: table.createView,
-      createSnapshot: table.createSnapshot,
-      addBtreeIndex: table.addBtreeIndex,
-      addEmbeddingIndex: table.addEmbeddingIndex,
-      dropIndex: table.dropIndex,
-      getVersions: table.getVersions,
-      async addComputedColumn(name, expression, options) {
-        return asView(await table.addComputedColumn(name, expression, options));
+    return wrapSource(
+      {
+        id: table.id,
+        path: table.path,
+        schema: table.schema,
+        columns: table.columns,
+        query: table.query,
+        callFunction: table.callFunction,
+        recomputeColumns: table.recomputeColumns,
+        compute: table.compute,
+        collect: table.collect,
+        count: table.count,
+        createView: table.createView,
+        createSnapshot: table.createSnapshot,
+        addBtreeIndex: table.addBtreeIndex,
+        addEmbeddingIndex: table.addEmbeddingIndex,
+        dropIndex: table.dropIndex,
+        getVersions: table.getVersions,
+        async addComputedColumn(name, expression, options) {
+          return asView(await table.addComputedColumn(name, expression, options));
+        },
       },
-    };
+      table,
+    );
   }
   async function dropObject(
     method: 'drop_table' | 'drop_dir',
@@ -996,6 +1055,71 @@ export function createCatalogClient(options: ClientOptions) {
     );
   }
   return {
+    join<L extends CatalogSchema, R extends CatalogSchema, const K extends CatalogJoinKind>(
+      left: Pick<CatalogTable<L>, 'schema' | 'columns'>,
+      right: Pick<CatalogTable<R>, 'schema' | 'columns'>,
+      options: CatalogJoinOptions<L, R, K>,
+    ): CatalogJoin<L, R, K> {
+      const leftSource = sources.get(left);
+      const rightSource = sources.get(right);
+      if (!leftSource || !rightSource) throw new TypeError('Join sources must be handles from this catalog client');
+      if (
+        leftSource.id === rightSource.id ||
+        JSON.stringify(leftSource.pathKey) === JSON.stringify(rightSource.pathKey)
+      )
+        throw new TypeError('Self joins require aliases and are not supported');
+      const how = options.how;
+      if (!['inner', 'left', 'full_outer', 'cross'].includes(how)) throw new TypeError('Unsupported join type');
+      if ((how === 'cross' && options.on !== undefined) || (how !== 'cross' && typeof options.on !== 'function'))
+        throw new TypeError('Non-cross joins require on; cross joins must omit on');
+      const scope = `join:${globalThis.crypto.randomUUID()}`;
+      const schema: CatalogSchema = {};
+      const references: Record<string, Record<string, unknown>> = {};
+      for (const [side, source] of [
+        ['left', leftSource],
+        ['right', rightSource],
+      ] as const) {
+        const nullable = how === 'full_outer' || (how === 'left' && side === 'right');
+        for (const [name, column] of Object.entries(source.schema)) {
+          schema[`${side}_${name}`] = { ...column, nullable: nullable || (column.nullable ?? false) };
+          references[`${side}_${name}`] = source.references[name]!;
+        }
+      }
+      const fromClause = {
+        tbls: [leftSource.pathKey, rightSource.pathKey],
+        join_clauses: [] as Record<string, unknown>[],
+      };
+      const builder = createTableQueries(
+        scope,
+        schema as CatalogJoinSchema<L, R, K>,
+        {},
+        collectQuery,
+        countQuery,
+        leftSource.pathKey,
+        { references, fromClause },
+      );
+      const columns = Object.freeze(
+        Object.fromEntries(
+          (['left', 'right'] as const).map((side) => [
+            side,
+            Object.freeze(
+              Object.fromEntries(
+                Object.keys(side === 'left' ? leftSource.schema : rightSource.schema).map((name) => [
+                  name,
+                  builder.columns[`${side}_${name}` as keyof CatalogJoinSchema<L, R, K> & string],
+                ]),
+              ),
+            ),
+          ]),
+        ),
+      ) as CatalogJoinColumns<L, R, K>;
+      const predicate =
+        how === 'cross'
+          ? null
+          : (options.on as (columns: CatalogJoinColumns<L, R, K>) => CatalogPredicate)(columns).toWire(scope);
+      fromClause.join_clauses.push({ join_type: how.toUpperCase(), join_predicate: predicate });
+      return { columns, query: builder.query } as CatalogJoin<L, R, K>;
+    },
     async dropTable(path: string, options: CatalogDropOptions = {}): Promise<void> {
       await dropObject('drop_table', path, options);
     },

@@ -1106,6 +1106,64 @@ try {
   assert.deepEqual(await copied.query().selectExpressions({ year }).limit(1).collect(), [{ year: 2026 }]);
   const preview = await copied.compute([{ id: 4, day, at: instant }]);
   assert.equal(preview[0].values.copy, instant);
+  const joinLeft = await catalog.createTable('sdk_test/join_left', { key: { type: 'int' }, label: { type: 'string' } });
+  const joinRight = await catalog.createTable('sdk_test/join_right', { key: { type: 'int' }, amount: { type: 'int' } });
+  await joinLeft.insert([
+    { key: 1, label: 'one' },
+    { key: 2, label: 'two' },
+  ]);
+  await joinRight.insert([
+    { key: 2, amount: 20 },
+    { key: 3, amount: 30 },
+  ]);
+  const joinCases = JSON.parse(await readFile(new URL('./fixtures/catalog-joins.json', import.meta.url), 'utf8'));
+  for (const how of ['inner', 'left', 'full_outer', 'cross']) {
+    const joined = catalog.join(joinLeft, joinRight, {
+      how,
+      ...(how === 'cross' ? {} : { on: ({ left, right }) => left.key.eq(right.key) }),
+    });
+    const { left, right } = joined.columns;
+    const rows = await joined
+      .query()
+      .selectExpressions({ left_key: left.key, label: left.label, right_key: right.key, amount: right.amount })
+      .collect();
+    rows.sort((a, b) => (a.left_key ?? 0) - (b.left_key ?? 0) || (a.right_key ?? 0) - (b.right_key ?? 0));
+    assert.deepEqual(rows, joinCases[how].rows);
+    assert.equal(await joined.query().count(), rows.length);
+    if (how === 'left') {
+      assert.deepEqual(await joined.query().where(right.key.isNull()).select('left_label').collect(), [
+        { left_label: 'one' },
+      ]);
+      assert.deepEqual(
+        await joined
+          .query()
+          .selectExpressions({ adjusted: right.amount.add(1) })
+          .orderBy('left_key')
+          .collect(),
+        [{ adjusted: null }, { adjusted: 21 }],
+      );
+      assert.throws(() => joined.query().where(joinLeft.columns.key.eq(1)), /belong/);
+    }
+  }
+  assert.throws(() => catalog.join(joinLeft, joinRight, { how: 'inner' }), /require/);
+  assert.throws(
+    () => catalog.join(joinLeft, joinRight, { how: 'cross', on: () => joinLeft.columns.key.eq(1) }),
+    /omit/,
+  );
+  assert.throws(() => catalog.join(joinLeft, joinLeft, { how: 'cross' }), /Self joins/);
+  assert.throws(() => catalog.join(joinLeft, { ...joinRight }, { how: 'cross' }), /handles/);
+  const joinView = await joinLeft.createView('sdk_test/join_view', { where: joinLeft.columns.key.gt(1) });
+  const viewJoin = catalog.join(joinView, joinRight, { how: 'inner', on: ({ left, right }) => left.key.eq(right.key) });
+  assert.deepEqual(await viewJoin.query().select('left_label', 'right_amount').collect(), [
+    { left_label: 'two', right_amount: 20 },
+  ]);
+  const joinFrozen = await joinRight.createSnapshot('sdk_test/join_frozen');
+  await joinRight.update({ amount: 99 });
+  const snapshotJoin = catalog.join(joinLeft, joinFrozen, {
+    how: 'inner',
+    on: ({ left, right }) => left.key.eq(right.key),
+  });
+  assert.deepEqual(await snapshotJoin.query().select('right_amount').collect(), [{ right_amount: 20 }]);
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );
