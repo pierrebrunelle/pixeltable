@@ -50,7 +50,7 @@ Acceptance: a TypeScript-defined pipeline and its Python equivalent produce the 
 
 ## Phase 4: lifecycle parity
 
-Implemented: stored computed-column error type/message inspection through query expressions; table/view/directory moves and removal, with dependency checks by default and explicit cascading removal. Typed version history and version-checked rollback of the latest data or schema change. Rollback returns a handle validated against the caller's expected prior schema.
+Implemented: filtered recomputation with error-only retries, cascade control, and version checks; stored computed-column error type/message inspection through query expressions; table/view/directory moves and removal, with dependency checks by default and explicit cascading removal. Typed version history and version-checked rollback of the latest data or schema change. Rollback returns a handle validated against the caller's expected prior schema.
 
 Extend the public server contract to cover snapshots, history, revert, row/column error inspection, recompute/backfill, deployment, observability, and typed agent tools. Document supported atomicity and job durability. Add hosted/local compatibility tests before claiming equivalent behavior.
 

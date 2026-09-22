@@ -8,7 +8,7 @@ from collections.abc import AsyncIterator
 
 import fastapi
 import uvicorn
-from udf_fixture import parse_number
+from udf_fixture import parse_number, retry_once
 
 import pixeltable as pxt
 from pixeltable.env import Env
@@ -56,6 +56,10 @@ router.add_insert_route(
 errors = pxt.create_table('sdk_test.errors', {'text': pxt.String})
 errors.add_computed_column(number=parse_number(errors.text))
 errors.insert([{'text': '42'}, {'text': 'invalid'}], on_error='ignore')
+retry = pxt.create_table('sdk_test.retry', {'value': pxt.Int})
+retry.add_computed_column(result=retry_once(retry.value))
+retry.add_computed_column(dependent=retry.result + 1)
+retry.insert([{'value': 4}], on_error='ignore')
 
 
 @asynccontextmanager

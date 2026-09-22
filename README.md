@@ -355,6 +355,15 @@ const failures = await scored
 
 `errorType` and `errorMessage` are nullable string expressions: successful rows return `null`. They require stored computed column references; ordinary scalar columns and inline calculations are rejected. The SDK can inspect errors retained by Python with `on_error='ignore'`; SDK inserts and computed-column creation currently abort on computation errors. Select the error properties instead of a failed required value, whose stored null would not match its declared TypeScript type.
 
+Retry a stored computed column after fixing its Python UDF or restoring an external dependency:
+
+```typescript
+const status = await scored.recomputeColumns(['doubled'], { errorsOnly: true });
+console.log(status.updatedRows, status.errors);
+```
+
+Pass one or more distinct computed-column names. `where` limits affected rows, `errorsOnly: true` retries only failed cells in a single column, and `cascade` defaults to `true` to refresh dependent computed columns. Set `cascade: false` only when leaving dependent values unchanged is intentional. The returned counts include cascaded table/view updates and computation errors; individual errors can remain stored without rejecting the whole operation. Calls check table versions, refresh the handle after success, and never retry automatically. Views can recompute their own computed columns; inherited columns must be recomputed through their base table. UDF calls run again and may incur provider costs.
+
 Catalog lifecycle operations use slash-separated paths:
 
 ```typescript
