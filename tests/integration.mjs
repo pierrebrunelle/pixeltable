@@ -700,6 +700,70 @@ try {
   assert.deepEqual(await (await catalog.openSnapshot('sdk_test/filtered_frozen', snapshotSchema)).collect(), [
     { id: 1, text: 'before' },
   ]);
+  const membership = await catalog.createTable('sdk_test/membership', {
+    id: { type: 'int' },
+    score: { type: 'float', nullable: true },
+    choices: { type: 'json' },
+  });
+  await membership.insert([
+    { id: 1, score: 1.5, choices: [1, 3] },
+    { id: 2, score: null, choices: [3] },
+    { id: 3, score: 3, choices: [3] },
+  ]);
+  assert.deepEqual(
+    await membership
+      .query()
+      .where(membership.columns.id.isIn([1, 3]))
+      .select('id')
+      .orderBy('id')
+      .collect(),
+    [{ id: 1 }, { id: 3 }],
+  );
+  assert.equal(await membership.query().where(membership.columns.id.isIn([])).count(), 0);
+  assert.deepEqual(
+    await membership
+      .query()
+      .where(membership.columns.score.isIn([3, 1.5]))
+      .select('id')
+      .orderBy('id')
+      .collect(),
+    [{ id: 1 }, { id: 3 }],
+  );
+  assert.equal(
+    await membership
+      .query()
+      .where(membership.columns.score.isIn([3, null]).not())
+      .count(),
+    0,
+  );
+  assert.equal(
+    await membership
+      .query()
+      .where(membership.columns.score.isIn([null]))
+      .count(),
+    0,
+  );
+  assert.deepEqual(
+    await membership
+      .query()
+      .where(membership.columns.id.isIn([1, 3]).not())
+      .select('id')
+      .collect(),
+    [{ id: 2 }],
+  );
+  assert.deepEqual(
+    await membership
+      .query()
+      .where(membership.columns.id.isIn(membership.columns.choices))
+      .select('id')
+      .orderBy('id')
+      .collect(),
+    [{ id: 1 }, { id: 3 }],
+  );
+  assert.deepEqual(await membership.update({ score: 9 }, { where: membership.columns.id.isIn([1, 3]) }), {
+    updatedRows: 2,
+  });
+  assert.deepEqual(await membership.delete({ where: membership.columns.id.isIn([2]) }), { deletedRows: 1 });
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );

@@ -412,3 +412,21 @@ export async function checkSnapshotTypes(): Promise<void> {
   // @ts-expect-error Snapshot schemas cannot be modified.
   await snapshot.addColumn('other', { type: 'int' });
 }
+
+export async function checkMembershipTypes(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.openTable('membership', {
+    id: { type: 'int' },
+    choices: { type: 'json' },
+    score: { type: 'float', nullable: true },
+  });
+  table.query().where(table.columns.id.isIn([1, 2]));
+  table.query().where(table.columns.id.isIn(table.columns.choices));
+  table.query().where(table.columns.score.isIn([1, null]));
+  // @ts-expect-error Membership lists must match the column type.
+  table.columns.id.isIn(['1']);
+  // @ts-expect-error Required columns do not accept null list members.
+  table.columns.id.isIn([null]);
+  // @ts-expect-error Membership requires a scalar left-hand expression.
+  table.columns.choices.isIn([1]);
+}
