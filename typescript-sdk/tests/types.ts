@@ -375,3 +375,15 @@ export async function checkErrorPropertyTypes(): Promise<void> {
   const required: string = rows[0]!.message;
   void required;
 }
+
+export async function checkRecomputeTypes(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.openTable('retry', { value: { type: 'int' }, result: { type: 'int', computed: true } });
+  const status = await table.recomputeColumns(['result'], { errorsOnly: true });
+  const errors: number = status.errors;
+  void errors;
+  // @ts-expect-error Base columns cannot be recomputed.
+  await table.recomputeColumns(['value']);
+  // @ts-expect-error Unknown columns cannot be recomputed.
+  await table.recomputeColumns(['missing']);
+}

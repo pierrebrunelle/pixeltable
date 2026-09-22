@@ -1,3 +1,5 @@
+import itertools
+
 import numpy as np
 
 import pixeltable as pxt
@@ -21,3 +23,13 @@ def text_embedding(text: str) -> pxt.Array[(3,), pxt.Float]:
 @pxt.udf
 def parse_number(text: str) -> int:
     return int(text)
+
+
+_retry_attempts = itertools.count()
+
+
+@pxt.udf
+def retry_once(value: int) -> int:
+    if next(_retry_attempts) == 0:
+        raise ValueError('temporary fixture failure')
+    return value * 2

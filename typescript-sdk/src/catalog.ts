@@ -46,6 +46,17 @@ export interface TextEmbeddingOptions {
   signal?: AbortSignal;
 }
 
+export type ComputedColumn<S extends CatalogSchema> = {
+  [K in keyof S & string]: S[K] extends { computed: true } ? K : never;
+}[keyof S & string];
+
+export interface RecomputeOptions {
+  where?: CatalogPredicate;
+  errorsOnly?: boolean;
+  cascade?: boolean;
+  signal?: AbortSignal;
+}
+
 export interface CatalogDropOptions {
   ifNotExists?: 'error' | 'ignore';
   /** Remove dependent views for tables, or recursively remove directory contents. */
@@ -75,6 +86,10 @@ export interface CatalogTable<S extends CatalogSchema> {
     args: CatalogFunctionArgs<P>,
   ): CatalogExpression<CatalogRow<{ result: C }>['result']>;
   query(): CatalogQuery<S>;
+  recomputeColumns(
+    columns: readonly ComputedColumn<S>[],
+    options?: RecomputeOptions,
+  ): Promise<{ updatedRows: number; errors: number }>;
   insert(rows: readonly CatalogInsertRow<S>[], options?: { signal?: AbortSignal }): Promise<{ insertedRows: number }>;
   update(
     values: CatalogUpdateRow<S>,
@@ -121,6 +136,7 @@ export interface CatalogView<S extends CatalogSchema> extends Pick<
   | 'columns'
   | 'query'
   | 'callFunction'
+  | 'recomputeColumns'
   | 'collect'
   | 'count'
   | 'createView'
@@ -669,6 +685,42 @@ export function createCatalogClient(options: ClientOptions) {
         );
         return { updatedRows };
       },
+      async recomputeColumns(columns, options = {}): Promise<{ updatedRows: number; errors: number }> {
+        if (!Array.isArray(columns) || columns.length === 0 || new Set(columns).size !== columns.length)
+          throw new TypeError('Specify distinct computed columns');
+        for (const name of columns) {
+          if (!Object.hasOwn(schema, name) || !schema[name]!.computed)
+            throw new TypeError('Recomputation requires computed columns');
+          const owner = state.columnIds[name];
+          if (typeof owner !== 'number' && owner?.tableId !== id)
+            throw new TypeError('Recompute inherited columns through their base table');
+        }
+        for (const value of [options.errorsOnly, options.cascade])
+          if (value !== undefined && typeof value !== 'boolean') throw new TypeError('Recompute flags must be boolean');
+        if (options.errorsOnly && columns.length !== 1) throw new TypeError('errorsOnly requires exactly one column');
+        const result = await mutateMetadata(
+          'recompute_columns',
+          {
+            columns: [...columns],
+            where: predicateWire(options.where),
+            errors_only: options.errorsOnly ?? false,
+            cascade: options.cascade ?? true,
+          },
+          options.signal,
+        );
+        const status = record(tagged(result, 'UpdateStatus'));
+        const own = record(status.row_count_stats);
+        const cascaded = record(status.cascade_row_count_stats);
+        function count(key: string): number {
+          const values = [own[key], cascaded[key]];
+          if (values.some((value) => typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0))
+            throw new TypeError('Invalid recomputation count');
+          const total = (values[0] as number) + (values[1] as number);
+          if (!Number.isSafeInteger(total)) throw new TypeError('Invalid recomputation count');
+          return total;
+        }
+        return { updatedRows: count('upd_rows'), errors: count('num_excs') };
+      },
       async delete(options: { where?: CatalogPredicate; signal?: AbortSignal } = {}): Promise<{ deletedRows: number }> {
         const deletedRows = await mutate('delete', { where: predicateWire(options.where) }, 'del_rows', options.signal);
         return { deletedRows };
@@ -694,6 +746,7 @@ export function createCatalogClient(options: ClientOptions) {
       columns: table.columns,
       query: table.query,
       callFunction: table.callFunction,
+      recomputeColumns: table.recomputeColumns,
       collect: table.collect,
       count: table.count,
       createView: table.createView,

@@ -597,6 +597,38 @@ try {
       .collect(),
     [{ error_type: null }],
   );
+  const failedRetry = await failedRows.recomputeColumns(['number'], { errorsOnly: true });
+  assert.equal(failedRetry.updatedRows, 1);
+  assert.equal(failedRetry.errors, 1);
+  const successRetry = await failedRows.recomputeColumns(['number'], { where: failedRows.columns.text.eq('42') });
+  assert.equal(successRetry.updatedRows, 1);
+  assert.equal(successRetry.errors, 0);
+  const staleErrors = await catalog.openTable('sdk_test/errors', failedRows.schema);
+  await failedRows.recomputeColumns(['number'], { errorsOnly: true });
+  await assert.rejects(staleErrors.recomputeColumns(['number']), CatalogStaleError);
+  const retryView = await failedRows.createView('sdk_test/retry_view', { where: failedRows.columns.text.eq('42') });
+  const retryDerived = await retryView.addComputedColumn('doubled', retryView.columns.number.multiply(2));
+  await assert.rejects(retryDerived.recomputeColumns(['number']), /base table/);
+  assert.deepEqual(await retryDerived.recomputeColumns(['doubled']), { updatedRows: 1, errors: 0 });
+  const recovered = await catalog.openTable('sdk_test/retry', {
+    value: { type: 'int' },
+    result: { type: 'int', computed: true },
+    dependent: { type: 'int', computed: true },
+  });
+  assert.equal(await recovered.query().where(recovered.columns.result.errorType.ne(null)).count(), 1);
+  assert.deepEqual(await recovered.recomputeColumns(['result'], { errorsOnly: true }), { updatedRows: 1, errors: 0 });
+  assert.deepEqual(await recovered.collect(), [{ value: 4, result: 8, dependent: 9 }]);
+  assert.equal(await recovered.query().where(recovered.columns.result.errorType.ne(null)).count(), 0);
+  assert.deepEqual(await recovered.recomputeColumns(['result'], { errorsOnly: true }), { updatedRows: 0, errors: 0 });
+  const recoveryView = await recovered.createView('sdk_test/recovery_view');
+  const recoveryDerived = await recoveryView.addComputedColumn('tripled', recoveryView.columns.result.multiply(3));
+  assert.deepEqual(await recovered.recomputeColumns(['result']), { updatedRows: 2, errors: 0 });
+  assert.deepEqual(await recoveryDerived.query().select('tripled').collect(), [{ tripled: 24 }]);
+  assert.deepEqual(await recovered.recomputeColumns(['result'], { cascade: false }), { updatedRows: 1, errors: 0 });
+  for (const columns of [[], ['value'], ['result', 'result'], ['unknown']])
+    await assert.rejects(recovered.recomputeColumns(columns), TypeError);
+  await assert.rejects(recovered.recomputeColumns(['result', 'dependent'], { errorsOnly: true }), TypeError);
+  await assert.rejects(recovered.recomputeColumns(['result'], { cascade: 'false' }), TypeError);
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );
