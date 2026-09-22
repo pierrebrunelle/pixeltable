@@ -50,6 +50,11 @@ export type ComputedColumn<S extends CatalogSchema> = {
   [K in keyof S & string]: S[K] extends { computed: true } ? K : never;
 }[keyof S & string];
 
+export interface CatalogInsertOptions {
+  onError?: 'abort' | 'ignore';
+  signal?: AbortSignal;
+}
+
 export interface RecomputeOptions {
   where?: CatalogPredicate;
   errorsOnly?: boolean;
@@ -90,7 +95,10 @@ export interface CatalogTable<S extends CatalogSchema> {
     columns: readonly ComputedColumn<S>[],
     options?: RecomputeOptions,
   ): Promise<{ updatedRows: number; errors: number }>;
-  insert(rows: readonly CatalogInsertRow<S>[], options?: { signal?: AbortSignal }): Promise<{ insertedRows: number }>;
+  insert(
+    rows: readonly CatalogInsertRow<S>[],
+    options?: CatalogInsertOptions,
+  ): Promise<{ insertedRows: number; errors: number }>;
   update(
     values: CatalogUpdateRow<S>,
     options?: { where?: CatalogPredicate; signal?: AbortSignal },
@@ -192,6 +200,14 @@ function tagged(value: unknown, tag: string): unknown {
   const wrapper = record(value);
   if (wrapper.$pxt !== tag || !Object.hasOwn(wrapper, 'v')) throw new TypeError(`Expected catalog ${tag}`);
   return wrapper.v;
+}
+
+function statusCount(values: unknown[]): number {
+  if (values.some((value) => typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0))
+    throw new TypeError('Invalid mutation count');
+  const total = (values as number[]).reduce((sum, value) => sum + value, 0);
+  if (!Number.isSafeInteger(total)) throw new TypeError('Invalid mutation count');
+  return total;
 }
 
 function pathValue(path: string): unknown {
@@ -632,8 +648,10 @@ export function createCatalogClient(options: ClientOptions) {
       },
       async insert(
         rows: readonly CatalogInsertRow<S>[],
-        options: { signal?: AbortSignal } = {},
-      ): Promise<{ insertedRows: number }> {
+        options: CatalogInsertOptions = {},
+      ): Promise<{ insertedRows: number; errors: number }> {
+        if (options.onError !== undefined && !['abort', 'ignore'].includes(options.onError))
+          throw new TypeError('Invalid onError policy');
         const wireRows = rows.map((row) => {
           const values = record(row);
           if (Object.keys(values).some((name) => !Object.hasOwn(schema, name) || schema[name]!.computed))
@@ -651,13 +669,15 @@ export function createCatalogClient(options: ClientOptions) {
               ]),
           );
         });
-        const insertedRows = await mutate(
+        const result = await mutateMetadata(
           'insert',
-          { rows: wireRows, on_error: 'abort', print_stats: false, return_rows: false },
-          'ins_rows',
+          { rows: wireRows, on_error: options.onError ?? 'abort', print_stats: false, return_rows: false },
           options.signal,
         );
-        return { insertedRows };
+        const status = record(tagged(result, 'UpdateStatus'));
+        const own = record(status.row_count_stats);
+        const cascaded = record(status.cascade_row_count_stats);
+        return { insertedRows: statusCount([own.ins_rows]), errors: statusCount([own.num_excs, cascaded.num_excs]) };
       },
       async update(
         values: CatalogUpdateRow<S>,
@@ -711,15 +731,10 @@ export function createCatalogClient(options: ClientOptions) {
         const status = record(tagged(result, 'UpdateStatus'));
         const own = record(status.row_count_stats);
         const cascaded = record(status.cascade_row_count_stats);
-        function count(key: string): number {
-          const values = [own[key], cascaded[key]];
-          if (values.some((value) => typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0))
-            throw new TypeError('Invalid recomputation count');
-          const total = (values[0] as number) + (values[1] as number);
-          if (!Number.isSafeInteger(total)) throw new TypeError('Invalid recomputation count');
-          return total;
-        }
-        return { updatedRows: count('upd_rows'), errors: count('num_excs') };
+        return {
+          updatedRows: statusCount([own.upd_rows, cascaded.upd_rows]),
+          errors: statusCount([own.num_excs, cascaded.num_excs]),
+        };
       },
       async delete(options: { where?: CatalogPredicate; signal?: AbortSignal } = {}): Promise<{ deletedRows: number }> {
         const deletedRows = await mutate('delete', { where: predicateWire(options.where) }, 'del_rows', options.signal);

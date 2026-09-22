@@ -160,7 +160,13 @@ test('typed table creation, insertion, and collection follow Python metadata and
           encodeProxyFrame(
             encoder.encode(
               JSON.stringify({
-                result: { $pxt: 'UpdateStatus', v: { row_count_stats: { ins_rows: head.args.rows.length } } },
+                result: {
+                  $pxt: 'UpdateStatus',
+                  v: {
+                    row_count_stats: { ins_rows: head.args.rows.length, num_excs: 0 },
+                    cascade_row_count_stats: { num_excs: 0 },
+                  },
+                },
                 error: null,
                 current_md: metadata,
                 is_stale_md: false,
@@ -185,7 +191,7 @@ test('typed table creation, insertion, and collection follow Python metadata and
   assert.equal(requests[0].args.schema.id.type.v._classname, 'IntType');
   assert.equal(requests[0].args.schema.id.primary_key, true);
   assert.equal(requests[0].args.schema.score.type.v.nullable, true);
-  assert.deepEqual(await table.insert([{ id: 1, title: 'hello' }]), { insertedRows: 1 });
+  assert.deepEqual(await table.insert([{ id: 1, title: 'hello' }]), { insertedRows: 1, errors: 0 });
   assert.equal(requests[1].class_name, 'Table');
   assert.equal(requests[1].snapshot_path_key.tbl_version.effective_version, 0);
   assert.deepEqual(requests[1].args.rows, [{ id: 1, title: 'hello', score: null }]);
