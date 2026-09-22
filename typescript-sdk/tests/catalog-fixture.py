@@ -53,3 +53,11 @@ serialized = json.dumps({name: expr.as_dict() for name, expr in expressions.item
 Path(__file__).with_name('fixtures').joinpath('catalog-arithmetic.json').write_text(
     json.dumps(json.loads(serialized), indent=2) + '\n'
 )
+
+expressions = {'multiply': table.id * table.score, 'power': table.id**table.id, 'compare': table.id > table.score}
+serialized = json.dumps({name: expr.as_dict() for name, expr in expressions.items()}).replace(
+    str(table._id), '12345678-1234-5678-1234-567812345678'
+)
+Path(__file__).with_name('fixtures').joinpath('catalog-column-expressions.json').write_text(
+    json.dumps(json.loads(serialized), indent=2) + '\n'
+)

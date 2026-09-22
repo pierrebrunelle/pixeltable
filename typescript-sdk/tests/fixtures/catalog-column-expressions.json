@@ -1,0 +1,74 @@
+{
+  "multiply": {
+    "_classname": "ArithmeticExpr",
+    "operator": 2,
+    "components": [
+      {
+        "_classname": "ColumnRef",
+        "tbl_id": "12345678-1234-5678-1234-567812345678",
+        "effective_version": null,
+        "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+        "col_tbl_effective_version": null,
+        "col_id": 0,
+        "perform_validation": false
+      },
+      {
+        "_classname": "ColumnRef",
+        "tbl_id": "12345678-1234-5678-1234-567812345678",
+        "effective_version": null,
+        "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+        "col_tbl_effective_version": null,
+        "col_id": 2,
+        "perform_validation": false
+      }
+    ]
+  },
+  "power": {
+    "_classname": "ArithmeticExpr",
+    "operator": 6,
+    "components": [
+      {
+        "_classname": "ColumnRef",
+        "tbl_id": "12345678-1234-5678-1234-567812345678",
+        "effective_version": null,
+        "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+        "col_tbl_effective_version": null,
+        "col_id": 0,
+        "perform_validation": false
+      },
+      {
+        "_classname": "ColumnRef",
+        "tbl_id": "12345678-1234-5678-1234-567812345678",
+        "effective_version": null,
+        "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+        "col_tbl_effective_version": null,
+        "col_id": 0,
+        "perform_validation": false
+      }
+    ]
+  },
+  "compare": {
+    "_classname": "Comparison",
+    "operator": 4,
+    "components": [
+      {
+        "_classname": "ColumnRef",
+        "tbl_id": "12345678-1234-5678-1234-567812345678",
+        "effective_version": null,
+        "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+        "col_tbl_effective_version": null,
+        "col_id": 0,
+        "perform_validation": false
+      },
+      {
+        "_classname": "ColumnRef",
+        "tbl_id": "12345678-1234-5678-1234-567812345678",
+        "effective_version": null,
+        "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+        "col_tbl_effective_version": null,
+        "col_id": 2,
+        "perform_validation": false
+      }
+    ]
+  }
+}

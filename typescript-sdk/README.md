@@ -270,7 +270,7 @@ await documents.update(
 );
 ```
 
-Numeric columns support `add`, `subtract`, `multiply`, `divide`, `modulo`, `floorDivide`, and `pow` with numeric literals. Expressions can be chained or compared in filters. Their calculations run on the server. TypeScript checks scalar types and nullability; runtime checks distinguish integers from floats and reject incompatible assignments (for example, true division into an integer column). Arithmetic between two column expressions is not yet supported.
+Numeric columns support `add`, `subtract`, `multiply`, `divide`, `modulo`, `floorDivide`, and `pow` with numeric literals or same-table numeric expressions. Expressions can be chained or compared in filters. Their calculations run on the server. TypeScript checks scalar types and nullability; runtime checks distinguish integers from floats and reject incompatible assignments (for example, true division into an integer column). For example, `documents.columns.id.multiply(documents.columns.score)` is nullable because `score` is nullable. Comparisons also accept compatible same-table expressions, such as `documents.columns.score.gt(documents.columns.id)`.
 
 Handles retain the catalog version for writes. A concurrent write or schema change can cause `CatalogStaleError` before insertion, update, or deletion. Reopen the table, review its schema, and explicitly retry if appropriate. The SDK never automatically replays a write. A network failure after submission can leave its outcome unknown. These operations apply immediately; previewing schema changes remains a subsequent phase.
 

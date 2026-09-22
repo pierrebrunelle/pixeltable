@@ -182,3 +182,21 @@ export async function checkExpressionUpdates(): Promise<void> {
   // @ts-expect-error Arithmetic literals must be numbers.
   table.columns.id.add('1');
 }
+
+export async function checkColumnOperands(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.openTable('docs', {
+    id: { type: 'int' },
+    score: { type: 'float', nullable: true },
+    title: { type: 'string' },
+  });
+  await table.update({ score: table.columns.id.multiply(table.columns.score).add(1) });
+  table.query().where(table.columns.id.gt(table.columns.score));
+  table.query().where(table.columns.title.eq(table.columns.title));
+  // @ts-expect-error Nullable right operands propagate to the result.
+  await table.update({ id: table.columns.id.add(table.columns.score) });
+  // @ts-expect-error Arithmetic operands must be numeric.
+  table.columns.id.add(table.columns.title);
+  // @ts-expect-error Comparison operands must have compatible types.
+  table.columns.id.eq(table.columns.title);
+}
