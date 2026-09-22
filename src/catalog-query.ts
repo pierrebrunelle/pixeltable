@@ -203,9 +203,10 @@ export interface CatalogQuery<S extends CatalogSchema, K extends ColumnName<S> =
 export function createTableQueries<S extends CatalogSchema>(
   tableId: string,
   schema: S,
-  columnIds: Record<string, number>,
+  columnIds: Record<string, number | { id: number; tableId: string }>,
   collect: (query: Wire, columns: readonly string[], signal?: AbortSignal) => Promise<CatalogRow<S>[]>,
   count: (query: Wire, signal?: AbortSignal) => Promise<number>,
+  pathKey: Wire = { tbl_version: { id: tableId, effective_version: null }, base: null },
 ): { columns: CatalogColumns<S>; query: () => CatalogQuery<S> } {
   const references = Object.fromEntries(
     Object.entries(columnIds).map(([name, id]) => [
@@ -214,9 +215,9 @@ export function createTableQueries<S extends CatalogSchema>(
         _classname: 'ColumnRef',
         tbl_id: tableId,
         effective_version: null,
-        col_tbl_id: tableId,
+        col_tbl_id: typeof id === 'number' ? tableId : id.tableId,
         col_tbl_effective_version: null,
-        col_id: id,
+        col_id: typeof id === 'number' ? id : id.id,
         perform_validation: false,
       },
     ]),
@@ -249,7 +250,7 @@ export function createTableQueries<S extends CatalogSchema>(
       return {
         _classname: 'Query',
         from_clause: {
-          tbls: [{ tbl_version: { id: tableId, effective_version: null }, base: null }],
+          tbls: [pathKey],
           join_clauses: [],
         },
         select_list: selected.map((name) => [columnReference(name), null]),

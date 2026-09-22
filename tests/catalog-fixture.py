@@ -5,11 +5,16 @@ import os
 from pathlib import Path
 
 import pixeltable as pxt
+from pixeltable.env import Env
 from pixeltable.runtime import get_runtime
 from pixeltable.service import proxy_protocol
 
 if not os.environ.get('PIXELTABLE_HOME'):
     raise RuntimeError('Set PIXELTABLE_HOME to a new temporary directory')
+
+database_server = Env.get()._db_server
+if database_server is not None:
+    database_server.cleanup_mode = 'stop'
 
 pxt.create_dir('inspect')
 table = pxt.create_table(
@@ -59,5 +64,15 @@ serialized = json.dumps({name: expr.as_dict() for name, expr in expressions.item
     str(table._id), '12345678-1234-5678-1234-567812345678'
 )
 Path(__file__).with_name('fixtures').joinpath('catalog-column-expressions.json').write_text(
+    json.dumps(json.loads(serialized), indent=2) + '\n'
+)
+
+view = pxt.create_view('inspect/filtered', table.where(table.id > 1))
+serialized = (
+    json.dumps(view.select(view.id, view.title, view.score).as_dict())
+    .replace(str(table._id), '12345678-1234-5678-1234-567812345678')
+    .replace(str(view._id), '23456789-2345-6789-2345-678923456789')
+)
+Path(__file__).with_name('fixtures').joinpath('catalog-view-query.json').write_text(
     json.dumps(json.loads(serialized), indent=2) + '\n'
 )

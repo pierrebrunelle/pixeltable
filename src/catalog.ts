@@ -52,6 +52,7 @@ export interface CatalogTable<S extends CatalogSchema> {
   delete(options?: { where?: CatalogPredicate; signal?: AbortSignal }): Promise<{ deletedRows: number }>;
   collect(options?: { limit?: number; signal?: AbortSignal }): Promise<CatalogRow<S>[]>;
   count(options?: { signal?: AbortSignal }): Promise<number>;
+  createView(path: string, options?: { where?: CatalogPredicate; signal?: AbortSignal }): Promise<CatalogView<S>>;
   getVersions(options?: { limit?: number; signal?: AbortSignal }): Promise<CatalogVersion[]>;
   revert<const R extends CatalogSchema>(schema: R, options?: { signal?: AbortSignal }): Promise<CatalogTable<R>>;
   addBtreeIndex(
@@ -65,6 +66,11 @@ export interface CatalogTable<S extends CatalogSchema> {
     options?: { signal?: AbortSignal },
   ): Promise<CatalogTable<S & ComputedSchema<N, T>>>;
 }
+
+export type CatalogView<S extends CatalogSchema> = Pick<
+  CatalogTable<S>,
+  'id' | 'path' | 'schema' | 'columns' | 'query' | 'collect' | 'count'
+>;
 
 export class CatalogStaleError extends Error {
   constructor() {
@@ -163,26 +169,49 @@ export function createCatalogClient(options: ClientOptions) {
   async function call(method: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
     return (await rpc(method, args, signal)).result;
   }
-  function tableHandle<S extends CatalogSchema>(path: string, schema: S, metadata: unknown): CatalogTable<S> {
-    function readMetadata(value: unknown): { id: string; version: number; columnIds: Record<string, number> } {
-      if (!Array.isArray(value) || value.length !== 1) throw new TypeError('Expected base-table metadata');
-      const md = record(tagged(value[0], 'TableVersionMd'));
-      const table = record(md.tbl_md);
-      if (table.view_md !== null || typeof table.tbl_id !== 'string') throw new TypeError('Expected a base table');
-      const version = record(md.version_md).version;
+  function tableHandle<S extends CatalogSchema>(
+    path: string,
+    schema: S,
+    metadata: unknown,
+    isView = false,
+  ): CatalogTable<S> {
+    function readMetadata(value: unknown): {
+      id: string;
+      version: number;
+      columnIds: Record<string, { id: number; tableId: string }>;
+      pathKey: Record<string, unknown>;
+    } {
+      if (!Array.isArray(value) || value.length === 0 || (!isView && value.length !== 1))
+        throw new TypeError('Unexpected table metadata');
+      const levels = value.map((entry) => record(tagged(entry, 'TableVersionMd')));
+      const table = record(levels[0]!.tbl_md);
+      if (typeof table.tbl_id !== 'string' || (table.view_md !== null) !== isView)
+        throw new TypeError(isView ? 'Expected a view' : 'Expected a base table');
+      const version = record(levels[0]!.version_md).version;
       if (typeof version !== 'number' || !Number.isSafeInteger(version) || version < 0)
         throw new TypeError('Invalid table version');
-      const columnIds: Record<string, number> = {};
-      for (const [id, value] of Object.entries(record(record(md.schema_version_md).columns))) {
-        const name = record(value).name;
-        if (typeof name === 'string') {
-          if (!Number.isSafeInteger(Number(id)) || Number(id) < 0) throw new TypeError('Invalid column ID');
-          columnIds[name] = Number(id);
+      const columnIds: Record<string, { id: number; tableId: string }> = {};
+      const visible = new Map<string, Record<string, unknown>>();
+      let pathKey: Record<string, unknown> | null = null;
+      for (const level of [...levels].reverse()) {
+        const owner = record(level.tbl_md);
+        if (typeof owner.tbl_id !== 'string') throw new TypeError('Invalid table identity');
+        if (owner.view_md !== null) {
+          const view = record(owner.view_md);
+          if (view.is_snapshot || !view.include_base_columns || view.iterator_call !== null)
+            throw new TypeError('Only live views with inherited columns are supported');
+        }
+        pathKey = { tbl_version: { id: owner.tbl_id, effective_version: null }, base: pathKey };
+        for (const [id, raw] of Object.entries(record(record(level.schema_version_md).columns))) {
+          const column = record(raw);
+          if (column.name === null) continue;
+          if (typeof column.name !== 'string' || !Number.isSafeInteger(Number(id)) || Number(id) < 0)
+            throw new TypeError('Invalid column metadata');
+          visible.set(column.name, column);
+          columnIds[column.name] = { id: Number(id), tableId: owner.tbl_id };
         }
       }
-      const columns = Object.values(record(record(md.schema_version_md).columns))
-        .map(record)
-        .filter((column) => column.name !== null);
+      const columns = [...visible.values()];
       if (columns.length !== Object.keys(schema).length)
         throw new TypeError('Table schema differs from the supplied schema');
       for (const column of columns) {
@@ -200,12 +229,12 @@ export function createCatalogClient(options: ClientOptions) {
         )
           throw new TypeError(`Schema mismatch for column ${name}`);
       }
-      return { id: table.tbl_id, version, columnIds };
+      return { id: table.tbl_id, version, columnIds, pathKey: pathKey! };
     }
     let state = readMetadata(metadata);
     const id = state.id;
-    const pathKey = { tbl_version: { id, effective_version: null }, base: null };
-    const queries = createTableQueries(id, schema, state.columnIds, collectQuery, countQuery);
+    const pathKey = state.pathKey;
+    const queries = createTableQueries(id, schema, state.columnIds, collectQuery, countQuery, pathKey);
     async function collectQuery(
       query: Record<string, unknown>,
       selected: readonly string[],
@@ -272,6 +301,34 @@ export function createCatalogClient(options: ClientOptions) {
       path,
       schema,
       ...queries,
+      async createView(viewPath, options = {}): Promise<CatalogView<S>> {
+        if (!viewPath) throw new TypeError('A view path is required');
+        const result = tagged(
+          await call(
+            'create_view',
+            {
+              path: pathValue(viewPath),
+              base: { $pxt: 'TablePathKey', v: pathKey },
+              select_list: null,
+              where: predicateWire(options.where),
+              sample_clause: null,
+              additional_columns: {},
+              is_snapshot: false,
+              has_default_idxs: false,
+              iterator: null,
+              comment: null,
+              custom_metadata: null,
+              media_validation: { $pxt: 'MediaValidation', v: 'ON_WRITE' },
+              if_exists: { $pxt: 'IfExistsParam', v: 'ERROR' },
+            },
+            options.signal,
+          ),
+          'tuple',
+        );
+        if (!Array.isArray(result) || result.length !== 2 || typeof result[1] !== 'boolean')
+          throw new TypeError('Invalid create-view response');
+        return viewHandle(viewPath, schema, result[0]);
+      },
       async getVersions(options = {}): Promise<CatalogVersion[]> {
         if (options.limit !== undefined && (!Number.isSafeInteger(options.limit) || options.limit < 1))
           throw new TypeError('Version limit must be a positive safe integer');
@@ -453,6 +510,18 @@ export function createCatalogClient(options: ClientOptions) {
       },
     };
   }
+  function viewHandle<S extends CatalogSchema>(path: string, schema: S, metadata: unknown): CatalogView<S> {
+    const table = tableHandle(path, schema, metadata, true);
+    return {
+      id: table.id,
+      path,
+      schema,
+      columns: table.columns,
+      query: table.query,
+      collect: table.collect,
+      count: table.count,
+    };
+  }
   return {
     async createTable<const S extends CatalogSchema>(
       path: string,
@@ -507,6 +576,15 @@ export function createCatalogClient(options: ClientOptions) {
         options.signal,
       );
       return tableHandle(path, schema, result);
+    },
+    async openView<const S extends CatalogSchema>(path: string, definition: S, options: { signal?: AbortSignal } = {}) {
+      const schema = copySchema(definition);
+      const result = await call(
+        'get_table',
+        { path: pathValue(path), if_not_exists: { $pxt: 'IfNotExistsParam', v: 'ERROR' } },
+        options.signal,
+      );
+      return viewHandle(path, schema, result);
     },
     async listDirectory(
       path = '',

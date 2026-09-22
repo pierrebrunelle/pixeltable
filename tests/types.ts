@@ -250,3 +250,16 @@ export async function checkVersionTypes(): Promise<void> {
   reverted.columns.next;
   await reverted.insert([{ id: 1 }]);
 }
+
+export async function checkViewTypes(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.createTable('base', { id: { type: 'int' }, title: { type: 'string' } });
+  const view = await table.createView('filtered', { where: table.columns.id.gt(1) });
+  const rows = await view.query().select('title').collect();
+  const title: string | undefined = rows[0]?.title;
+  void title;
+  // @ts-expect-error View handles do not expose row insertion.
+  await view.insert([{ id: 2, title: 'no' }]);
+  // @ts-expect-error View handles do not expose base-table writes.
+  await view.update({ title: 'no' });
+}

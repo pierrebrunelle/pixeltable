@@ -139,3 +139,34 @@ test('computed definitions retain expression types without primary-key flags', (
   assert.equal(columns.title.computedDefinition(tableId).wire.$pxt, 'Expr');
   assert.throws(() => columns.id.computedDefinition('other'), /belong to the table/);
 });
+
+test('view queries preserve the logical view and physical base-column identities', async () => {
+  const viewId = '23456789-2345-6789-2345-678923456789';
+  const pathKey = {
+    tbl_version: { id: viewId, effective_version: null },
+    base: { tbl_version: { id: tableId, effective_version: null }, base: null },
+  };
+  let actual;
+  const view = createTableQueries(
+    viewId,
+    {
+      id: schema.id,
+      title: schema.title,
+      score: schema.score,
+    },
+    {
+      id: { id: 0, tableId },
+      title: { id: 1, tableId },
+      score: { id: 2, tableId },
+    },
+    async (wire) => {
+      actual = wire;
+      return [];
+    },
+    async () => 0,
+    pathKey,
+  );
+  await view.query().select('id', 'title', 'score').collect();
+  const python = JSON.parse(await readFile(new URL('./fixtures/catalog-view-query.json', import.meta.url), 'utf8'));
+  assert.deepEqual(actual, python);
+});
