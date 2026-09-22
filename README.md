@@ -211,7 +211,7 @@ const entries = await catalog.listDirectory('', { recursive: true });
 
 `baseUrl` must identify an existing protected catalog proxy with a `/rpc` endpoint. An application service URL is insufficient. This adapter does not establish the hosted Python client's TLS tunnel or handle `pxt://` connection discovery. Keep it in trusted server code; the catalog endpoint grants broader access than application routes.
 
-Paths use slash-separated identifiers. Entries include directory names, table IDs, and nested children when requested. The adapter supports directory creation/listing and scalar table creation, opening, insertion, collection, and counts. It is tested against protocol version 4 and metadata schema version 56 in this checkout. Computed columns, expression filters, views, indexes, media localization, and schema diffs remain in progress. This experimental API can change alongside the Python protocol.
+Paths use slash-separated identifiers. Entries include directory names, table IDs, and nested children when requested. The adapter supports directory creation/listing and scalar table creation, opening, insertion, collection, and counts. It is tested against protocol version 4 and metadata schema version 56 in this checkout. The sections below describe supported computed columns, queries, live views, and indexes. Media localization and schema diffs remain incomplete. This experimental API can change alongside the Python protocol.
 
 Create a table with an inferred row type:
 
@@ -353,7 +353,7 @@ const failures = await scored
   .collect();
 ```
 
-`errorType` and `errorMessage` are nullable string expressions: successful rows return `null`. They require stored computed column references; ordinary scalar columns and inline calculations are rejected. The SDK can inspect errors retained by Python with `on_error='ignore'`; SDK inserts and computed-column creation currently abort on computation errors. Select the error properties instead of a failed required value, whose stored null would not match its declared TypeScript type.
+`errorType` and `errorMessage` are nullable string expressions: successful rows return `null`. They require stored computed column references; ordinary scalar columns and inline calculations are rejected. Use `insert(rows, { onError: 'ignore' })` to retain rows with failed computed values; the default `onError: 'abort'` rejects the insertion when computation fails. Inserts return `{ insertedRows, errors }`: insertedRows counts rows in the target table and errors includes computation failures in dependent views. Invalid input values still fail local validation before transport. Computed-column creation currently aborts on computation errors. Select the error properties instead of a failed required value, whose stored null would not match its declared TypeScript type.
 
 Retry a stored computed column after fixing its Python UDF or restoring an external dependency:
 

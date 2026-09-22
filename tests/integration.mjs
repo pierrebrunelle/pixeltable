@@ -184,14 +184,14 @@ try {
     active: true,
     payload: { $pxt: 'literal user data', nested: [1, null, false] },
   };
-  assert.deepEqual(await authored.insert([authoredRow]), { insertedRows: 1 });
+  assert.deepEqual(await authored.insert([authoredRow]), { insertedRows: 1, errors: 0 });
   assert.equal(await authored.count(), 1);
   assert.deepEqual(await authored.collect(), [{ ...authoredRow, score: null }]);
   assert.deepEqual(await authored.collect({ limit: 0 }), []);
   await assert.rejects(stale.insert([{ ...authoredRow, id: 2 }]), { name: 'CatalogStaleError' });
   assert.equal(await authored.count(), 1);
   const reopened = await catalog.openTable('typescript_catalog/docs', schemaDefinition);
-  assert.deepEqual(await reopened.insert([{ ...authoredRow, id: 2, score: 2.5 }]), { insertedRows: 1 });
+  assert.deepEqual(await reopened.insert([{ ...authoredRow, id: 2, score: 2.5 }]), { insertedRows: 1, errors: 0 });
   assert.equal(await reopened.count(), 2);
   await assert.rejects(
     catalog.openTable('typescript_catalog/docs', { ...schemaDefinition, title: { type: 'int' } }),
@@ -629,6 +629,32 @@ try {
     await assert.rejects(recovered.recomputeColumns(columns), TypeError);
   await assert.rejects(recovered.recomputeColumns(['result', 'dependent'], { errorsOnly: true }), TypeError);
   await assert.rejects(recovered.recomputeColumns(['result'], { cascade: 'false' }), TypeError);
+  const ingestSource = await catalog.createTable('sdk_test/ingest_errors', { text: { type: 'string' } });
+  const parseNumber = defineCatalogFunction('udf_fixture.parse_number', { text: { type: 'string' } }, { type: 'int' });
+  const ingest = await ingestSource.addComputedColumn(
+    'number',
+    ingestSource.callFunction(parseNumber, { text: ingestSource.columns.text }),
+  );
+  await assert.rejects(ingest.insert([{ text: '7' }, { text: 'bad' }]), CatalogError);
+  assert.equal(await ingest.count(), 0);
+  assert.deepEqual(await ingest.insert([{ text: '8' }, { text: 'bad' }], { onError: 'ignore' }), {
+    insertedRows: 2,
+    errors: 1,
+  });
+  assert.equal(await ingest.count(), 2);
+  assert.deepEqual(await ingest.query().where(ingest.columns.number.errorType.ne(null)).select('text').collect(), [
+    { text: 'bad' },
+  ]);
+  await ingest.update({ text: '9' }, { where: ingest.columns.text.eq('bad') });
+  assert.deepEqual(await ingest.query().select('number').orderBy('number').collect(), [{ number: 8 }, { number: 9 }]);
+  assert.equal(await ingest.query().where(ingest.columns.number.errorType.ne(null)).count(), 0);
+  await assert.rejects(ingest.insert([{ text: '3' }], { onError: 'skip' }), TypeError);
+  const ingestView = await ingest.createView('sdk_test/ingest_error_view');
+  await ingestView.addComputedColumn(
+    'parsed_again',
+    ingestView.callFunction(parseNumber, { text: ingestView.columns.text }),
+  );
+  assert.deepEqual(await ingest.insert([{ text: 'bad_again' }], { onError: 'ignore' }), { insertedRows: 1, errors: 2 });
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );

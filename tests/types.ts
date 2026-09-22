@@ -387,3 +387,13 @@ export async function checkRecomputeTypes(): Promise<void> {
   // @ts-expect-error Unknown columns cannot be recomputed.
   await table.recomputeColumns(['missing']);
 }
+
+export async function checkInsertErrorPolicy(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.openTable('docs', { text: { type: 'string' } });
+  const status = await table.insert([{ text: 'hello' }], { onError: 'ignore' });
+  const errors: number = status.errors;
+  void errors;
+  // @ts-expect-error Unknown error policies are rejected.
+  await table.insert([{ text: 'hello' }], { onError: 'skip' });
+}
