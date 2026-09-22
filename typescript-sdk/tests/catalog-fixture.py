@@ -257,3 +257,18 @@ serialized = json.dumps(proxy_protocol.serialize_args(uuid_expressions, proxy_pr
 Path(__file__).with_name('fixtures').joinpath('catalog-uuid.json').write_text(
     json.dumps(json.loads(serialized), indent=2) + '\n'
 )
+
+
+matrix = pxt.create_table('inspect/matrix', {'value': pxt.Array[(3, 4), pxt.Float]})
+slices = {
+    'reverse': matrix.value[::-1, 1::2],
+    'empty': matrix.value[2:1],
+    'clamped': matrix.value[-100:100:2, ::-1],
+    'negative_stop': matrix.value[:-1:-1],
+}
+serialized = json.dumps(
+    {name: {'expression': expr.as_dict(), 'type': expr.col_type.as_dict()} for name, expr in slices.items()}
+).replace(str(matrix._id), '12345678-1234-5678-1234-567812345678')
+Path(__file__).with_name('fixtures').joinpath('catalog-array-slice.json').write_text(
+    json.dumps(json.loads(serialized), indent=2) + '\n'
+)
