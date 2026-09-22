@@ -2,13 +2,14 @@ import { catalogDate, catalogTimestamp } from './catalog-temporal.js';
 import type { CatalogDate, CatalogTimestamp } from './catalog-temporal.js';
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 export interface CatalogColumn {
-  type: 'int' | 'float' | 'string' | 'bool' | 'json' | 'date' | 'timestamp';
+  type: 'int' | 'float' | 'string' | 'bool' | 'json' | 'date' | 'timestamp' | 'binary';
   nullable?: boolean;
   primaryKey?: boolean;
   computed?: boolean;
 }
 export type CatalogSchema = Record<string, CatalogColumn>;
 type ValueTypes = {
+  binary: Uint8Array;
   date: CatalogDate;
   timestamp: CatalogTimestamp;
   string: string;
@@ -39,6 +40,7 @@ export type CatalogBatchUpdateRow<S extends CatalogSchema> = [PrimaryKeyColumn<S
   : Pick<CatalogRow<S>, PrimaryKeyColumn<S>> & Partial<Pick<CatalogRow<S>, WritableColumn<S>>>;
 
 export const columnClasses = {
+  binary: 'BinaryType',
   int: 'IntType',
   float: 'FloatType',
   string: 'StringType',
@@ -110,6 +112,10 @@ export function columnValue(value: unknown, column: CatalogColumn, input: boolea
     if (!column.nullable) throw new TypeError('A non-nullable column requires a value');
     return null;
   }
+  if (column.type === 'binary') {
+    if (!(value instanceof Uint8Array)) throw new TypeError('Binary values must be Uint8Array');
+    return new Uint8Array(value);
+  }
   if (column.type === 'date' || column.type === 'timestamp') {
     const tag = column.type === 'date' ? 'date' : 'datetime';
     const parse = column.type === 'date' ? catalogDate : catalogTimestamp;
@@ -131,6 +137,11 @@ export function columnValue(value: unknown, column: CatalogColumn, input: boolea
 
 export function literalValue(value: unknown, column: CatalogColumn): unknown {
   const encoded = columnValue(value, column, true);
+  if (column.type === 'binary' && encoded !== null) {
+    let text = '';
+    for (const byte of encoded as Uint8Array) text += String.fromCharCode(byte);
+    return btoa(text);
+  }
   return encoded !== null && (column.type === 'date' || column.type === 'timestamp')
     ? (encoded as { v: string }).v
     : encoded;

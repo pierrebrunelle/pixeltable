@@ -1,3 +1,4 @@
+import { encodeBinaryParts, decodeBinaryParts } from './catalog-binary.js';
 export { catalogDate, catalogTimestamp } from './catalog-temporal.js';
 export type { CatalogDate, CatalogTimestamp } from './catalog-temporal.js';
 export type { CatalogJsonPathElement, CatalogCastType, CatalogWindow } from './catalog-query.js';
@@ -321,18 +322,20 @@ export function createCatalogClient(options: ClientOptions) {
     signal?: AbortSignal,
     context: Record<string, unknown> = {},
   ): Promise<Record<string, unknown>> {
+    const parts: Uint8Array[] = [];
+    const encodedArgs = encodeBinaryParts(args, parts);
     const head = new TextEncoder().encode(
       JSON.stringify({
         protocol_version: proxyProtocolVersion,
         schema_version: proxySchemaVersion,
         class_name: 'CatalogBase',
         method,
-        args,
+        args: encodedArgs,
         ...context,
       }),
     );
     const { data } = await client.api.POST('/rpc', {
-      body: encodeProxyFrame(head, []),
+      body: encodeProxyFrame(head, parts),
       bodySerializer: (body) => body,
       headers: { 'Content-Type': 'application/octet-stream' },
       parseAs: 'arrayBuffer',
@@ -340,12 +343,11 @@ export function createCatalogClient(options: ClientOptions) {
     });
     if (!data) throw new TypeError('Missing catalog response');
     const frame = decodeProxyFrame(new Uint8Array(data));
-    if (frame.parts.length) throw new TypeError('Unexpected binary catalog result');
     const response = record(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(frame.head)));
     if (response.error !== null && response.error !== undefined) throw new CatalogError(record(response.error));
     if (response.is_stale_md === true) throw new CatalogStaleError();
     if (!Object.hasOwn(response, 'result')) throw new TypeError('Missing catalog result');
-    return response;
+    return record(decodeBinaryParts(response, frame.parts));
   }
   async function call(method: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
     return (await rpc(method, args, signal)).result;
