@@ -2,9 +2,9 @@ import { createClient } from './index.js';
 import type { ClientOptions } from './index.js';
 import { decodeProxyFrame, encodeProxyFrame, proxyProtocolVersion, proxySchemaVersion } from './proxy-protocol.js';
 
-import type { CatalogPredicate } from './catalog-query.js';
-import { createTableQueries } from './catalog-query.js';
-export type { CatalogQuery, CatalogColumns, CatalogPredicate } from './catalog-query.js';
+import type { CatalogPredicate, CatalogUpdateRow } from './catalog-query.js';
+import { createTableQueries, updateValue } from './catalog-query.js';
+export type { CatalogQuery, CatalogColumns, CatalogPredicate, CatalogUpdateRow } from './catalog-query.js';
 import { columnClasses, columnValue, copySchema } from './catalog-schema.js';
 import type { CatalogSchema, CatalogInsertRow, CatalogRow } from './catalog-schema.js';
 export type { CatalogColumn, CatalogSchema, CatalogRow, CatalogInsertRow, JsonValue } from './catalog-schema.js';
@@ -235,7 +235,7 @@ export function createCatalogClient(options: ClientOptions) {
         return { insertedRows };
       },
       async update(
-        values: Partial<CatalogRow<S>>,
+        values: CatalogUpdateRow<S>,
         options: { where?: CatalogPredicate; signal?: AbortSignal } = {},
       ): Promise<{ updatedRows: number }> {
         const entries = Object.entries(record(values));
@@ -243,7 +243,7 @@ export function createCatalogClient(options: ClientOptions) {
         const valueSpec = Object.fromEntries(
           entries.map(([name, value]) => {
             if (!Object.hasOwn(schema, name)) throw new TypeError('Unknown update column');
-            return [name, columnValue(value, schema[name]!, true)];
+            return [name, updateValue(value, schema[name]!, id)];
           }),
         );
         const updatedRows = await mutate(

@@ -162,3 +162,23 @@ export async function checkCatalogMutationTypes(): Promise<void> {
   // @ts-expect-error Non-nullable columns reject null.
   await table.update({ title: null });
 }
+
+export async function checkExpressionUpdates(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.openTable('docs', {
+    id: { type: 'int' },
+    title: { type: 'string' },
+    score: { type: 'float', nullable: true },
+  });
+  await table.update({ score: table.columns.id.add(1).divide(2) });
+  await table.update({ score: table.columns.score.multiply(2) });
+  await table.update({ title: table.columns.title });
+  // @ts-expect-error Nullable expressions cannot target required columns.
+  await table.update({ id: table.columns.score });
+  // @ts-expect-error String expressions cannot target numeric columns.
+  await table.update({ score: table.columns.title });
+  // @ts-expect-error Arithmetic requires a numeric column.
+  table.columns.title.add(1);
+  // @ts-expect-error Arithmetic literals must be numbers.
+  table.columns.id.add('1');
+}

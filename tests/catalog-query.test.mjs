@@ -93,3 +93,17 @@ test('count rejects pagination before transport', async () => {
   await assert.rejects(query().offset(0).count(), /count\(\) cannot be used/);
   assert.equal(calls.length, 0);
 });
+
+test('arithmetic expressions match Python and enforce assignment types and table identity', async () => {
+  const { columns } = setup();
+  const python = JSON.parse(await readFile(new URL('./fixtures/catalog-arithmetic.json', import.meta.url), 'utf8'));
+  for (const operation of Object.keys(python)) {
+    assert.deepEqual(columns.id[operation](2).toUpdateWire(tableId, { type: 'float' }).v, python[operation]);
+  }
+  assert.throws(() => columns.id.divide(2).toUpdateWire(tableId, { type: 'int' }), /expression type/);
+  assert.throws(() => columns.score.toUpdateWire(tableId, { type: 'float' }), /expression type/);
+  assert.throws(() => columns.id.add(1).toUpdateWire('different-table', { type: 'int' }), /updated table/);
+  assert.throws(() => columns.title.add(2), /numeric/);
+  assert.throws(() => columns.id.add(NaN), /Invalid float/);
+  assert.throws(() => columns.id.add(Number.MAX_SAFE_INTEGER + 1), /Unsafe/);
+});

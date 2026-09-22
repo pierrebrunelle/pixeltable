@@ -243,7 +243,7 @@ const matches = await documents
   .collect();
 ```
 
-Query builders are immutable: filtering or selecting returns a new query. Predicates support comparisons, `isNull()`, `and()`, `or()`, and `not()`, using columns from the same table. Projections narrow the returned row type. Ordering supports scalar columns other than JSON. `count()` counts matching rows and rejects queries with a limit or offset, matching Python. Joins, aggregates, arithmetic, and UDF expressions are not yet supported.
+Query builders are immutable: filtering or selecting returns a new query. Predicates support comparisons, `isNull()`, `and()`, `or()`, and `not()`, using columns from the same table. Projections narrow the returned row type. Ordering supports scalar columns other than JSON. `count()` counts matching rows and rejects queries with a limit or offset, matching Python. Joins, aggregates, and UDF expressions are not yet supported.
 
 Use `openTable(path, schema)` to open an existing base table with runtime schema verification. `createTable` fails if the table exists unless `ifExists: 'ignore'` is specified; an ignored existing table must still match the supplied schema. Both methods reject computed columns, views, and specialized types outside the supported scalar schema. Creation does not replace tables.
 
@@ -259,7 +259,18 @@ await documents.update(
 await documents.delete({ where: documents.columns.enabled.eq(false) });
 ```
 
-Updates accept partial literal rows and return `{ updatedRows }`; deletes return `{ deletedRows }`. Omitting `where` affects every row, matching Python. Updates validate values and reject empty patches. Expression-valued updates are not yet supported.
+Updates accept partial literal rows and return `{ updatedRows }`; deletes return `{ deletedRows }`. Omitting `where` affects every row, matching Python. Updates validate values and reject empty patches. Updates also accept same-table column expressions:
+
+```typescript
+await documents.update(
+  { score: documents.columns.score.add(1).multiply(2) },
+  {
+    where: documents.columns.enabled.eq(true),
+  },
+);
+```
+
+Numeric columns support `add`, `subtract`, `multiply`, `divide`, `modulo`, `floorDivide`, and `pow` with numeric literals. Expressions can be chained or compared in filters. Their calculations run on the server. TypeScript checks scalar types and nullability; runtime checks distinguish integers from floats and reject incompatible assignments (for example, true division into an integer column). Arithmetic between two column expressions is not yet supported.
 
 Handles retain the catalog version for writes. A concurrent write or schema change can cause `CatalogStaleError` before insertion, update, or deletion. Reopen the table, review its schema, and explicitly retry if appropriate. The SDK never automatically replays a write. A network failure after submission can leave its outcome unknown. These operations apply immediately; previewing schema changes remains a subsequent phase.
 

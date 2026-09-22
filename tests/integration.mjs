@@ -228,6 +228,17 @@ try {
   assert.equal(await reopened.query().where(reopened.columns.payload.eq(authoredRow.payload)).count(), 4);
   assert.deepEqual(
     await reopened.update(
+      { score: reopened.columns.id.add(2).multiply(3).divide(2) },
+      { where: reopened.columns.id.eq(3) },
+    ),
+    { updatedRows: 1 },
+  );
+  assert.deepEqual(await reopened.query().where(reopened.columns.id.eq(3)).select('score').collect(), [{ score: 7.5 }]);
+  assert.equal(await reopened.query().where(reopened.columns.id.add(1).gt(4)).count(), 1);
+  await assert.rejects(reopened.update({ id: reopened.columns.score }), /expression type/);
+  await assert.rejects(reopened.update({ id: reopened.columns.id.divide(2) }), /expression type/);
+  assert.deepEqual(
+    await reopened.update(
       { title: 'updated', score: null },
       {
         where: reopened.columns.id.eq(3),

@@ -1,0 +1,163 @@
+{
+  "add": {
+    "_classname": "ArithmeticExpr",
+    "operator": 0,
+    "components": [
+      {
+        "_classname": "ColumnRef",
+        "tbl_id": "12345678-1234-5678-1234-567812345678",
+        "effective_version": null,
+        "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+        "col_tbl_effective_version": null,
+        "col_id": 0,
+        "perform_validation": false
+      },
+      {
+        "_classname": "Literal",
+        "val": 2,
+        "col_type": {
+          "_classname": "IntType",
+          "nullable": false
+        }
+      }
+    ]
+  },
+  "subtract": {
+    "_classname": "ArithmeticExpr",
+    "operator": 1,
+    "components": [
+      {
+        "_classname": "ColumnRef",
+        "tbl_id": "12345678-1234-5678-1234-567812345678",
+        "effective_version": null,
+        "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+        "col_tbl_effective_version": null,
+        "col_id": 0,
+        "perform_validation": false
+      },
+      {
+        "_classname": "Literal",
+        "val": 2,
+        "col_type": {
+          "_classname": "IntType",
+          "nullable": false
+        }
+      }
+    ]
+  },
+  "multiply": {
+    "_classname": "ArithmeticExpr",
+    "operator": 2,
+    "components": [
+      {
+        "_classname": "ColumnRef",
+        "tbl_id": "12345678-1234-5678-1234-567812345678",
+        "effective_version": null,
+        "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+        "col_tbl_effective_version": null,
+        "col_id": 0,
+        "perform_validation": false
+      },
+      {
+        "_classname": "Literal",
+        "val": 2,
+        "col_type": {
+          "_classname": "IntType",
+          "nullable": false
+        }
+      }
+    ]
+  },
+  "divide": {
+    "_classname": "ArithmeticExpr",
+    "operator": 3,
+    "components": [
+      {
+        "_classname": "ColumnRef",
+        "tbl_id": "12345678-1234-5678-1234-567812345678",
+        "effective_version": null,
+        "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+        "col_tbl_effective_version": null,
+        "col_id": 0,
+        "perform_validation": false
+      },
+      {
+        "_classname": "Literal",
+        "val": 2,
+        "col_type": {
+          "_classname": "IntType",
+          "nullable": false
+        }
+      }
+    ]
+  },
+  "modulo": {
+    "_classname": "ArithmeticExpr",
+    "operator": 4,
+    "components": [
+      {
+        "_classname": "ColumnRef",
+        "tbl_id": "12345678-1234-5678-1234-567812345678",
+        "effective_version": null,
+        "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+        "col_tbl_effective_version": null,
+        "col_id": 0,
+        "perform_validation": false
+      },
+      {
+        "_classname": "Literal",
+        "val": 2,
+        "col_type": {
+          "_classname": "IntType",
+          "nullable": false
+        }
+      }
+    ]
+  },
+  "floorDivide": {
+    "_classname": "ArithmeticExpr",
+    "operator": 5,
+    "components": [
+      {
+        "_classname": "ColumnRef",
+        "tbl_id": "12345678-1234-5678-1234-567812345678",
+        "effective_version": null,
+        "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+        "col_tbl_effective_version": null,
+        "col_id": 0,
+        "perform_validation": false
+      },
+      {
+        "_classname": "Literal",
+        "val": 2,
+        "col_type": {
+          "_classname": "IntType",
+          "nullable": false
+        }
+      }
+    ]
+  },
+  "pow": {
+    "_classname": "ArithmeticExpr",
+    "operator": 6,
+    "components": [
+      {
+        "_classname": "ColumnRef",
+        "tbl_id": "12345678-1234-5678-1234-567812345678",
+        "effective_version": null,
+        "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+        "col_tbl_effective_version": null,
+        "col_id": 0,
+        "perform_validation": false
+      },
+      {
+        "_classname": "Literal",
+        "val": 2,
+        "col_type": {
+          "_classname": "IntType",
+          "nullable": false
+        }
+      }
+    ]
+  }
+}
