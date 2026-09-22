@@ -243,6 +243,21 @@ const matches = await documents
   .collect();
 ```
 
+Return named expressions without adding stored columns:
+
+```typescript
+const totals = await documents
+  .query()
+  .selectExpressions({
+    item: documents.columns.id,
+    doubled_score: documents.columns.score.multiply(2),
+  })
+  .orderBy('id')
+  .collect();
+```
+
+Result types contain the selected aliases and preserve expression nullability. Aliases follow the SDK's column-name rules. Filters and ordering still refer to source columns; projections do not add reusable table columns. The same method works on views.
+
 Query builders are immutable: filtering or selecting returns a new query. Predicates support comparisons, `isNull()`, `and()`, `or()`, and `not()`, using columns from the same table. Projections narrow the returned row type. Ordering supports scalar columns other than JSON. `count()` counts matching rows and rejects queries with a limit or offset, matching Python. Joins, aggregates, and UDF expressions are not yet supported.
 
 Use `openTable(path, schema)` to open an existing base table with runtime schema verification. `createTable` fails if the table exists unless `ifExists: 'ignore'` is specified; an ignored existing table must still match the supplied schema. These table methods reject views and specialized types outside the supported scalar schema; use `openView` for supported views. To open existing computed columns, include `computed: true` in their schema definitions; the SDK verifies that they are computed and excludes them from writes. Creation does not replace tables.

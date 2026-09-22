@@ -384,6 +384,30 @@ try {
   const renamedComputed = await derived.renameColumn('double_id', 'twice');
   assert.deepEqual(await renamedComputed.query().select('twice').orderBy('id').collect(), [{ twice: 2 }, { twice: 4 }]);
   await renamedComputed.dropColumn('twice');
+  const projected = await withoutExtra
+    .query()
+    .selectExpressions({
+      item: withoutExtra.columns.id,
+      doubled_score: withoutExtra.columns.score.multiply(2),
+    })
+    .where(withoutExtra.columns.id.lte(2))
+    .orderBy('id')
+    .collect();
+  assert.deepEqual(projected, [
+    { item: 1, doubled_score: 18 },
+    { item: 2, doubled_score: null },
+  ]);
+  assert.deepEqual(
+    await nestedView
+      .query()
+      .selectExpressions({
+        label: nestedView.columns.id,
+        total: nestedView.columns.adjusted.add(1),
+      })
+      .where(nestedView.columns.id.eq(1))
+      .collect(),
+    [{ label: 1, total: 30 }],
+  );
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );

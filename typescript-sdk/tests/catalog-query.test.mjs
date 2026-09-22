@@ -170,3 +170,19 @@ test('view queries preserve the logical view and physical base-column identities
   const python = JSON.parse(await readFile(new URL('./fixtures/catalog-view-query.json', import.meta.url), 'utf8'));
   assert.deepEqual(actual, python);
 });
+
+test('named expression projections match Python and retain immutable query branches', async () => {
+  const { columns, query, calls } = setup();
+  const base = query();
+  const projection = base.selectExpressions({ item: columns.id, new_score: columns.score.multiply(2) });
+  await projection.collect();
+  const python = JSON.parse(await readFile(new URL('./fixtures/catalog-projection.json', import.meta.url), 'utf8'));
+  assert.deepEqual(calls[0].wire, python);
+  assert.deepEqual(calls[0].selected, ['item', 'new_score']);
+  await base.collect();
+  assert.equal(calls[1].selected.length, 5);
+  assert.throws(() => base.selectExpressions({}), /at least one/);
+  assert.throws(() => base.selectExpressions({ invalid: 1 }), /catalog expression/);
+  assert.throws(() => base.selectExpressions({ 'invalid-name': columns.id }), /Column names/);
+  assert.throws(() => base.selectExpressions({ foreign: setup('other').columns.id }), /belong to the table/);
+});

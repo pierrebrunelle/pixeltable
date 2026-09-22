@@ -17,6 +17,7 @@ export type {
   CatalogPredicate,
   CatalogUpdateRow,
   CatalogExpression,
+  CatalogProjection,
 } from './catalog-query.js';
 import { columnClasses, columnValue, copySchema } from './catalog-schema.js';
 import type { CatalogColumn, CatalogSchema, CatalogInsertRow, CatalogRow } from './catalog-schema.js';
@@ -275,14 +276,15 @@ export function createCatalogClient(options: ClientOptions) {
       query: Record<string, unknown>,
       selected: readonly string[],
       signal?: AbortSignal,
-    ): Promise<CatalogRow<S>[]> {
+      outputSchema: CatalogSchema = schema,
+    ): Promise<Record<string, unknown>[]> {
       const response = await rpc('collect', { query }, signal, { class_name: 'Query' });
       const result = record(response.result);
       const columns = Object.entries(record(result.schema));
       if (columns.length !== selected.length || columns.some(([name]) => !selected.includes(name)))
         throw new TypeError('Query schema changed');
       for (const [name, wrapped] of columns) {
-        const column = schema[name];
+        const column = outputSchema[name];
         const type = record(tagged(wrapped, 'ColumnType'));
         if (!column || type._classname !== columnClasses[column.type] || type.nullable !== (column.nullable ?? false))
           throw new TypeError('Query schema changed');
@@ -291,8 +293,8 @@ export function createCatalogClient(options: ClientOptions) {
       return result.rows.map((row: unknown) => {
         if (!Array.isArray(row) || row.length !== columns.length) throw new TypeError('Invalid query row');
         return Object.fromEntries(
-          columns.map(([name], index) => [name, columnValue(row[index], schema[name]!, false)]),
-        ) as CatalogRow<S>;
+          columns.map(([name], index) => [name, columnValue(row[index], outputSchema[name]!, false)]),
+        );
       });
     }
     async function countQuery(query: Record<string, unknown>, signal?: AbortSignal): Promise<number> {
