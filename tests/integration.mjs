@@ -365,6 +365,25 @@ try {
     name: 'CatalogStaleError',
   });
   assert.ok((await enrichedView.getVersions({ limit: 1 }))[0].version > 0);
+  const evolving = await catalog.createTable('typescript_catalog/evolving', { id: { type: 'int' } });
+  await evolving.insert([{ id: 1 }]);
+  const added = await evolving.addColumn('note', { type: 'string', nullable: true });
+  assert.deepEqual(await added.collect(), [{ id: 1, note: null }]);
+  await added.update({ note: 'hello' });
+  await assert.rejects(evolving.addColumn('old', { type: 'int', nullable: true }), { name: 'CatalogStaleError' });
+  const renamed = await added.renameColumn('note', 'text');
+  assert.deepEqual(await renamed.collect(), [{ id: 1, text: 'hello' }]);
+  await renamed.insert([{ id: 2, text: 'next' }]);
+  const dropped = await renamed.dropColumn('text');
+  assert.deepEqual(await dropped.query().orderBy('id').collect(), [{ id: 1 }, { id: 2 }]);
+  const derived = await dropped.addComputedColumn('double_id', dropped.columns.id.multiply(2));
+  await assert.rejects(derived.dropColumn('id'), CatalogError);
+  assert.equal(await derived.count(), 2);
+  await assert.rejects(derived.addColumn('double_id', { type: 'int' }), /already exists/);
+  await assert.rejects(derived.renameColumn('id', 'invalid-name'), /Column names/);
+  const renamedComputed = await derived.renameColumn('double_id', 'twice');
+  assert.deepEqual(await renamedComputed.query().select('twice').orderBy('id').collect(), [{ twice: 2 }, { twice: 4 }]);
+  await renamedComputed.dropColumn('twice');
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );

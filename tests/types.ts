@@ -276,3 +276,23 @@ export async function checkViewAuthoringTypes(): Promise<void> {
   // @ts-expect-error Adding computed columns must not expose base-row insertion.
   await enriched.insert([{ id: 1 }]);
 }
+
+export async function checkSchemaMutationTypes(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const base = await catalog.createTable('evolving', { id: { type: 'int' } });
+  const added = await base.addColumn('note', { type: 'string', nullable: true });
+  await added.insert([{ id: 1, note: 'hello' }]);
+  const renamed = await added.renameColumn('note', 'text');
+  await renamed.update({ text: null });
+  // @ts-expect-error The old column name is removed.
+  await renamed.update({ note: 'old' });
+  const dropped = await renamed.dropColumn('text');
+  // @ts-expect-error Dropped columns are removed from inputs.
+  await dropped.insert([{ id: 2, text: 'old' }]);
+  // @ts-expect-error Column names must exist.
+  await dropped.dropColumn('missing');
+  const derived = await dropped.addComputedColumn('double_id', dropped.columns.id.multiply(2));
+  const renamedComputed = await derived.renameColumn('double_id', 'twice');
+  // @ts-expect-error Renaming preserves computed write protection.
+  await renamedComputed.update({ twice: 4 });
+}
