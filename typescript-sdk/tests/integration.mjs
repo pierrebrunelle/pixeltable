@@ -16,6 +16,7 @@ import {
   CatalogError,
   CatalogStaleError,
   defineCatalogFunction,
+  catalogUuid,
   catalogDate,
   catalogTimestamp,
 } from '../dist/catalog.js';
@@ -1206,6 +1207,37 @@ try {
   assert.deepEqual((await binaryCopy.compute([{ id: 3, content: bytes }]))[0].values.copy, bytes);
   const openedBinary = await catalog.openTable('sdk_test/binary_values', binaryCopy.schema);
   assert.equal(await openedBinary.query().where(openedBinary.columns.content.eq(bytes)).count(), 1);
+  const uuidTable = await catalog.createTable('sdk_test/uuid_values', {
+    id: { type: 'uuid', primaryKey: true },
+    optional: { type: 'uuid', nullable: true },
+  });
+  const uuidA = catalogUuid('ABCDEF01-2345-6789-ABCD-EF0123456789');
+  const uuidB = catalogUuid('00000000000000000000000000000000');
+  await uuidTable.insert([{ id: uuidA }, { id: uuidB, optional: uuidA }]);
+  assert.deepEqual(await uuidTable.query().orderBy('id').collect(), [
+    { id: uuidB, optional: uuidA },
+    { id: uuidA, optional: null },
+  ]);
+  assert.equal(await uuidTable.query().where(uuidTable.columns.id.lt(uuidA)).count(), 1);
+  assert.equal(
+    await uuidTable
+      .query()
+      .where(uuidTable.columns.id.isIn([uuidA]))
+      .count(),
+    1,
+  );
+  await uuidTable.addBtreeIndex('id', { name: 'uuid_lookup' });
+  const uuidCopy = await uuidTable.addComputedColumn('copy', uuidTable.columns.id);
+  await uuidCopy.batchUpdate([{ id: uuidA, optional: uuidB }]);
+  assert.deepEqual((await uuidCopy.query().where(uuidCopy.columns.id.eq(uuidA)).collect())[0], {
+    id: uuidA,
+    optional: uuidB,
+    copy: uuidA,
+  });
+  await uuidCopy.update({ optional: uuidA }, { where: uuidCopy.columns.id.eq(uuidB) });
+  assert.equal((await uuidCopy.compute([{ id: uuidA }]))[0].values.copy, uuidA);
+  const uuidOpened = await catalog.openTable('sdk_test/uuid_values', uuidCopy.schema);
+  assert.equal(await uuidOpened.query().where(uuidOpened.columns.copy.eq(uuidA)).count(), 1);
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );
