@@ -1,13 +1,14 @@
+import type { CatalogArray } from './catalog-array.js';
 import type { CatalogUuid } from './catalog-uuid.js';
 import type { CatalogDate, CatalogTimestamp } from './catalog-temporal.js';
-import { columnClasses, columnValue, copySchema, literalValue } from './catalog-schema.js';
+import { columnClasses, columnValue, copySchema, literalValue, columnWire } from './catalog-schema.js';
 import type { CatalogColumn, CatalogRow, CatalogSchema, WritableColumn, JsonValue } from './catalog-schema.js';
 
 type Wire = Record<string, unknown>;
 type OrderedValue<T> = Exclude<T, null> extends string | number ? Exclude<T, null> : never;
 type ColumnName<S extends CatalogSchema> = keyof S & string;
 type SortableName<S extends CatalogSchema> = {
-  [K in ColumnName<S>]: S[K]['type'] extends 'json' | 'binary' ? never : K;
+  [K in ColumnName<S>]: S[K]['type'] extends 'json' | 'binary' | 'array' ? never : K;
 }[ColumnName<S>];
 
 class Predicate {
@@ -45,7 +46,7 @@ type ArithmeticValue<T, O> =
   number | Extract<T, null> | (O extends ColumnExpression<infer V> ? Extract<V, null> : never);
 
 export type CatalogJsonPathElement = string | number | { start?: number; stop?: number; step?: number };
-export type CatalogCastType = Pick<CatalogColumn, 'type' | 'nullable'>;
+export type CatalogCastType = Pick<CatalogColumn, 'type' | 'nullable' | 'dtype' | 'shape'>;
 export type CatalogWindow =
   | { partitionBy: ProjectionExpression; orderBy?: ProjectionExpression }
   | { partitionBy?: ProjectionExpression; orderBy: ProjectionExpression };
@@ -94,13 +95,13 @@ class ColumnExpression<T> {
   ): ColumnExpression<
     null extends T ? CatalogRow<{ result: C }>['result'] : Exclude<CatalogRow<{ result: C }>['result'], null>
   > {
-    if (Object.keys(target).some((key) => !['type', 'nullable'].includes(key)))
-      throw new TypeError('Cast types only accept type and nullable');
+    if (Object.keys(target).some((key) => !['type', 'nullable', 'dtype', 'shape'].includes(key)))
+      throw new TypeError('Cast types only accept type, nullable, dtype, and shape');
     const column = copySchema({ result: target }).result;
-    const result = { type: column.type, nullable: Boolean(this.column.nullable && column.nullable) };
+    const result = { ...column, nullable: Boolean(this.column.nullable && column.nullable) };
     return new ColumnExpression(this.tableId, result, {
       _classname: 'TypeCast',
-      new_type: { _classname: columnClasses[result.type], nullable: result.nullable },
+      new_type: columnWire(result),
       components: [this.expression],
     });
   }
@@ -120,7 +121,7 @@ class ColumnExpression<T> {
     if (!['count', 'sum', 'mean', 'min', 'max'].includes(kind)) throw new TypeError('Unsupported aggregate');
     if (['sum', 'mean'].includes(kind) && !['int', 'float'].includes(this.column.type))
       throw new TypeError('Sum and mean require numeric expressions');
-    if (['min', 'max'].includes(kind) && ['json', 'date', 'binary', 'uuid'].includes(this.column.type))
+    if (['min', 'max'].includes(kind) && ['json', 'date', 'binary', 'uuid', 'array'].includes(this.column.type))
       throw new TypeError('Min and max require ordered scalar expressions');
     if (
       window !== undefined &&
@@ -153,7 +154,7 @@ class ColumnExpression<T> {
             parameters: [
               {
                 name: 'val',
-                col_type: { _classname: columnClasses[this.column.type], nullable: true },
+                col_type: columnWire({ ...this.column, nullable: true }),
                 kind: 'POSITIONAL_OR_KEYWORD',
                 is_batched: false,
                 default: null,
@@ -213,7 +214,17 @@ class ColumnExpression<T> {
   computedDefinition(tableId: string): { column: CatalogColumn; wire: Wire } {
     if (tableId !== this.tableId) throw new TypeError('A computed expression must belong to the table');
     return {
-      column: { type: this.column.type, nullable: this.column.nullable ?? false, computed: true },
+      column: {
+        type: this.column.type,
+        nullable: this.column.nullable ?? false,
+        computed: true,
+        ...(this.column.type === 'array'
+          ? {
+              ...(this.column.dtype ? { dtype: this.column.dtype } : {}),
+              ...(this.column.shape ? { shape: this.column.shape } : {}),
+            }
+          : {}),
+      },
       wire: { $pxt: 'Expr', v: this.expression },
     };
   }
@@ -290,7 +301,8 @@ class ColumnExpression<T> {
   isIn(
     values: Exclude<T, null> extends string | number | boolean ? readonly T[] | ColumnExpression<JsonValue> : never,
   ): Predicate {
-    if (['json', 'binary'].includes(this.column.type)) throw new TypeError('Membership requires a scalar expression');
+    if (['json', 'binary', 'array'].includes(this.column.type))
+      throw new TypeError('Membership requires a scalar expression');
     if (values instanceof ColumnExpression) {
       if (values.tableId !== this.tableId || values.column.type !== 'json')
         throw new TypeError('Membership values must be a JSON expression from the same table');
@@ -358,21 +370,23 @@ export type CatalogExpression<T> = ColumnExpression<T>;
 export type ComputedSchema<N extends string, T> = Record<
   N,
   {
-    type: Exclude<T, null> extends CatalogUuid
-      ? 'uuid'
-      : Exclude<T, null> extends Uint8Array
-        ? 'binary'
-        : Exclude<T, null> extends CatalogDate
-          ? 'date'
-          : Exclude<T, null> extends CatalogTimestamp
-            ? 'timestamp'
-            : Exclude<T, null> extends number
-              ? 'int' | 'float'
-              : Exclude<T, null> extends string
-                ? 'string'
-                : Exclude<T, null> extends boolean
-                  ? 'bool'
-                  : 'json';
+    type: Exclude<T, null> extends CatalogArray
+      ? 'array'
+      : Exclude<T, null> extends CatalogUuid
+        ? 'uuid'
+        : Exclude<T, null> extends Uint8Array
+          ? 'binary'
+          : Exclude<T, null> extends CatalogDate
+            ? 'date'
+            : Exclude<T, null> extends CatalogTimestamp
+              ? 'timestamp'
+              : Exclude<T, null> extends number
+                ? 'int' | 'float'
+                : Exclude<T, null> extends string
+                  ? 'string'
+                  : Exclude<T, null> extends boolean
+                    ? 'bool'
+                    : 'json';
     nullable: null extends T ? true : false;
     computed: true;
   }
@@ -422,10 +436,7 @@ export function callCatalogFunction<P extends CatalogSchema, C extends CatalogCo
   const names = Object.keys(definition.parameters);
   if (Object.keys(args).length !== names.length || names.some((name) => !Object.hasOwn(args, name)))
     throw new TypeError('Function arguments must match the declared parameters');
-  const typeWire = (column: CatalogColumn): Wire => ({
-    _classname: columnClasses[column.type],
-    nullable: column.nullable ?? false,
-  });
+  const typeWire = columnWire;
   const components = names.map((name) => {
     const value = args[name];
     const column = definition.parameters[name]!;
@@ -603,7 +614,8 @@ export function createTableQueries<S extends CatalogSchema>(
         const definition = name instanceof ColumnExpression ? name.computedDefinition(tableId) : null;
         const reference = definition ? definition.wire.v : columnReference(name as string);
         const column = definition ? definition.column : schema[name as string]!;
-        if (['json', 'binary'].includes(column.type)) throw new TypeError('JSON and binary columns cannot be sorted');
+        if (['json', 'binary', 'array'].includes(column.type))
+          throw new TypeError('JSON, binary, and array columns cannot be sorted');
         return build<R>(selected, predicate, [...order, [reference, direction === 'asc']], limit, offset, grouping);
       },
       distinct() {

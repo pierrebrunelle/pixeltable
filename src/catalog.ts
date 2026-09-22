@@ -1,3 +1,4 @@
+export { CatalogArray, catalogArray } from './catalog-array.js';
 export { catalogUuid } from './catalog-uuid.js';
 export type { CatalogUuid } from './catalog-uuid.js';
 import { encodeBinaryParts, decodeBinaryParts } from './catalog-binary.js';
@@ -30,7 +31,7 @@ export type {
   CatalogFunction,
   CatalogFunctionArgs,
 } from './catalog-query.js';
-import { columnClasses, columnValue, copySchema } from './catalog-schema.js';
+import { columnValue, copySchema, columnWire, matchesColumn } from './catalog-schema.js';
 import type {
   CatalogColumn,
   CatalogSchema,
@@ -371,12 +372,7 @@ export function createCatalogClient(options: ClientOptions) {
     for (const [name, wrapped] of columns) {
       const column = outputSchema[name];
       const type = record(tagged(wrapped, 'ColumnType'));
-      if (
-        !column ||
-        type._classname !== columnClasses[column.type] ||
-        (type.nullable !== (column.nullable ?? false) && !(outer && column.nullable && type.nullable === false))
-      )
-        throw new TypeError('Query schema changed');
+      if (!column || !matchesColumn(type, column, outer)) throw new TypeError('Query schema changed');
     }
     if (!Array.isArray(result.rows)) throw new TypeError('Invalid query rows');
     return result.rows.map((row: unknown) => {
@@ -463,10 +459,8 @@ export function createCatalogClient(options: ClientOptions) {
         const expected = schema[name]!;
         const type = record(column.col_type);
         if (
-          Object.keys(type).some((key) => !['_classname', 'nullable'].includes(key)) ||
           (column.value_expr !== null) !== (expected.computed ?? false) ||
-          type._classname !== columnClasses[expected.type] ||
-          type.nullable !== (expected.nullable ?? false) ||
+          !matchesColumn(type, expected) ||
           column.is_pk !== (expected.primaryKey ?? false)
         )
           throw new TypeError(`Schema mismatch for column ${name}`);
@@ -658,10 +652,7 @@ export function createCatalogClient(options: ClientOptions) {
             columns: {
               [name]: {
                 $pxt: 'ColumnType',
-                v: {
-                  _classname: columnClasses[definition.type],
-                  nullable: definition.nullable ?? false,
-                },
+                v: columnWire(definition),
               },
             },
             if_exists: 'error',
@@ -809,12 +800,7 @@ export function createCatalogClient(options: ClientOptions) {
         for (const [name, raw] of columns) {
           const type = record(raw);
           const expected = schema[name];
-          if (
-            !expected ||
-            type._classname !== columnClasses[expected.type] ||
-            type.nullable !== (expected.nullable ?? false)
-          )
-            throw new TypeError('Compute schema changed');
+          if (!expected || !matchesColumn(type, expected)) throw new TypeError('Compute schema changed');
         }
         if (
           !Array.isArray(batch.rows) ||
@@ -1175,7 +1161,7 @@ export function createCatalogClient(options: ClientOptions) {
                 {
                   type: {
                     $pxt: 'ColumnType',
-                    v: { _classname: columnClasses[column.type], nullable: column.nullable ?? false },
+                    v: columnWire(column),
                   },
                   primary_key: column.primaryKey ?? false,
                 },

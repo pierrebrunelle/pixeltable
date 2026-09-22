@@ -19,6 +19,7 @@ import {
   CatalogError,
   CatalogStaleError,
   defineCatalogFunction,
+  catalogArray,
   catalogUuid,
   catalogDate,
   catalogTimestamp,
@@ -1282,6 +1283,40 @@ try {
   assert.equal((await uuidCopy.compute([{ id: uuidA }]))[0].values.copy, uuidA);
   const uuidOpened = await catalog.openTable('sdk_test/uuid_values', uuidCopy.schema);
   assert.equal(await uuidOpened.query().where(uuidOpened.columns.copy.eq(uuidA)).count(), 1);
+  const arrayTable = await catalog.createTable('sdk_test/arrays', {
+    id: { type: 'int', primaryKey: true },
+    vector: { type: 'array', dtype: 'float32', shape: [2] },
+    loose: { type: 'array', nullable: true },
+  });
+  const vector = catalogArray(new Float32Array([1.5, -2]));
+  const large = catalogArray(new BigInt64Array([-(2n ** 63n), 2n ** 63n - 1n]));
+  await arrayTable.insert([{ id: 1, vector, loose: large }]);
+  const arrayRows = await arrayTable.collect();
+  assert.deepEqual(arrayRows[0].vector.data, vector.data);
+  assert.deepEqual(arrayRows[0].loose.data, large.data);
+  await assert.rejects(arrayTable.insert([{ id: 2, vector: catalogArray(new Float32Array(3)) }]), /shape/);
+  await assert.rejects(arrayTable.insert([{ id: 2, vector: catalogArray(new Float64Array(2)) }]), /dtype/);
+  const arrayCopy = await arrayTable.addComputedColumn('copy', arrayTable.columns.vector);
+  const replacement = catalogArray(new Float32Array([3, 4]));
+  await arrayCopy.update({ vector: replacement });
+  assert.deepEqual((await arrayCopy.collect())[0].copy.data, replacement.data);
+  await arrayCopy.batchUpdate([{ id: 1, vector }]);
+  const arrayPreview = await arrayCopy.compute([{ id: 2, vector }]);
+  assert.deepEqual(arrayPreview[0].values.copy.data, vector.data);
+  const castArray = arrayCopy.columns.vector.asType({ type: 'array', dtype: 'float32', shape: [2] });
+  assert.deepEqual(
+    (await arrayCopy.query().selectExpressions({ cast: castArray }).collect())[0].cast.data,
+    vector.data,
+  );
+  const arrayOpened = await catalog.openTable('sdk_test/arrays', arrayCopy.schema);
+  assert.deepEqual((await arrayOpened.collect())[0].vector.data, vector.data);
+  await assert.rejects(
+    catalog.openTable('sdk_test/arrays', {
+      ...arrayCopy.schema,
+      vector: { type: 'array', dtype: 'float32', shape: [3] },
+    }),
+    /Schema mismatch/,
+  );
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );
