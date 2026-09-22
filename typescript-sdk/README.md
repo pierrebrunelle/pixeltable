@@ -247,6 +247,16 @@ Query builders are immutable: filtering or selecting returns a new query. Predic
 
 Use `openTable(path, schema)` to open an existing base table with runtime schema verification. `createTable` fails if the table exists unless `ifExists: 'ignore'` is specified; an ignored existing table must still match the supplied schema. These table methods reject views and specialized types outside the supported scalar schema; use `openView` for supported views. To open existing computed columns, include `computed: true` in their schema definitions; the SDK verifies that they are computed and excludes them from writes. Creation does not replace tables.
 
+Evolve a base table's scalar schema:
+
+```typescript
+const withNotes = await documents.addColumn('note', { type: 'string', nullable: true });
+const renamed = await withNotes.renameColumn('note', 'description');
+const withoutNotes = await renamed.dropColumn('description');
+```
+
+Each operation returns a new typed handle and leaves earlier handles stale for writes. Nullable additions fill existing rows with null; Python validates whether other additions are allowed. Renaming preserves values and computed-column write protection. Dropping removes the column and its values, and Python rejects drops blocked by dependencies. These methods do not replace existing columns, change primary keys, or support type alterations. Column addition, renaming, and removal are currently exposed on base-table handles.
+
 Create a filtered view of a table:
 
 ```typescript

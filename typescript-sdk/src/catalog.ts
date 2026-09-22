@@ -19,7 +19,7 @@ export type {
   CatalogExpression,
 } from './catalog-query.js';
 import { columnClasses, columnValue, copySchema } from './catalog-schema.js';
-import type { CatalogSchema, CatalogInsertRow, CatalogRow } from './catalog-schema.js';
+import type { CatalogColumn, CatalogSchema, CatalogInsertRow, CatalogRow } from './catalog-schema.js';
 export type { CatalogColumn, CatalogSchema, CatalogRow, CatalogInsertRow, JsonValue } from './catalog-schema.js';
 
 export type BtreeColumn<S extends CatalogSchema> = {
@@ -55,6 +55,20 @@ export interface CatalogTable<S extends CatalogSchema> {
   createView(path: string, options?: { where?: CatalogPredicate; signal?: AbortSignal }): Promise<CatalogView<S>>;
   getVersions(options?: { limit?: number; signal?: AbortSignal }): Promise<CatalogVersion[]>;
   revert<const R extends CatalogSchema>(schema: R, options?: { signal?: AbortSignal }): Promise<CatalogTable<R>>;
+  addColumn<const N extends string, const C extends CatalogColumn>(
+    name: N,
+    definition: C,
+    options?: { signal?: AbortSignal },
+  ): Promise<CatalogTable<S & Record<N, C>>>;
+  renameColumn<K extends keyof S & string, const N extends string>(
+    name: K,
+    newName: N,
+    options?: { signal?: AbortSignal },
+  ): Promise<CatalogTable<Omit<S, K> & Record<N, S[K]>>>;
+  dropColumn<K extends keyof S & string>(
+    name: K,
+    options?: { signal?: AbortSignal },
+  ): Promise<CatalogTable<Omit<S, K>>>;
   addBtreeIndex(
     column: BtreeColumn<S>,
     options?: { name?: string; ifExists?: 'error' | 'ignore'; signal?: AbortSignal },
@@ -315,6 +329,22 @@ export function createCatalogClient(options: ClientOptions) {
         throw new TypeError('Invalid mutation count');
       return count;
     }
+    async function changeSchema<R extends CatalogSchema>(
+      method: string,
+      args: Record<string, unknown>,
+      definition: R,
+      signal?: AbortSignal,
+    ): Promise<CatalogTable<R>> {
+      const nextSchema = copySchema(definition);
+      const response = await rpc(method, args, signal, {
+        class_name: 'Table',
+        path_key: pathKey,
+        snapshot_path_key: state.snapshotKey,
+      });
+      const updated = tableHandle(path, nextSchema, response.current_md, isView);
+      if (updated.id !== id) throw new TypeError('Table identity changed');
+      return updated;
+    }
     function predicateWire(where?: CatalogPredicate): unknown {
       return where === undefined ? null : { $pxt: 'Expr', v: where.toWire(id) };
     }
@@ -402,6 +432,55 @@ export function createCatalogClient(options: ClientOptions) {
         const reverted = tableHandle(path, nextSchema, response.current_md);
         if (reverted.id !== id) throw new TypeError('Table identity changed');
         return reverted;
+      },
+      async addColumn<const N extends string, const C extends CatalogColumn>(
+        name: N,
+        definition: C,
+        options: { signal?: AbortSignal } = {},
+      ): Promise<CatalogTable<S & Record<N, C>>> {
+        if (Object.hasOwn(schema, name)) throw new TypeError('Column already exists');
+        if (definition.computed || definition.primaryKey)
+          throw new TypeError(
+            'Added columns cannot be computed or primary keys; use addComputedColumn for expressions',
+          );
+        const nextSchema = { ...schema, [name]: definition } as S & Record<N, C>;
+        return changeSchema(
+          'add_column',
+          {
+            columns: {
+              [name]: {
+                $pxt: 'ColumnType',
+                v: {
+                  _classname: columnClasses[definition.type],
+                  nullable: definition.nullable ?? false,
+                },
+              },
+            },
+            if_exists: 'error',
+          },
+          nextSchema,
+          options.signal,
+        );
+      },
+      async renameColumn<K extends keyof S & string, const N extends string>(
+        name: K,
+        newName: N,
+        options: { signal?: AbortSignal } = {},
+      ): Promise<CatalogTable<Omit<S, K> & Record<N, S[K]>>> {
+        if (!Object.hasOwn(schema, name)) throw new TypeError('Unknown column');
+        if (Object.hasOwn(schema, newName)) throw new TypeError('Column already exists');
+        const nextSchema = Object.fromEntries(
+          Object.entries(schema).map(([key, column]) => [key === name ? newName : key, column]),
+        ) as Omit<S, K> & Record<N, S[K]>;
+        return changeSchema('rename_column', { old_name: name, new_name: newName }, nextSchema, options.signal);
+      },
+      async dropColumn<K extends keyof S & string>(
+        name: K,
+        options: { signal?: AbortSignal } = {},
+      ): Promise<CatalogTable<Omit<S, K>>> {
+        if (!Object.hasOwn(schema, name)) throw new TypeError('Unknown column');
+        const nextSchema = Object.fromEntries(Object.entries(schema).filter(([key]) => key !== name)) as Omit<S, K>;
+        return changeSchema('drop_column', { column: name, if_not_exists: 'error' }, nextSchema, options.signal);
       },
       async addBtreeIndex(column, options = {}): Promise<void> {
         if (!Object.hasOwn(schema, column) || !['int', 'float', 'string'].includes(schema[column]!.type))
