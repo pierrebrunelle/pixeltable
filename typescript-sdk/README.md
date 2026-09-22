@@ -369,6 +369,17 @@ const failures = await scored
 
 `errorType` and `errorMessage` are nullable string expressions: successful rows return `null`. They require stored computed column references; ordinary scalar columns and inline calculations are rejected. Use `insert(rows, { onError: 'ignore' })` to retain rows with failed computed values; the default `onError: 'abort'` rejects the insertion when computation fails. Inserts return `{ insertedRows, errors }`: insertedRows counts rows in the target table and errors includes computation failures in dependent views. Invalid input values still fail local validation before transport. Computed-column creation also defaults to abort; pass `{ onError: 'ignore' }` to `addComputedColumn()` to retain failures during backfill. Select the error properties instead of a failed required value, whose stored null would not match its declared TypeScript type.
 
+Evaluate a pipeline without persisting the input rows:
+
+```typescript
+const preview = await scored.compute([{ id: 9, title: 'Preview', score: 3, enabled: true, payload: {} }], {
+  onError: 'ignore',
+});
+console.log(preview[0]?.values, preview[0]?.errors);
+```
+
+`compute()` requires a nonempty array with the same input shape as `insert()` and returns `{ values, errors }` for each resulting row. Values are conservatively nullable so failed cells are represented honestly; errors map column names to `{ type, message }`. It defaults to aborting on computation errors. A live view evaluates the base pipeline and drops rows excluded by its filter. Computation does not insert rows or create table versions, but UDFs still execute and can incur costs or external side effects. It uses the current server schema and verifies the returned schema. Scalar and JSON outputs are supported; media and embedding-index vector outputs are not yet decoded by this adapter.
+
 Retry a stored computed column after fixing its Python UDF or restoring an external dependency:
 
 ```typescript

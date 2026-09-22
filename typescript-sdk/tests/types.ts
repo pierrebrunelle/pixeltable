@@ -440,3 +440,19 @@ export async function checkBackfillErrorPolicy(): Promise<void> {
   // @ts-expect-error Unknown backfill error policies are rejected.
   await table.addComputedColumn('double', table.columns.value.multiply(2), { onError: 'skip' });
 }
+
+export async function checkComputeTypes(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.openTable('pipeline', {
+    input: { type: 'string' },
+    result: { type: 'int', computed: true },
+  });
+  const rows = await table.compute([{ input: '1' }], { onError: 'ignore' });
+  const result: number | null = rows[0]!.values.result;
+  void result;
+  // @ts-expect-error Failed computations can return null even for required columns.
+  const required: number = rows[0]!.values.result;
+  void required;
+  // @ts-expect-error Computed columns are not inputs.
+  await table.compute([{ input: '1', result: 1 }]);
+}

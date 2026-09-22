@@ -468,3 +468,49 @@ test('catalog lifecycle validates destructive options before transport and prese
   await assert.rejects(catalog.move('old', 'new', { ifNotExists: 'replace' }), TypeError);
   assert.equal(requests.length, 3);
 });
+
+test('compute validates row batches and cell errors without mutating handles', async () => {
+  let batch = {
+    schema: {
+      id: { _classname: 'IntType', nullable: false },
+      title: { _classname: 'StringType', nullable: false },
+      score: { _classname: 'FloatType', nullable: true },
+    },
+    rows: [[1, 'hello', null]],
+    errors: [{}],
+    index_values: [{}],
+  };
+  const requests = [];
+  const catalog = createCatalogClient({
+    baseUrl: 'https://catalog.test',
+    fetch: async (request) => {
+      const head = JSON.parse(decoder.decode(decodeProxyFrame(new Uint8Array(await request.arrayBuffer())).head));
+      requests.push(head);
+      return head.method === 'get_table'
+        ? response(tableResponse.result.v[0])
+        : response({ $pxt: 'RowBatch', v: batch });
+    },
+  });
+  const table = await catalog.openTable('docs', schemaDefinition);
+  assert.deepEqual(await table.compute([{ id: 1, title: 'hello' }]), [
+    { values: { id: 1, title: 'hello', score: null }, errors: {} },
+  ]);
+  assert.equal(requests[1].method, 'compute');
+  assert.equal(requests[1].args.on_error, 'abort');
+  const valid = structuredClone(batch);
+  for (const patch of [
+    { errors: [] },
+    { rows: [[1]] },
+    { rows: [[null, 'hello', null]] },
+    { errors: [{ title: { errortype: 1, errormsg: 'bad' } }] },
+    { index_values: [{ vector: [1] }] },
+    { schema: {} },
+  ]) {
+    batch = { ...valid, ...patch };
+    await assert.rejects(table.compute([{ id: 1, title: 'hello' }]), TypeError);
+  }
+  const sent = requests.length;
+  await assert.rejects(table.compute([{ id: 'wrong', title: 'hello' }]), TypeError);
+  await assert.rejects(table.compute([{ id: 1, title: 'hello' }], { onError: 'skip' }), TypeError);
+  assert.equal(requests.length, sent);
+});
