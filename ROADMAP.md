@@ -1,5 +1,7 @@
 # TypeScript SDK phases
 
+See [CAPABILITIES.md](CAPABILITIES.md) for the audited Python API inventory, test evidence, and remaining release gates.
+
 ## Decision
 
 Requirement: let TypeScript applications consume Pixeltable with checked inputs and outputs, then expand toward the Python SDK's capabilities.

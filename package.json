@@ -31,7 +31,8 @@
     "README.md",
     "LICENSE",
     "ROADMAP.md",
-    "CODEBASE_GUIDE.md"
+    "CODEBASE_GUIDE.md",
+    "CAPABILITIES.md"
   ],
   "bin": {
     "pxt-generate-ts": "./bin/generate.mjs"
