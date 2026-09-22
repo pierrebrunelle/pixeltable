@@ -22,6 +22,10 @@ import { columnClasses, columnValue, copySchema } from './catalog-schema.js';
 import type { CatalogSchema, CatalogInsertRow, CatalogRow } from './catalog-schema.js';
 export type { CatalogColumn, CatalogSchema, CatalogRow, CatalogInsertRow, JsonValue } from './catalog-schema.js';
 
+export type BtreeColumn<S extends CatalogSchema> = {
+  [K in keyof S & string]: S[K]['type'] extends 'int' | 'float' | 'string' ? K : never;
+}[keyof S & string];
+
 export interface CatalogTable<S extends CatalogSchema> {
   readonly id: string;
   readonly path: string;
@@ -36,6 +40,11 @@ export interface CatalogTable<S extends CatalogSchema> {
   delete(options?: { where?: CatalogPredicate; signal?: AbortSignal }): Promise<{ deletedRows: number }>;
   collect(options?: { limit?: number; signal?: AbortSignal }): Promise<CatalogRow<S>[]>;
   count(options?: { signal?: AbortSignal }): Promise<number>;
+  addBtreeIndex(
+    column: BtreeColumn<S>,
+    options?: { name?: string; ifExists?: 'error' | 'ignore'; signal?: AbortSignal },
+  ): Promise<void>;
+  dropIndex(name: string, options?: { ifNotExists?: 'error' | 'ignore'; signal?: AbortSignal }): Promise<void>;
   addComputedColumn<const N extends string, T>(
     name: N,
     expression: CatalogExpression<T>,
@@ -213,12 +222,11 @@ export function createCatalogClient(options: ClientOptions) {
         throw new TypeError('Invalid row count');
       return result;
     }
-    async function mutate(
+    async function mutateMetadata(
       method: string,
       args: Record<string, unknown>,
-      countKey: string,
       signal?: AbortSignal,
-    ): Promise<number> {
+    ): Promise<unknown> {
       const response = await rpc(method, args, signal, {
         class_name: 'Table',
         path_key: pathKey,
@@ -227,7 +235,16 @@ export function createCatalogClient(options: ClientOptions) {
       const updated = readMetadata(response.current_md);
       if (updated.id !== id) throw new TypeError('Table identity changed');
       state = updated;
-      const status = record(tagged(response.result, 'UpdateStatus'));
+      return response.result;
+    }
+    async function mutate(
+      method: string,
+      args: Record<string, unknown>,
+      countKey: string,
+      signal?: AbortSignal,
+    ): Promise<number> {
+      const result = await mutateMetadata(method, args, signal);
+      const status = record(tagged(result, 'UpdateStatus'));
       const count = record(status.row_count_stats)[countKey];
       if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0)
         throw new TypeError('Invalid mutation count');
@@ -241,6 +258,37 @@ export function createCatalogClient(options: ClientOptions) {
       path,
       schema,
       ...queries,
+      async addBtreeIndex(column, options = {}): Promise<void> {
+        if (!Object.hasOwn(schema, column) || !['int', 'float', 'string'].includes(schema[column]!.type))
+          throw new TypeError('B-tree indexes require an integer, float, or string column');
+        if (options.name !== undefined && (typeof options.name !== 'string' || !options.name))
+          throw new TypeError('An index name must be a nonempty string');
+        if (options.ifExists !== undefined && !['error', 'ignore'].includes(options.ifExists))
+          throw new TypeError('Invalid ifExists option');
+        await mutateMetadata(
+          'add_btree_index',
+          {
+            column,
+            idx_name: options.name ?? null,
+            if_exists: options.ifExists ?? 'error',
+          },
+          options.signal,
+        );
+      },
+      async dropIndex(name, options = {}): Promise<void> {
+        if (typeof name !== 'string' || !name) throw new TypeError('An index name is required');
+        if (options.ifNotExists !== undefined && !['error', 'ignore'].includes(options.ifNotExists))
+          throw new TypeError('Invalid ifNotExists option');
+        await mutateMetadata(
+          'drop_index',
+          {
+            column: null,
+            idx_name: name,
+            if_not_exists: options.ifNotExists ?? 'error',
+          },
+          options.signal,
+        );
+      },
       async addComputedColumn<const N extends string, T>(
         name: N,
         expression: CatalogExpression<T>,

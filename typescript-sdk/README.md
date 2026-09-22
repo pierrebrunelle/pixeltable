@@ -257,6 +257,15 @@ const results = await scored.query().select('id', 'doubled').collect();
 
 Pixeltable backfills existing rows and maintains computed values on subsequent inserts and updates. The returned handle includes the new column's inferred type and nullability. Keep using that returned handle: the original handle retains its old schema and version, so writes through it become stale. Computed columns cannot be inserted or updated directly. Names must be new; creation does not replace existing columns. Use `openTable(path, scored.schema)` to reopen the resulting schema. Computed columns must be added after creating the base table; `createTable` rejects schemas marked `computed: true`. Python UDF calls and non-stored computed columns are not yet supported.
 
+Manage B-tree indexes on integer, float, and string columns, including stored computed columns:
+
+```typescript
+await scored.addBtreeIndex('doubled', { name: 'doubled_idx' });
+await scored.dropIndex('doubled_idx');
+```
+
+Index mutations refresh the handle's version. Creation fails on duplicates unless `ifExists: 'ignore'` is specified; removal fails on missing indexes unless `ifNotExists: 'ignore'` is specified. Omitting the index name during creation lets Python generate it. Tables created with automatic default indexes do not allow separate B-tree index management. Boolean and JSON columns are excluded, matching Python. Embedding indexes remain unsupported.
+
 Update or delete matching rows:
 
 ```typescript

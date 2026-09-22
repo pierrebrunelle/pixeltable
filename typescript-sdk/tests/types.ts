@@ -217,3 +217,24 @@ export async function checkComputedColumns(): Promise<void> {
   const required: number = rows[0]!.doubled;
   void required;
 }
+
+export async function checkIndexTypes(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.openTable('docs', {
+    id: { type: 'int' },
+    title: { type: 'string' },
+    active: { type: 'bool' },
+    payload: { type: 'json' },
+  });
+  await table.addBtreeIndex('id', { name: 'id_idx' });
+  await table.addBtreeIndex('title');
+  await table.dropIndex('id_idx', { ifNotExists: 'ignore' });
+  // @ts-expect-error Python excludes boolean B-tree indexes.
+  await table.addBtreeIndex('active');
+  // @ts-expect-error JSON does not support B-tree indexes.
+  await table.addBtreeIndex('payload');
+  // @ts-expect-error Indexed columns must exist.
+  await table.addBtreeIndex('missing');
+  // @ts-expect-error Index creation does not replace existing indexes.
+  await table.addBtreeIndex('id', { ifExists: 'replace' });
+}

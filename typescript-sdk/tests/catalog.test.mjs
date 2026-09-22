@@ -288,3 +288,31 @@ test('updates and deletes validate values, encode predicates, and advance write 
     await assert.rejects(table.update(values), TypeError);
   assert.equal(requests.length, sent);
 });
+
+test('index operations use version checks and validate columns before sending', async () => {
+  const requests = [];
+  const metadata = structuredClone(tableResponse.result.v[0]);
+  const catalog = createCatalogClient({
+    baseUrl: 'https://catalog.test',
+    fetch: async (request) => {
+      const head = JSON.parse(decoder.decode(decodeProxyFrame(new Uint8Array(await request.arrayBuffer())).head));
+      requests.push(head);
+      if (head.method === 'get_table') return response(metadata);
+      metadata[0].v.version_md.version++;
+      return new Response(encodeProxyFrame(encoder.encode(JSON.stringify({ result: null, current_md: metadata })), []));
+    },
+  });
+  const table = await catalog.openTable('docs', schemaDefinition);
+  await table.addBtreeIndex('title', { name: 'title_idx' });
+  assert.deepEqual(requests[1].args, { column: 'title', idx_name: 'title_idx', if_exists: 'error' });
+  await table.dropIndex('title_idx', { ifNotExists: 'ignore' });
+  assert.deepEqual(requests[2].args, { column: null, idx_name: 'title_idx', if_not_exists: 'ignore' });
+  assert.equal(requests[1].snapshot_path_key.tbl_version.effective_version, 0);
+  assert.equal(requests[2].snapshot_path_key.tbl_version.effective_version, 1);
+  await assert.rejects(table.addBtreeIndex('missing'), /B-tree indexes require/);
+  await assert.rejects(table.addBtreeIndex('id', { name: '' }), /nonempty/);
+  await assert.rejects(table.addBtreeIndex('id', { ifExists: 'replace' }), /Invalid ifExists/);
+  await assert.rejects(table.dropIndex(''), /name is required/);
+  await assert.rejects(table.dropIndex('id_idx', { ifNotExists: 'replace' }), /Invalid ifNotExists/);
+  assert.equal(requests.length, 3);
+});

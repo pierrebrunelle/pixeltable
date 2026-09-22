@@ -11,7 +11,7 @@ import { createClient, multipartBody, PixeltableHttpError } from '../dist/index.
 
 import { loadGeneratedClient, loadTypeScriptModule } from './load-generated.mjs';
 
-import { createCatalogClient } from '../dist/catalog.js';
+import { createCatalogClient, CatalogError } from '../dist/catalog.js';
 
 if (!process.env.PXT_TEST_PYTHON)
   throw new Error('Set PXT_TEST_PYTHON to a Python executable with pixeltable[serve] installed');
@@ -296,6 +296,17 @@ try {
   ]);
   await assert.rejects(chained.addComputedColumn('tripled', chained.columns.score), /already exists/);
   await assert.rejects(chained.addComputedColumn('invalid-name', chained.columns.score), /Column names/);
+  await chained.addBtreeIndex('tripled', { name: 'tripled_idx' });
+  await assert.rejects(chained.addBtreeIndex('tripled', { name: 'tripled_idx' }), CatalogError);
+  await chained.addBtreeIndex('tripled', { name: 'tripled_idx', ifExists: 'ignore' });
+  await assert.rejects(restored.addBtreeIndex('score', { name: 'stale_idx' }), { name: 'CatalogStaleError' });
+  await chained.insert([{ id: 4, score: 6 }]);
+  assert.equal(await chained.query().where(chained.columns.tripled.gte(18)).count(), 1);
+  await chained.dropIndex('tripled_idx');
+  await assert.rejects(chained.dropIndex('tripled_idx'), CatalogError);
+  await chained.dropIndex('tripled_idx', { ifNotExists: 'ignore' });
+  await chained.update({ score: 7 }, { where: chained.columns.id.eq(4) });
+  assert.equal(await chained.query().where(chained.columns.tripled.eq(21)).count(), 1);
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );
