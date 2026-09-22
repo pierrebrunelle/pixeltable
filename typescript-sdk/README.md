@@ -339,6 +339,18 @@ The UDF must already be installed on the Python server and accept a string, retu
 
 `metric` accepts `cosine` (default), `ip`, or `l2`; `precision` accepts `fp16` (default) or `fp32`. Rank cosine and inner-product scores descending, and L2 distances ascending. Similarity supports projections, predicates, and ordering on tables and live views. Only string-column queries are supported here; image, audio, video, and explicit vector queries remain unsupported. Similarity expressions cannot be stored as computed columns. Index creation uses the same version checks and duplicate policy as B-tree indexes; remove by name with `dropIndex()`.
 
+Catalog lifecycle operations use slash-separated paths:
+
+```typescript
+await catalog.move('documents/drafts', 'documents/archive');
+await catalog.dropTable('documents/archive');
+await catalog.dropDirectory('documents');
+```
+
+`move()` renames or relocates a table, view, or directory to an existing parent directory and preserves table identity and dependent views. It fails when the source is missing or the destination exists. Set `ifNotExists: 'ignore'` or `ifExists: 'ignore'` to skip those cases; an ignored destination conflict leaves the source intact. Existing handles keep their original `path` property; reopen at the new path when you need a current handle.
+
+`dropTable()` also removes views. By default it refuses to remove a table with dependent views, and `dropDirectory()` refuses nonempty directories. Explicit `force: true` cascades through dependent views or directory contents, including dependencies outside that directory. Drops are permanent. `ifNotExists: 'ignore'` tolerates missing paths; Python also tolerates missing paths when force is enabled. Root paths are rejected locally. These catalog operations address the current object at a path, without table-version checks, and are never retried by the SDK.
+
 Update or delete matching rows:
 
 ```typescript

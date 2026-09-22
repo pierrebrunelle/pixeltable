@@ -542,6 +542,36 @@ try {
   ]);
   await searchTable.dropIndex('text_idx');
   await assert.rejects(searchTable.query().selectExpressions({ score: similarity }).collect(), CatalogError);
+  await catalog.createDirectory('typescript_lifecycle');
+  const lifecycleSchema = { id: { type: 'int' } };
+  const lifecycle = await catalog.createTable('typescript_lifecycle/source', lifecycleSchema);
+  await lifecycle.insert([{ id: 7 }]);
+  await lifecycle.createView('typescript_lifecycle/dependent');
+  await assert.rejects(catalog.dropTable('typescript_lifecycle/source'), CatalogError);
+  await assert.rejects(catalog.dropDirectory('typescript_lifecycle'), CatalogError);
+  await catalog.move('typescript_lifecycle/source', 'typescript_lifecycle/renamed');
+  const movedTable = await catalog.openTable('typescript_lifecycle/renamed', lifecycleSchema);
+  assert.equal(movedTable.id, lifecycle.id);
+  assert.deepEqual(await movedTable.collect(), [{ id: 7 }]);
+  await assert.rejects(catalog.openTable('typescript_lifecycle/source', lifecycleSchema), CatalogError);
+  assert.deepEqual(await (await catalog.openView('typescript_lifecycle/dependent', lifecycleSchema)).collect(), [
+    { id: 7 },
+  ]);
+  await assert.rejects(catalog.move('typescript_lifecycle/renamed', 'typescript_lifecycle/dependent'), CatalogError);
+  await catalog.move('typescript_lifecycle/renamed', 'typescript_lifecycle/dependent', { ifExists: 'ignore' });
+  assert.equal((await catalog.openTable('typescript_lifecycle/renamed', lifecycleSchema)).id, lifecycle.id);
+  await catalog.move('typescript_lifecycle/absent', 'typescript_lifecycle/unused', { ifNotExists: 'ignore' });
+  await assert.rejects(catalog.move('typescript_lifecycle/absent', 'typescript_lifecycle/unused'), CatalogError);
+  await catalog.move('typescript_lifecycle', 'typescript_lifecycle_moved');
+  await assert.rejects(catalog.listDirectory('typescript_lifecycle'), CatalogError);
+  await catalog.dropTable('typescript_lifecycle_moved/renamed', { force: true });
+  assert.deepEqual(await catalog.listDirectory('typescript_lifecycle_moved'), []);
+  await catalog.dropTable('typescript_lifecycle_moved/renamed', { ifNotExists: 'ignore' });
+  await assert.rejects(catalog.dropTable('typescript_lifecycle_moved/renamed'), CatalogError);
+  await catalog.createTable('typescript_lifecycle_moved/cleanup', lifecycleSchema);
+  await catalog.dropDirectory('typescript_lifecycle_moved', { force: true });
+  await catalog.dropDirectory('typescript_lifecycle_moved', { ifNotExists: 'ignore' });
+  await assert.rejects(catalog.dropDirectory('typescript_lifecycle_moved'), CatalogError);
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );
