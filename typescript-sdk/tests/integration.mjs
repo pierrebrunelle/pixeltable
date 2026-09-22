@@ -764,6 +764,25 @@ try {
     updatedRows: 2,
   });
   assert.deepEqual(await membership.delete({ where: membership.columns.id.isIn([2]) }), { deletedRows: 1 });
+  const backfillSchema = { text: { type: 'string' } };
+  const backfill = await catalog.createTable('sdk_test/backfill', backfillSchema);
+  await backfill.insert([{ text: '10' }, { text: 'bad' }]);
+  const parsed = backfill.callFunction(parseNumber, { text: backfill.columns.text });
+  await assert.rejects(backfill.addComputedColumn('number', parsed), CatalogError);
+  assert.equal(await (await catalog.openTable('sdk_test/backfill', backfillSchema)).count(), 2);
+  await assert.rejects(backfill.addComputedColumn('number', parsed, { onError: 'skip' }), TypeError);
+  const backfilled = await backfill.addComputedColumn('number', parsed, { onError: 'ignore' });
+  assert.equal(await backfilled.query().where(backfilled.columns.number.errorType.ne(null)).count(), 1);
+  assert.deepEqual(await backfilled.query().where(backfilled.columns.text.eq('10')).select('number').collect(), [
+    { number: 10 },
+  ]);
+  await assert.rejects(backfill.insert([{ text: '11' }]), CatalogStaleError);
+  await backfilled.update({ text: '12' }, { where: backfilled.columns.text.eq('bad') });
+  assert.equal(await backfilled.query().where(backfilled.columns.number.errorType.ne(null)).count(), 0);
+  const backfillView = await backfilled.createView('sdk_test/backfill_view');
+  const invalidNumber = backfillView.callFunction(parseNumber, { text: 'not_a_number' });
+  const failedView = await backfillView.addComputedColumn('failed', invalidNumber, { onError: 'ignore' });
+  assert.equal(await failedView.query().where(failedView.columns.failed.errorType.ne(null)).count(), 2);
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );

@@ -55,6 +55,11 @@ export interface CatalogInsertOptions {
   signal?: AbortSignal;
 }
 
+export interface CatalogComputedColumnOptions {
+  onError?: 'abort' | 'ignore';
+  signal?: AbortSignal;
+}
+
 export interface RecomputeOptions {
   where?: CatalogPredicate;
   errorsOnly?: boolean;
@@ -136,7 +141,7 @@ export interface CatalogTable<S extends CatalogSchema> {
   addComputedColumn<const N extends string, T>(
     name: N,
     expression: CatalogExpression<T>,
-    options?: { signal?: AbortSignal },
+    options?: CatalogComputedColumnOptions,
   ): Promise<CatalogTable<S & ComputedSchema<N, T>>>;
 }
 
@@ -166,7 +171,7 @@ export interface CatalogView<S extends CatalogSchema> extends Pick<
   addComputedColumn<const N extends string, T>(
     name: N,
     expression: CatalogExpression<T>,
-    options?: { signal?: AbortSignal },
+    options?: CatalogComputedColumnOptions,
   ): Promise<CatalogView<S & ComputedSchema<N, T>>>;
 }
 
@@ -653,8 +658,10 @@ export function createCatalogClient(options: ClientOptions) {
       async addComputedColumn<const N extends string, T>(
         name: N,
         expression: CatalogExpression<T>,
-        options: { signal?: AbortSignal } = {},
+        options: CatalogComputedColumnOptions = {},
       ): Promise<CatalogTable<S & ComputedSchema<N, T>>> {
+        if (options.onError !== undefined && !['abort', 'ignore'].includes(options.onError))
+          throw new TypeError('Invalid onError policy');
         if (Object.hasOwn(schema, name)) throw new TypeError('Column already exists');
         const definition = expression.computedDefinition(id);
         const nextSchema = copySchema({ ...schema, [name]: definition.column }) as S & ComputedSchema<N, T>;
@@ -667,7 +674,7 @@ export function createCatalogClient(options: ClientOptions) {
             custom_metadata: null,
             comment: '',
             print_stats: false,
-            on_error: 'abort',
+            on_error: options.onError ?? 'abort',
             if_exists: 'error',
           },
           options.signal,

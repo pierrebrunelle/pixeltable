@@ -430,3 +430,13 @@ export async function checkMembershipTypes(): Promise<void> {
   // @ts-expect-error Membership requires a scalar left-hand expression.
   table.columns.choices.isIn([1]);
 }
+
+export async function checkBackfillErrorPolicy(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.openTable('docs', { value: { type: 'int' } });
+  const computed = await table.addComputedColumn('double', table.columns.value.multiply(2), { onError: 'ignore' });
+  const errors = computed.columns.double.errorType;
+  void errors;
+  // @ts-expect-error Unknown backfill error policies are rejected.
+  await table.addComputedColumn('double', table.columns.value.multiply(2), { onError: 'skip' });
+}
