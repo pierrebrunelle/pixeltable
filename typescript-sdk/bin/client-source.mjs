@@ -3,6 +3,8 @@ const methods = new Set(['get', 'post', 'put', 'patch', 'delete', 'head', 'optio
 export function clientSource(schema) {
   const names = new Set();
   const calls = [];
+  const queries = [];
+  const mutations = [];
   let needsMultipart = false;
   for (const [path, item] of Object.entries(schema.paths ?? {})) {
     if (item.$ref) throw new Error(`Resolve the path reference at ${path} before generating a client`);
@@ -13,6 +15,23 @@ export function clientSource(schema) {
         throw new Error(`A unique operationId is required for ${method.toUpperCase()} ${path}`);
       }
       names.add(name);
+      const metadata = operation['x-pixeltable'];
+      if (metadata !== undefined) {
+        if (
+          metadata?.version !== 1 ||
+          !['query', 'insert', 'update', 'delete', 'compute'].includes(metadata.kind) ||
+          typeof metadata.background !== 'boolean'
+        )
+          throw new Error(`Unsupported x-pixeltable metadata for ${name}`);
+        const quotedName = JSON.stringify(name);
+        if (metadata.kind === 'query' && !metadata.background) {
+          queries.push(
+            `[${quotedName}]: defineQuery([options.baseUrl, ...scope, ${quotedName}], operations[${quotedName}])`,
+          );
+        } else {
+          mutations.push(`[${quotedName}]: operations[${quotedName}]`);
+        }
+      }
       const unsupported = () => {
         throw new Error(`Unsupported named call: ${name}. Generate declarations without --client and use client.api`);
       };
@@ -66,11 +85,22 @@ export function clientSource(schema) {
       }`);
     }
   }
-  return `\nimport { createClient, ${needsMultipart ? 'multipartBody, ' : ''}type ClientOptions } from '@pixeltable/sdk';
+  return `\nimport { createClient, ${needsMultipart ? 'multipartBody, ' : ''}${queries.length ? 'defineQuery, ' : ''}type ClientOptions } from '@pixeltable/sdk';
 
 export function createServiceClient(options: ClientOptions) {
   const client = createClient<paths>(options);
-  return { ...client, operations: { ${calls.join(',\n')} } };
+  const operations = { ${calls.join(',\n')} };
+  return { ...client, operations,
+    ${mutations.length ? `mutations: { ${mutations.join(',\n')} },` : ''}
+    ${
+      queries.length
+        ? `queries(scope: readonly unknown[]) {
+      if (scope.length === 0) throw new TypeError('A query scope must identify the session or tenant');
+      return { ${queries.join(',\n')} };
+    },`
+        : ''
+    }
+  };
 }
 `;
 }

@@ -28,7 +28,9 @@ Remaining release gates: select the standalone GitHub repository and npm owner; 
 
 Implemented: named calls generated from OpenAPI operation IDs with automatic JSON/multipart serialization, `defineQuery`, `usePixeltableQuery`, `usePixeltableMutation`, and `usePixeltableJob`, using TanStack Query with documented polling, cancellation, cache scopes, and invalidation.
 
-Remaining: generate named query and mutation handles from explicit serving metadata and supply a tested authenticated application-backend example. Browser code calls an authenticated application backend. Service/catalog credentials remain on the server.
+Implemented: version 1 serving metadata and generated scoped query handles and mutation functions, including POST queries.
+
+Remaining: supply a tested authenticated application-backend example. Browser code calls an authenticated application backend. Service/catalog credentials remain on the server.
 
 Required server contracts: stable route identity, public/internal visibility, final background-result schemas, tenant authorization, and any presigned upload flow. Preserve current route methods and media representations. Do not infer a table's identity or permissions from a URL.
 

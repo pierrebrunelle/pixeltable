@@ -1023,15 +1023,28 @@ class TestFastAPI:
         router.add_insert_route(t, path='/upload', uploadfile_inputs=['image'])
         router.add_insert_route(t, path='/file', outputs=['rotated'], return_fileresponse=True)
         router.add_insert_route(t, path='/bg', background=True)
+
+        def health() -> dict[str, str]:
+            return {'status': 'ok'}
+
+        router.add_api_route('/health', health, openapi_extra={'x-custom': 'preserved'})
         client = make_test_client(router)
 
         spec = client.get('/openapi.json').json()
         paths = spec['paths']
         schemas = spec['components']['schemas']
 
+        assert paths['/health']['get']['x-custom'] == 'preserved'
+        assert 'x-pixeltable' not in paths['/health']['get']
+
         # routes present
         for route_path in ('/json', '/upload', '/file', '/bg'):
             assert route_path in paths, f'missing {route_path} from openapi paths: {list(paths)}'
+            assert paths[route_path]['post']['x-pixeltable'] == {
+                'version': 1,
+                'kind': 'insert',
+                'background': route_path == '/bg',
+            }
         # the routes Pixeltable serves itself are excluded from the document, so a reader sees only
         # the application's own paths
         assert not any(path.startswith('/_pxt/') for path in paths), sorted(paths)

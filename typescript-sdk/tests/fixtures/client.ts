@@ -20,6 +20,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Query Search
+         * @description Wrapper for an endpoint `Callable` that carries additional metadata about the endpoint operation.
+         */
+        post: operations["query_search_search_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/docs": {
         parameters: {
             query?: never;
@@ -186,6 +206,11 @@ export interface components {
             /** Image */
             image?: Blob;
         };
+        /** Body_query_search_search_post */
+        Body_query_search_search_post: {
+            /** Id */
+            id: number;
+        };
         /** Body_update_edit_edit_post */
         Body_update_edit_edit_post: {
             /** Id */
@@ -240,6 +265,21 @@ export interface components {
             /** Title Upper */
             title_upper: string;
         };
+        /** SearchResponse */
+        SearchResponse: {
+            /**
+             * Rows
+             * @description Query result rows
+             */
+            rows: components["schemas"]["SearchRowResponse"][];
+        };
+        /** SearchRowResponse */
+        SearchRowResponse: {
+            /** Id */
+            id: number;
+            /** Title Upper */
+            title_upper: string;
+        };
         /** UploadResponse */
         UploadResponse: {
             /** Id */
@@ -287,6 +327,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LookupResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    query_search_search_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Body_query_search_search_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResponse"];
                 };
             };
             /** @description Validation Error */
@@ -500,57 +573,70 @@ export interface operations {
     };
 }
 
-import { createClient, multipartBody, type ClientOptions } from "@pixeltable/sdk";
+import { createClient, multipartBody, defineQuery, type ClientOptions } from "@pixeltable/sdk";
 export function createServiceClient(options: ClientOptions) {
     const client = createClient<paths>(options);
-    return { ...client, operations: { ["query_lookup_lookup_get"]: async (input: NonNullable<operations["query_lookup_lookup_get"]["parameters"]["query"]>, options: {
-                signal?: AbortSignal;
-            } = {}) => {
-                const { data } = await client.api.GET("/lookup", { params: { query: input }, ...options });
-                if (data === undefined)
-                    throw new Error("Missing JSON response for query_lookup_lookup_get");
-                return data;
-            }, ["insert_docs_docs_post"]: async (input: operations["insert_docs_docs_post"]["requestBody"]["content"]["application/json"], options: {
-                signal?: AbortSignal;
-            } = {}) => {
-                const { data } = await client.api.POST("/docs", { body: input, ...options });
-                if (data === undefined)
-                    throw new Error("Missing JSON response for insert_docs_docs_post");
-                return data;
-            }, ["compute_preview_preview_post"]: async (input: operations["compute_preview_preview_post"]["requestBody"]["content"]["application/json"], options: {
-                signal?: AbortSignal;
-            } = {}) => {
-                const { data } = await client.api.POST("/preview", { body: input, ...options });
-                if (data === undefined)
-                    throw new Error("Missing JSON response for compute_preview_preview_post");
-                return data;
-            }, ["compute_background_background_post"]: async (input: operations["compute_background_background_post"]["requestBody"]["content"]["application/json"], options: {
-                signal?: AbortSignal;
-            } = {}) => {
-                const { data } = await client.api.POST("/background", { body: input, ...options });
-                if (data === undefined)
-                    throw new Error("Missing JSON response for compute_background_background_post");
-                return data;
-            }, ["update_edit_edit_post"]: async (input: operations["update_edit_edit_post"]["requestBody"]["content"]["application/json"], options: {
-                signal?: AbortSignal;
-            } = {}) => {
-                const { data } = await client.api.POST("/edit", { body: input, ...options });
-                if (data === undefined)
-                    throw new Error("Missing JSON response for update_edit_edit_post");
-                return data;
-            }, ["delete_remove_remove_post"]: async (input: operations["delete_remove_remove_post"]["requestBody"]["content"]["application/json"], options: {
-                signal?: AbortSignal;
-            } = {}) => {
-                const { data } = await client.api.POST("/remove", { body: input, ...options });
-                if (data === undefined)
-                    throw new Error("Missing JSON response for delete_remove_remove_post");
-                return data;
-            }, ["insert_upload_upload_post"]: async (input: operations["insert_upload_upload_post"]["requestBody"]["content"]["multipart/form-data"], options: {
-                signal?: AbortSignal;
-            } = {}) => {
-                const { data } = await client.api.POST("/upload", { body: input, bodySerializer: multipartBody, ...options });
-                if (data === undefined)
-                    throw new Error("Missing JSON response for insert_upload_upload_post");
-                return data;
-            } } };
+    const operations = { ["query_lookup_lookup_get"]: async (input: NonNullable<operations["query_lookup_lookup_get"]["parameters"]["query"]>, options: {
+            signal?: AbortSignal;
+        } = {}) => {
+            const { data } = await client.api.GET("/lookup", { params: { query: input }, ...options });
+            if (data === undefined)
+                throw new Error("Missing JSON response for query_lookup_lookup_get");
+            return data;
+        }, ["query_search_search_post"]: async (input: operations["query_search_search_post"]["requestBody"]["content"]["application/json"], options: {
+            signal?: AbortSignal;
+        } = {}) => {
+            const { data } = await client.api.POST("/search", { body: input, ...options });
+            if (data === undefined)
+                throw new Error("Missing JSON response for query_search_search_post");
+            return data;
+        }, ["insert_docs_docs_post"]: async (input: operations["insert_docs_docs_post"]["requestBody"]["content"]["application/json"], options: {
+            signal?: AbortSignal;
+        } = {}) => {
+            const { data } = await client.api.POST("/docs", { body: input, ...options });
+            if (data === undefined)
+                throw new Error("Missing JSON response for insert_docs_docs_post");
+            return data;
+        }, ["compute_preview_preview_post"]: async (input: operations["compute_preview_preview_post"]["requestBody"]["content"]["application/json"], options: {
+            signal?: AbortSignal;
+        } = {}) => {
+            const { data } = await client.api.POST("/preview", { body: input, ...options });
+            if (data === undefined)
+                throw new Error("Missing JSON response for compute_preview_preview_post");
+            return data;
+        }, ["compute_background_background_post"]: async (input: operations["compute_background_background_post"]["requestBody"]["content"]["application/json"], options: {
+            signal?: AbortSignal;
+        } = {}) => {
+            const { data } = await client.api.POST("/background", { body: input, ...options });
+            if (data === undefined)
+                throw new Error("Missing JSON response for compute_background_background_post");
+            return data;
+        }, ["update_edit_edit_post"]: async (input: operations["update_edit_edit_post"]["requestBody"]["content"]["application/json"], options: {
+            signal?: AbortSignal;
+        } = {}) => {
+            const { data } = await client.api.POST("/edit", { body: input, ...options });
+            if (data === undefined)
+                throw new Error("Missing JSON response for update_edit_edit_post");
+            return data;
+        }, ["delete_remove_remove_post"]: async (input: operations["delete_remove_remove_post"]["requestBody"]["content"]["application/json"], options: {
+            signal?: AbortSignal;
+        } = {}) => {
+            const { data } = await client.api.POST("/remove", { body: input, ...options });
+            if (data === undefined)
+                throw new Error("Missing JSON response for delete_remove_remove_post");
+            return data;
+        }, ["insert_upload_upload_post"]: async (input: operations["insert_upload_upload_post"]["requestBody"]["content"]["multipart/form-data"], options: {
+            signal?: AbortSignal;
+        } = {}) => {
+            const { data } = await client.api.POST("/upload", { body: input, bodySerializer: multipartBody, ...options });
+            if (data === undefined)
+                throw new Error("Missing JSON response for insert_upload_upload_post");
+            return data;
+        } };
+    return { ...client, operations, mutations: { ["insert_docs_docs_post"]: operations["insert_docs_docs_post"], ["compute_preview_preview_post"]: operations["compute_preview_preview_post"], ["compute_background_background_post"]: operations["compute_background_background_post"], ["update_edit_edit_post"]: operations["update_edit_edit_post"], ["delete_remove_remove_post"]: operations["delete_remove_remove_post"], ["insert_upload_upload_post"]: operations["insert_upload_upload_post"] }, queries(scope: readonly unknown[]) {
+            if (scope.length === 0)
+                throw new TypeError("A query scope must identify the session or tenant");
+            return { ["query_lookup_lookup_get"]: defineQuery([options.baseUrl, ...scope, "query_lookup_lookup_get"], operations["query_lookup_lookup_get"]), ["query_search_search_post"]: defineQuery([options.baseUrl, ...scope, "query_search_search_post"], operations["query_search_search_post"]) };
+        },
+    };
 }

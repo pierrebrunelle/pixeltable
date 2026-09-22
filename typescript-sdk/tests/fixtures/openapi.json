@@ -42,6 +42,55 @@
               }
             }
           }
+        },
+        "x-pixeltable": {
+          "version": 1,
+          "kind": "query",
+          "background": false
+        }
+      }
+    },
+    "/search": {
+      "post": {
+        "summary": "Query Search",
+        "description": "Wrapper for an endpoint `Callable` that carries additional metadata about the endpoint operation.",
+        "operationId": "query_search_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_query_search_search_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-pixeltable": {
+          "version": 1,
+          "kind": "query",
+          "background": false
         }
       }
     },
@@ -81,6 +130,11 @@
               }
             }
           }
+        },
+        "x-pixeltable": {
+          "version": 1,
+          "kind": "insert",
+          "background": false
         }
       }
     },
@@ -128,6 +182,11 @@
               }
             }
           }
+        },
+        "x-pixeltable": {
+          "version": 1,
+          "kind": "compute",
+          "background": false
         }
       }
     },
@@ -167,6 +226,11 @@
               }
             }
           }
+        },
+        "x-pixeltable": {
+          "version": 1,
+          "kind": "compute",
+          "background": true
         }
       }
     },
@@ -206,6 +270,11 @@
               }
             }
           }
+        },
+        "x-pixeltable": {
+          "version": 1,
+          "kind": "update",
+          "background": false
         }
       }
     },
@@ -245,6 +314,11 @@
               }
             }
           }
+        },
+        "x-pixeltable": {
+          "version": 1,
+          "kind": "delete",
+          "background": false
         }
       }
     },
@@ -284,6 +358,11 @@
               }
             }
           }
+        },
+        "x-pixeltable": {
+          "version": 1,
+          "kind": "insert",
+          "background": false
         }
       }
     }
@@ -397,6 +476,19 @@
           "title"
         ],
         "title": "Body_insert_upload_upload_post"
+      },
+      "Body_query_search_search_post": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "Body_query_search_search_post"
       },
       "Body_update_edit_edit_post": {
         "properties": {
@@ -526,6 +618,41 @@
           "title_upper"
         ],
         "title": "PreviewResponse"
+      },
+      "SearchResponse": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/SearchRowResponse"
+            },
+            "type": "array",
+            "title": "Rows",
+            "description": "Query result rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rows"
+        ],
+        "title": "SearchResponse"
+      },
+      "SearchRowResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "title_upper": {
+            "type": "string",
+            "title": "Title Upper"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title_upper"
+        ],
+        "title": "SearchRowResponse"
       },
       "UploadResponse": {
         "properties": {

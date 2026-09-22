@@ -115,3 +115,58 @@ test('unsupported named calls preserve existing output', async (t) => {
   }
   assert.notEqual(spawnSync(process.execPath, [cli, fixture, '--client', '-o', join(dir, 'client.d.ts')]).status, 0);
 });
+
+test('generated handles use explicit route metadata and isolate query scopes', async () => {
+  const { loadGeneratedClient } = await import('./load-generated.mjs');
+  const { createServiceClient } = await loadGeneratedClient();
+  const requests = [];
+  const service = createServiceClient({
+    baseUrl: 'https://service.test',
+    fetch: async (request) => {
+      requests.push(request);
+      return Response.json({ rows: [{ id: 1, title_upper: 'HELLO' }] });
+    },
+  });
+  assert.throws(() => service.queries([]), /scope/);
+  const queries = service.queries(['session-a']);
+  assert.deepEqual(Object.keys(queries).sort(), ['query_lookup_lookup_get', 'query_search_search_post']);
+  assert.equal('query_search_search_post' in service.mutations, false);
+  assert.equal(
+    service.mutations.compute_background_background_post,
+    service.operations.compute_background_background_post,
+  );
+  assert.deepEqual(queries.query_search_search_post.key, [
+    'https://service.test',
+    'session-a',
+    'query_search_search_post',
+  ]);
+  assert.notDeepEqual(
+    queries.query_search_search_post.key,
+    service.queries(['session-b']).query_search_search_post.key,
+  );
+  assert.deepEqual(await queries.query_search_search_post.run({ id: 1 }), { rows: [{ id: 1, title_upper: 'HELLO' }] });
+  assert.equal(requests[0].method, 'POST');
+  assert.deepEqual(await requests[0].json(), { id: 1 });
+});
+
+test('older service schemas keep named calls without guessed handles', async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), 'pxt-codegen-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const schema = JSON.parse(await readFile(fixture, 'utf8'));
+  for (const item of Object.values(schema.paths)) {
+    for (const operation of Object.values(item)) delete operation['x-pixeltable'];
+  }
+  const input = join(dir, 'schema.json');
+  const output = join(dir, 'client.ts');
+  await writeFile(input, JSON.stringify(schema));
+  execFileSync(process.execPath, [cli, input, '--client', '-o', output]);
+  const source = await readFile(output, 'utf8');
+  assert.match(source, /const operations =/);
+  assert.doesNotMatch(source, /defineQuery|mutations:|queries\(scope/);
+  schema.paths['/lookup'].get['x-pixeltable'] = { version: 2, kind: 'query', background: false };
+  await writeFile(input, JSON.stringify(schema));
+  const result = spawnSync(process.execPath, [cli, input, '--client', '-o', output]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr.toString(), /Unsupported x-pixeltable/);
+  assert.equal(await readFile(output, 'utf8'), source);
+});

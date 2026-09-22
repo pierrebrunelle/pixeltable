@@ -25,3 +25,5 @@ Before extraction, move the TypeScript workflow into the new repository, adjust 
 The root and server imports must remain usable without React installed. React and TanStack Query are optional peer dependencies used only by the `./react` entry point. Keep cache keys scoped by application endpoint and session; clear the application cache when its authentication context changes.
 
 Generated client fixtures are typechecked with the package. Runtime tests transpile the same fixture into a temporary module and remove it after loading. Keep declaration-only generation available for OpenAPI shapes outside named-call support.
+
+`FastAPIRouter.add_api_route` adds version 1 `x-pixeltable` metadata only for `PxtEndpoint` operations. Keep `kind` and `background` synchronized with the registered route. The generator uses this extension for query handles and mutation functions; plain OpenAPI operations retain only named calls. New metadata versions require an explicit generator update.

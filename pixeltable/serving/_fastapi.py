@@ -718,6 +718,16 @@ class FastAPIRouter(fastapi.APIRouter):
             raise excs.AlreadyExistsError(
                 excs.ErrorCode.PATH_ALREADY_EXISTS, f'route already registered: {conflict} {prefixed_path!r}'
             )
+        endpoint = args[0] if args else kwargs.get('endpoint')
+        if isinstance(endpoint, PxtEndpoint):
+            kwargs['openapi_extra'] = {
+                **(kwargs.get('openapi_extra') or {}),
+                'x-pixeltable': {
+                    'version': 1,
+                    'kind': endpoint.route_type,
+                    'background': endpoint.route.spec.background,
+                },
+            }
         super().add_api_route(path, *args, **kwargs)
 
     def __shutdown(self) -> None:
