@@ -1,16 +1,32 @@
+import { CatalogArray } from './catalog-array.js';
 import { catalogUuid } from './catalog-uuid.js';
 import type { CatalogUuid } from './catalog-uuid.js';
 import { catalogDate, catalogTimestamp } from './catalog-temporal.js';
 import type { CatalogDate, CatalogTimestamp } from './catalog-temporal.js';
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 export interface CatalogColumn {
-  type: 'int' | 'float' | 'string' | 'bool' | 'json' | 'date' | 'timestamp' | 'binary' | 'uuid';
+  type: 'int' | 'float' | 'string' | 'bool' | 'json' | 'date' | 'timestamp' | 'binary' | 'uuid' | 'array';
+  dtype?:
+    | 'bool'
+    | 'int8'
+    | 'uint8'
+    | 'int16'
+    | 'uint16'
+    | 'int32'
+    | 'uint32'
+    | 'int64'
+    | 'uint64'
+    | 'float16'
+    | 'float32'
+    | 'float64';
+  shape?: readonly (number | null)[];
   nullable?: boolean;
   primaryKey?: boolean;
   computed?: boolean;
 }
 export type CatalogSchema = Record<string, CatalogColumn>;
 type ValueTypes = {
+  array: CatalogArray;
   uuid: CatalogUuid;
   binary: Uint8Array;
   date: CatalogDate;
@@ -43,6 +59,7 @@ export type CatalogBatchUpdateRow<S extends CatalogSchema> = [PrimaryKeyColumn<S
   : Pick<CatalogRow<S>, PrimaryKeyColumn<S>> & Partial<Pick<CatalogRow<S>, WritableColumn<S>>>;
 
 export const columnClasses = {
+  array: 'ArrayType',
   uuid: 'UUIDType',
   binary: 'BinaryType',
   int: 'IntType',
@@ -59,7 +76,9 @@ export function copySchema<S extends CatalogSchema>(schema: S): S {
   const entries = Object.entries(schema).map(([name, column]) => {
     if (!/^[a-z][a-z0-9_]*$/.test(name))
       throw new TypeError('Column names must be lowercase identifiers starting with a letter');
-    if (Object.keys(column).some((key) => !['type', 'nullable', 'primaryKey', 'computed'].includes(key)))
+    if (
+      Object.keys(column).some((key) => !['type', 'nullable', 'primaryKey', 'computed', 'dtype', 'shape'].includes(key))
+    )
       throw new TypeError('Unsupported column option');
     if (!Object.hasOwn(column, 'type') || !Object.hasOwn(columnClasses, column.type))
       throw new TypeError(`Unsupported column type: ${column.type}`);
@@ -71,7 +90,21 @@ export function copySchema<S extends CatalogSchema>(schema: S): S {
       throw new TypeError('computed must be boolean');
     if (column.computed && column.primaryKey) throw new TypeError('Computed columns cannot be primary keys');
     if (column.primaryKey && column.nullable) throw new TypeError('Primary keys cannot be nullable');
-    return [name, Object.freeze({ ...column })];
+    if (column.type !== 'array' && (column.dtype !== undefined || column.shape !== undefined))
+      throw new TypeError('Only array columns accept dtype and shape');
+    if (column.type === 'array') {
+      if (column.primaryKey) throw new TypeError('Array columns cannot be primary keys');
+      if (column.dtype !== undefined && !Object.hasOwn(arrayDtypes, column.dtype))
+        throw new TypeError('Unsupported array dtype');
+      if (
+        column.shape !== undefined &&
+        (!column.dtype ||
+          !Array.isArray(column.shape) ||
+          column.shape.some((n) => n !== null && (!Number.isSafeInteger(n) || n < 0)))
+      )
+        throw new TypeError('Array shape requires a dtype and nonnegative dimensions or null');
+    }
+    return [name, Object.freeze({ ...column, ...(column.shape ? { shape: Object.freeze([...column.shape]) } : {}) })];
   });
   return Object.freeze(Object.fromEntries(entries)) as S;
 }
@@ -116,6 +149,17 @@ export function columnValue(value: unknown, column: CatalogColumn, input: boolea
     if (!column.nullable) throw new TypeError('A non-nullable column requires a value');
     return null;
   }
+  if (column.type === 'array') {
+    const array = !input && value instanceof Uint8Array ? CatalogArray.fromNpy(value) : value;
+    if (!(array instanceof CatalogArray)) throw new TypeError('Array values require catalogArray()');
+    if (column.dtype && array.descr.slice(1) !== arrayDtypes[column.dtype]) throw new TypeError('Array dtype mismatch');
+    if (
+      column.shape &&
+      (column.shape.length !== array.shape.length || column.shape.some((n, i) => n !== null && n !== array.shape[i]))
+    )
+      throw new TypeError('Array shape mismatch');
+    return array;
+  }
   if (column.type === 'binary') {
     if (!(value instanceof Uint8Array)) throw new TypeError('Binary values must be Uint8Array');
     return new Uint8Array(value);
@@ -140,6 +184,7 @@ export function columnValue(value: unknown, column: CatalogColumn, input: boolea
 }
 
 export function literalValue(value: unknown, column: CatalogColumn): unknown {
+  if (column.type === 'array' && value !== null) throw new TypeError('Array expression literals are not supported yet');
   const encoded = columnValue(value, column, true);
   if (column.type === 'binary' && encoded !== null) {
     let text = '';
@@ -149,4 +194,39 @@ export function literalValue(value: unknown, column: CatalogColumn): unknown {
   return encoded !== null && (column.type === 'date' || column.type === 'timestamp' || column.type === 'uuid')
     ? (encoded as { v: string }).v
     : encoded;
+}
+
+const arrayDtypes = {
+  bool: 'b1',
+  int8: 'i1',
+  uint8: 'u1',
+  int16: 'i2',
+  uint16: 'u2',
+  int32: 'i4',
+  uint32: 'u4',
+  int64: 'i8',
+  uint64: 'u8',
+  float16: 'f2',
+  float32: 'f4',
+  float64: 'f8',
+} as const;
+
+export function columnWire(column: CatalogColumn): Record<string, unknown> {
+  return {
+    _classname: columnClasses[column.type],
+    nullable: column.nullable ?? false,
+    ...(column.type === 'array' ? { numpy_dtype: column.dtype ?? null, shape: column.shape ?? null } : {}),
+  };
+}
+
+export function matchesColumn(type: Record<string, unknown>, column: CatalogColumn, outer = false): boolean {
+  const expected = columnWire(column);
+  return (
+    Object.keys(type).every((key) => Object.hasOwn(expected, key)) &&
+    Object.entries(expected).every(
+      ([key, value]) =>
+        (key === 'nullable' && outer && value === true && type[key] === false) ||
+        JSON.stringify(type[key]) === JSON.stringify(value),
+    )
+  );
 }

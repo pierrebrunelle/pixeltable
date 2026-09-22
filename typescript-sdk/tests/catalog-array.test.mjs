@@ -1,3 +1,4 @@
+import { copySchema, columnValue, columnWire, matchesColumn } from '../dist/catalog-schema.js';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFile } from 'node:fs/promises';
@@ -66,4 +67,28 @@ test('Python ndarray fixtures decode with dtype, memory order, and bytes intact'
   }
   assert.throws(() => decodeBinaryParts({ $pxt: 'ndarray', v: 'remote.npy' }, []), /reference/);
   assert.throws(() => decodeBinaryParts({ $pxt: 'ndarray', v: 0 }, [new Uint8Array([1])]), /magic/);
+});
+
+test('array schemas preserve dtype and shape and validate metadata and cell values', () => {
+  const shape = [null, 2];
+  const column = copySchema({ array: { type: 'array', dtype: 'float32', shape } }).array;
+  shape[1] = 7;
+  const wire = { _classname: 'ArrayType', nullable: false, numpy_dtype: 'float32', shape: [null, 2] };
+  assert.deepEqual(columnWire(column), wire);
+  assert.equal(matchesColumn(wire, column), true);
+  assert.equal(matchesColumn({ ...wire, shape: [2] }, column), false);
+  assert.equal(matchesColumn({ ...wire, numpy_dtype: 'float64' }, column), false);
+  assert.equal(matchesColumn({ ...wire, extra: true }, column), false);
+  const array = catalogArray(new Float32Array(6), [3, 2]);
+  assert.equal(columnValue(array, column, true), array);
+  assert.deepEqual(columnValue(array.toNpy(), column, false).data, array.data);
+  assert.throws(() => columnValue(catalogArray(new Float32Array(3)), column, true), /shape/);
+  for (const invalid of [
+    { type: 'array', shape: [2] },
+    { type: 'array', dtype: 'float32', shape: [-1] },
+    { type: 'array', dtype: 'object' },
+    { type: 'array', primaryKey: true },
+    { type: 'int', dtype: 'int64' },
+  ])
+    assert.throws(() => copySchema({ value: invalid }));
 });

@@ -648,3 +648,15 @@ export async function checkUuidTypes(): Promise<void> {
   table.columns.id.aggregate('min');
   void value;
 }
+
+export async function checkArrayTypes(): Promise<void> {
+  const { catalogArray, CatalogArray } = await import('@pixeltable/sdk/experimental/catalog');
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.openTable('arrays', { vector: { type: 'array', dtype: 'float32', shape: [2] } });
+  await table.insert([{ vector: catalogArray(new Float32Array([1, 2])) }]);
+  // @ts-expect-error Array inputs need dtype and shape, not plain JSON lists.
+  await table.insert([{ vector: [1, 2] }]);
+  const copy = await table.addComputedColumn('copy', table.columns.vector);
+  const array: InstanceType<typeof CatalogArray> = (await copy.collect())[0]!.copy;
+  void array;
+}
