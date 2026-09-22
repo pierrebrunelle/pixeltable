@@ -245,7 +245,18 @@ const matches = await documents
 
 Query builders are immutable: filtering or selecting returns a new query. Predicates support comparisons, `isNull()`, `and()`, `or()`, and `not()`, using columns from the same table. Projections narrow the returned row type. Ordering supports scalar columns other than JSON. `count()` counts matching rows and rejects queries with a limit or offset, matching Python. Joins, aggregates, and UDF expressions are not yet supported.
 
-Use `openTable(path, schema)` to open an existing base table with runtime schema verification. `createTable` fails if the table exists unless `ifExists: 'ignore'` is specified; an ignored existing table must still match the supplied schema. Both methods reject views and specialized types outside the supported scalar schema. To open existing computed columns, include `computed: true` in their schema definitions; the SDK verifies that they are computed and excludes them from writes. Creation does not replace tables.
+Use `openTable(path, schema)` to open an existing base table with runtime schema verification. `createTable` fails if the table exists unless `ifExists: 'ignore'` is specified; an ignored existing table must still match the supplied schema. These table methods reject views and specialized types outside the supported scalar schema; use `openView` for supported views. To open existing computed columns, include `computed: true` in their schema definitions; the SDK verifies that they are computed and excludes them from writes. Creation does not replace tables.
+
+Create a filtered view of a table:
+
+```typescript
+const enabledDocuments = await documents.createView('documents/enabled', {
+  where: documents.columns.enabled.eq(true),
+});
+const visible = await enabledDocuments.query().select('id', 'title').collect();
+```
+
+Views inherit the base table's schema, including computed columns, and reflect inserts, updates, and deletes in the base. Use `openView(path, schema)` to reopen a live view with schema verification. These view handles expose reads only. Creation fails if the destination exists. Snapshots, iterators, projected views, and view-specific schema changes are not yet supported.
 
 Add stored computed columns from same-table expressions:
 

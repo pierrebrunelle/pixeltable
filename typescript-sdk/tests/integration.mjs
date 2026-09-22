@@ -322,6 +322,26 @@ try {
   assert.deepEqual(Object.keys(withoutExtra.schema), Object.keys(reverted.schema));
   await withoutExtra.insert([{ id: 5, score: 1 }]);
   assert.equal(await withoutExtra.query().where(withoutExtra.columns.id.eq(5)).count(), 1);
+  const view = await withoutExtra.createView('typescript_catalog/filtered', {
+    where: withoutExtra.columns.score.gte(4),
+  });
+  assert.deepEqual(await view.query().select('id').orderBy('id').collect(), [{ id: 1 }, { id: 3 }, { id: 4 }]);
+  assert.equal(typeof view.insert, 'undefined');
+  const openedView = await catalog.openView('typescript_catalog/filtered', withoutExtra.schema);
+  assert.equal(await openedView.count(), 3);
+  await withoutExtra.insert([{ id: 6, score: 8 }]);
+  assert.equal(await view.count(), 4);
+  await withoutExtra.update({ score: 0 }, { where: withoutExtra.columns.id.eq(3) });
+  assert.equal(await view.count(), 3);
+  await withoutExtra.delete({ where: withoutExtra.columns.id.eq(6) });
+  assert.equal(await view.count(), 2);
+  assert.deepEqual(await view.query().select('id', 'tripled').orderBy('id').collect(), [
+    { id: 1, tripled: 12 },
+    { id: 4, tripled: 18 },
+  ]);
+  await assert.rejects(catalog.openTable('typescript_catalog/filtered', withoutExtra.schema), TypeError);
+  await assert.rejects(catalog.openView('typescript_catalog/computed', withoutExtra.schema), TypeError);
+  await assert.rejects(withoutExtra.createView('typescript_catalog/filtered'), CatalogError);
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );

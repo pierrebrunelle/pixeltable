@@ -1,11 +1,13 @@
 import argparse
 import json
+import os
 from pathlib import Path
 
 import fastapi
 import uvicorn
 
 import pixeltable as pxt
+from pixeltable.env import Env
 import pixeltable.functions as pxtf
 from pixeltable.serving import FastAPIRouter
 
@@ -14,6 +16,12 @@ parser.add_argument('--schema', type=Path)
 parser.add_argument('--port', type=int, default=8765)
 parser.add_argument('--catalog', action='store_true')
 args = parser.parse_args()
+
+if not os.environ.get('PIXELTABLE_HOME'):
+    raise RuntimeError('Set PIXELTABLE_HOME to a temporary directory')
+database_server = Env.get()._db_server
+if database_server is not None:
+    database_server.cleanup_mode = 'stop'
 
 pxt.create_dir('sdk_test', if_exists='ignore')
 docs = pxt.create_table(
