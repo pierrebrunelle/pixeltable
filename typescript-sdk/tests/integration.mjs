@@ -268,6 +268,34 @@ try {
   assert.equal(await reopened.query().where(reopened.columns.active.eq(true)).count(), 0);
   assert.deepEqual(await reopened.delete(), { deletedRows: 3 });
   assert.equal(await reopened.count(), 0);
+  const source = await catalog.createTable('typescript_catalog/computed', {
+    id: { type: 'int', primaryKey: true },
+    score: { type: 'float', nullable: true },
+  });
+  await source.insert([{ id: 1, score: 2 }, { id: 2 }]);
+  const computed = await source.addComputedColumn('doubled', source.columns.score.multiply(2));
+  assert.deepEqual(await computed.query().orderBy('id').collect(), [
+    { id: 1, score: 2, doubled: 4 },
+    { id: 2, score: null, doubled: null },
+  ]);
+  await assert.rejects(source.insert([{ id: 3, score: 5 }]), { name: 'CatalogStaleError' });
+  await computed.insert([{ id: 3, score: 5 }]);
+  await computed.update({ score: 4 }, { where: computed.columns.id.eq(1) });
+  assert.deepEqual(await computed.query().orderBy('id').select('id', 'doubled').collect(), [
+    { id: 1, doubled: 8 },
+    { id: 2, doubled: null },
+    { id: 3, doubled: 10 },
+  ]);
+  await assert.rejects(computed.update({ doubled: 100 }), /computed update column/);
+  await assert.rejects(computed.insert([{ id: 4, score: 1, doubled: 2 }]), /insert column/);
+  const restored = await catalog.openTable('typescript_catalog/computed', computed.schema);
+  assert.equal(await restored.query().where(restored.columns.doubled.gt(5)).count(), 2);
+  const chained = await restored.addComputedColumn('tripled', restored.columns.doubled.multiply(1.5));
+  assert.deepEqual(await chained.query().where(chained.columns.id.eq(1)).select('tripled').collect(), [
+    { tripled: 12 },
+  ]);
+  await assert.rejects(chained.addComputedColumn('tripled', chained.columns.score), /already exists/);
+  await assert.rejects(chained.addComputedColumn('invalid-name', chained.columns.score), /Column names/);
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );

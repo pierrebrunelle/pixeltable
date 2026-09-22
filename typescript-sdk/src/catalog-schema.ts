@@ -3,6 +3,7 @@ export interface CatalogColumn {
   type: 'int' | 'float' | 'string' | 'bool' | 'json';
   nullable?: boolean;
   primaryKey?: boolean;
+  computed?: boolean;
 }
 export type CatalogSchema = Record<string, CatalogColumn>;
 type ValueTypes = { string: string; bool: boolean; json: Exclude<JsonValue, null>; int: number; float: number };
@@ -13,9 +14,12 @@ type AllowsNull<C extends CatalogColumn> = 'nullable' extends keyof C
   : false;
 type ColumnValue<C extends CatalogColumn> = ValueTypes[C['type']] | (AllowsNull<C> extends true ? null : never);
 export type CatalogRow<S extends CatalogSchema> = { [K in keyof S & string]: ColumnValue<S[K]> };
+export type WritableColumn<S extends CatalogSchema> = {
+  [K in keyof S & string]: S[K] extends { computed: true } ? never : K;
+}[keyof S & string];
 export type CatalogInsertRow<S extends CatalogSchema> = {
-  [K in keyof S & string as AllowsNull<S[K]> extends true ? never : K]: ColumnValue<S[K]>;
-} & { [K in keyof S & string as AllowsNull<S[K]> extends true ? K : never]?: ColumnValue<S[K]> };
+  [K in WritableColumn<S> as AllowsNull<S[K]> extends true ? never : K]: ColumnValue<S[K]>;
+} & { [K in WritableColumn<S> as AllowsNull<S[K]> extends true ? K : never]?: ColumnValue<S[K]> };
 
 export const columnClasses = {
   int: 'IntType',
@@ -30,7 +34,7 @@ export function copySchema<S extends CatalogSchema>(schema: S): S {
   const entries = Object.entries(schema).map(([name, column]) => {
     if (!/^[a-z][a-z0-9_]*$/.test(name))
       throw new TypeError('Column names must be lowercase identifiers starting with a letter');
-    if (Object.keys(column).some((key) => !['type', 'nullable', 'primaryKey'].includes(key)))
+    if (Object.keys(column).some((key) => !['type', 'nullable', 'primaryKey', 'computed'].includes(key)))
       throw new TypeError('Unsupported column option');
     if (!Object.hasOwn(column, 'type') || !Object.hasOwn(columnClasses, column.type))
       throw new TypeError(`Unsupported column type: ${column.type}`);
@@ -38,6 +42,9 @@ export function copySchema<S extends CatalogSchema>(schema: S): S {
       throw new TypeError('nullable must be boolean');
     if (column.primaryKey !== undefined && typeof column.primaryKey !== 'boolean')
       throw new TypeError('primaryKey must be boolean');
+    if (column.computed !== undefined && typeof column.computed !== 'boolean')
+      throw new TypeError('computed must be boolean');
+    if (column.computed && column.primaryKey) throw new TypeError('Computed columns cannot be primary keys');
     if (column.primaryKey && column.nullable) throw new TypeError('Primary keys cannot be nullable');
     return [name, Object.freeze({ ...column })];
   });

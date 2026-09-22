@@ -2,12 +2,46 @@ import { createClient } from './index.js';
 import type { ClientOptions } from './index.js';
 import { decodeProxyFrame, encodeProxyFrame, proxyProtocolVersion, proxySchemaVersion } from './proxy-protocol.js';
 
-import type { CatalogPredicate, CatalogUpdateRow } from './catalog-query.js';
+import type {
+  CatalogPredicate,
+  CatalogUpdateRow,
+  CatalogExpression,
+  ComputedSchema,
+  CatalogColumns,
+  CatalogQuery,
+} from './catalog-query.js';
 import { createTableQueries, updateValue } from './catalog-query.js';
-export type { CatalogQuery, CatalogColumns, CatalogPredicate, CatalogUpdateRow } from './catalog-query.js';
+export type {
+  CatalogQuery,
+  CatalogColumns,
+  CatalogPredicate,
+  CatalogUpdateRow,
+  CatalogExpression,
+} from './catalog-query.js';
 import { columnClasses, columnValue, copySchema } from './catalog-schema.js';
 import type { CatalogSchema, CatalogInsertRow, CatalogRow } from './catalog-schema.js';
 export type { CatalogColumn, CatalogSchema, CatalogRow, CatalogInsertRow, JsonValue } from './catalog-schema.js';
+
+export interface CatalogTable<S extends CatalogSchema> {
+  readonly id: string;
+  readonly path: string;
+  readonly schema: S;
+  readonly columns: CatalogColumns<S>;
+  query(): CatalogQuery<S>;
+  insert(rows: readonly CatalogInsertRow<S>[], options?: { signal?: AbortSignal }): Promise<{ insertedRows: number }>;
+  update(
+    values: CatalogUpdateRow<S>,
+    options?: { where?: CatalogPredicate; signal?: AbortSignal },
+  ): Promise<{ updatedRows: number }>;
+  delete(options?: { where?: CatalogPredicate; signal?: AbortSignal }): Promise<{ deletedRows: number }>;
+  collect(options?: { limit?: number; signal?: AbortSignal }): Promise<CatalogRow<S>[]>;
+  count(options?: { signal?: AbortSignal }): Promise<number>;
+  addComputedColumn<const N extends string, T>(
+    name: N,
+    expression: CatalogExpression<T>,
+    options?: { signal?: AbortSignal },
+  ): Promise<CatalogTable<S & ComputedSchema<N, T>>>;
+}
 
 export class CatalogStaleError extends Error {
   constructor() {
@@ -106,7 +140,7 @@ export function createCatalogClient(options: ClientOptions) {
   async function call(method: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
     return (await rpc(method, args, signal)).result;
   }
-  function tableHandle<S extends CatalogSchema>(path: string, schema: S, metadata: unknown) {
+  function tableHandle<S extends CatalogSchema>(path: string, schema: S, metadata: unknown): CatalogTable<S> {
     function readMetadata(value: unknown): { id: string; version: number; columnIds: Record<string, number> } {
       if (!Array.isArray(value) || value.length !== 1) throw new TypeError('Expected base-table metadata');
       const md = record(tagged(value[0], 'TableVersionMd'));
@@ -136,7 +170,7 @@ export function createCatalogClient(options: ClientOptions) {
         const type = record(column.col_type);
         if (
           Object.keys(type).some((key) => !['_classname', 'nullable'].includes(key)) ||
-          column.value_expr !== null ||
+          (column.value_expr !== null) !== (expected.computed ?? false) ||
           type._classname !== columnClasses[expected.type] ||
           type.nullable !== (expected.nullable ?? false) ||
           column.is_pk !== (expected.primaryKey ?? false)
@@ -207,23 +241,54 @@ export function createCatalogClient(options: ClientOptions) {
       path,
       schema,
       ...queries,
+      async addComputedColumn<const N extends string, T>(
+        name: N,
+        expression: CatalogExpression<T>,
+        options: { signal?: AbortSignal } = {},
+      ): Promise<CatalogTable<S & ComputedSchema<N, T>>> {
+        if (Object.hasOwn(schema, name)) throw new TypeError('Column already exists');
+        const definition = expression.computedDefinition(id);
+        const nextSchema = copySchema({ ...schema, [name]: definition.column }) as S & ComputedSchema<N, T>;
+        const response = await rpc(
+          'add_computed_column',
+          {
+            columns: { [name]: definition.wire },
+            stored: true,
+            destination: null,
+            custom_metadata: null,
+            comment: '',
+            print_stats: false,
+            on_error: 'abort',
+            if_exists: 'error',
+          },
+          options.signal,
+          {
+            class_name: 'Table',
+            path_key: pathKey,
+            snapshot_path_key: { tbl_version: { id, effective_version: state.version }, base: null },
+          },
+        );
+        return tableHandle(path, nextSchema, response.current_md);
+      },
       async insert(
         rows: readonly CatalogInsertRow<S>[],
         options: { signal?: AbortSignal } = {},
       ): Promise<{ insertedRows: number }> {
         const wireRows = rows.map((row) => {
           const values = record(row);
-          if (Object.keys(values).some((name) => !Object.hasOwn(schema, name)))
+          if (Object.keys(values).some((name) => !Object.hasOwn(schema, name) || schema[name]!.computed))
             throw new TypeError('Unknown insert column');
           return Object.fromEntries(
-            Object.entries(schema).map(([name, column]) => [
-              name,
-              columnValue(
-                Object.hasOwn(values, name) ? values[name] : column.nullable ? null : undefined,
-                column,
-                true,
-              ),
-            ]),
+            Object.entries(schema)
+              .filter(([, column]) => !column.computed)
+              .map(([name, column]) => [
+                name,
+                columnValue(
+                  Object.hasOwn(values, name) ? values[name] : column.nullable ? null : undefined,
+                  column,
+                  true,
+                ),
+              ]),
           );
         });
         const insertedRows = await mutate(
@@ -242,7 +307,8 @@ export function createCatalogClient(options: ClientOptions) {
         if (entries.length === 0) throw new TypeError('Specify at least one update column');
         const valueSpec = Object.fromEntries(
           entries.map(([name, value]) => {
-            if (!Object.hasOwn(schema, name)) throw new TypeError('Unknown update column');
+            if (!Object.hasOwn(schema, name) || schema[name]!.computed)
+              throw new TypeError('Unknown or computed update column');
             return [name, updateValue(value, schema[name]!, id)];
           }),
         );
@@ -281,6 +347,8 @@ export function createCatalogClient(options: ClientOptions) {
     ) {
       if (!path) throw new TypeError('A table path is required');
       const schema = copySchema(definition);
+      if (Object.values(schema).some((column) => column.computed))
+        throw new TypeError('Create base columns first, then use addComputedColumn');
       const result = tagged(
         await call(
           'create_table',

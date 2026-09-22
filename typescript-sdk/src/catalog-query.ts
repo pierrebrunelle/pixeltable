@@ -1,5 +1,5 @@
 import { columnClasses, columnValue } from './catalog-schema.js';
-import type { CatalogColumn, CatalogRow, CatalogSchema } from './catalog-schema.js';
+import type { CatalogColumn, CatalogRow, CatalogSchema, WritableColumn } from './catalog-schema.js';
 
 type Wire = Record<string, unknown>;
 type OrderedValue<T> = Exclude<T, null> extends string | number ? Exclude<T, null> : never;
@@ -49,6 +49,13 @@ class ColumnExpression<T> {
     private readonly column: CatalogColumn,
     private readonly expression: Wire,
   ) {}
+  computedDefinition(tableId: string): { column: CatalogColumn; wire: Wire } {
+    if (tableId !== this.tableId) throw new TypeError('A computed expression must belong to the table');
+    return {
+      column: { type: this.column.type, nullable: this.column.nullable ?? false, computed: true },
+      wire: { $pxt: 'Expr', v: this.expression },
+    };
+  }
   toUpdateWire(tableId: string, target: CatalogColumn): Wire {
     if (tableId !== this.tableId) throw new TypeError('An expression must belong to the updated table');
     if (
@@ -155,12 +162,28 @@ class ColumnExpression<T> {
     });
   }
 }
+export type CatalogExpression<T> = ColumnExpression<T>;
+export type ComputedSchema<N extends string, T> = Record<
+  N,
+  {
+    type: Exclude<T, null> extends number
+      ? 'int' | 'float'
+      : Exclude<T, null> extends string
+        ? 'string'
+        : Exclude<T, null> extends boolean
+          ? 'bool'
+          : 'json';
+    nullable: null extends T ? true : false;
+    computed: true;
+  }
+>;
+
 export type CatalogColumns<S extends CatalogSchema> = {
   readonly [K in keyof S & string]: ColumnExpression<CatalogRow<S>[K]>;
 };
 
 export type CatalogUpdateRow<S extends CatalogSchema> = {
-  [K in keyof S & string]?: CatalogRow<S>[K] | ColumnExpression<CatalogRow<S>[K]>;
+  [K in WritableColumn<S>]?: CatalogRow<S>[K] | ColumnExpression<CatalogRow<S>[K]>;
 };
 
 export function updateValue(value: unknown, column: CatalogColumn, tableId: string): unknown {
