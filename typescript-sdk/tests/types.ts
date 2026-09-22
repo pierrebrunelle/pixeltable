@@ -535,3 +535,22 @@ export async function checkAggregateTypes(): Promise<void> {
   // @ts-expect-error Group keys must be known columns or expressions.
   table.query().groupBy('unknown');
 }
+
+export async function checkWindowTypes(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.openTable('items', { id: { type: 'int' }, value: { type: 'float' } });
+  const running = table.columns.value.aggregate('sum', { orderBy: table.columns.id });
+  const rows = await table
+    .query()
+    .selectExpressions({ running, seen: table.columns.value.aggregate('count', { partitionBy: table.columns.id }) })
+    .collect();
+  const value: number | null = rows[0]!.running;
+  const count: number = rows[0]!.seen;
+  void [value, count];
+  // @ts-expect-error Python mean does not support windows.
+  table.columns.value.aggregate('mean', { orderBy: table.columns.id });
+  // @ts-expect-error Empty options do not specify a window.
+  table.columns.value.aggregate('sum', {});
+  // @ts-expect-error Window ordering uses expressions, not unresolved names.
+  table.columns.value.aggregate('sum', { orderBy: 'id' });
+}

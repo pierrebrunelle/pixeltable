@@ -44,6 +44,9 @@ type ArithmeticValue<T, O> =
 
 export type CatalogJsonPathElement = string | number | { start?: number; stop?: number; step?: number };
 export type CatalogCastType = Pick<CatalogColumn, 'type' | 'nullable'>;
+export type CatalogWindow =
+  | { partitionBy: ProjectionExpression; orderBy?: ProjectionExpression }
+  | { partitionBy?: ProjectionExpression; orderBy: ProjectionExpression };
 
 class ColumnExpression<T> {
   declare readonly [expressionValue]: T;
@@ -104,12 +107,31 @@ class ColumnExpression<T> {
       | 'count'
       | (Exclude<T, null> extends number ? 'sum' | 'mean' : never)
       | (Exclude<T, null> extends string | number | boolean ? 'min' | 'max' : never),
-  >(kind: K): ColumnExpression<K extends 'count' ? number : K extends 'sum' | 'mean' ? number | null : T | null> {
+  >(
+    kind: K,
+    window?: NoInfer<K> extends 'mean' ? never : CatalogWindow,
+  ): ColumnExpression<K extends 'count' ? number : K extends 'sum' | 'mean' ? number | null : T | null> {
     if (!['count', 'sum', 'mean', 'min', 'max'].includes(kind)) throw new TypeError('Unsupported aggregate');
     if (['sum', 'mean'].includes(kind) && !['int', 'float'].includes(this.column.type))
       throw new TypeError('Sum and mean require numeric expressions');
     if (['min', 'max'].includes(kind) && this.column.type === 'json')
       throw new TypeError('Min and max require ordered scalar expressions');
+    if (
+      window !== undefined &&
+      (kind === 'mean' ||
+        typeof window !== 'object' ||
+        window === null ||
+        Object.keys(window).some((key) => !['partitionBy', 'orderBy'].includes(key)) ||
+        (window.partitionBy === undefined && window.orderBy === undefined))
+    )
+      throw new TypeError('A window requires partitionBy or orderBy and is not supported by mean');
+    const windowExpression = (value: ProjectionExpression | undefined): Wire[] => {
+      if (value === undefined) return [];
+      if (!(value instanceof ColumnExpression)) throw new TypeError('Window keys must be catalog expressions');
+      return [value.computedDefinition(this.tableId).wire.v as Wire];
+    };
+    const partitions = windowExpression(window?.partitionBy);
+    const ordering = windowExpression(window?.orderBy);
     const column: CatalogColumn = {
       type: kind === 'count' ? 'int' : kind === 'mean' ? 'float' : this.column.type,
       nullable: kind !== 'count',
@@ -138,11 +160,11 @@ class ColumnExpression<T> {
       return_type: { _classname: columnClasses[column.type], nullable: column.nullable },
       arg_idxs: [0],
       kwarg_idxs: {},
-      group_by_start_idx: 0,
-      group_by_stop_idx: 0,
-      order_by_start_idx: 1,
+      group_by_start_idx: partitions.length ? 1 : 0,
+      group_by_stop_idx: partitions.length ? 2 : 0,
+      order_by_start_idx: 1 + partitions.length,
       is_method_call: false,
-      components: [this.expression],
+      components: [this.expression, ...partitions, ...ordering],
     });
   }
   get errorType(): ColumnExpression<string | null> {

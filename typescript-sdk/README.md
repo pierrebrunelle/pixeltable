@@ -258,7 +258,7 @@ const totals = await documents
 
 Result types contain the selected aliases and preserve expression nullability. Aliases follow the SDK's column-name rules. Filters and ordering still refer to source columns; projections do not add reusable table columns. The same method works on views.
 
-Query builders are immutable: filtering or selecting returns a new query. Predicates support comparisons, `isNull()`, `and()`, `or()`, and `not()`, using columns from the same table. Projections narrow the returned row type. Ordering supports scalar columns other than JSON. `count()` counts matching rows and rejects queries with a limit or offset, matching Python. Joins and window functions are not yet supported.
+Query builders are immutable: filtering or selecting returns a new query. Predicates support comparisons, `isNull()`, `and()`, `or()`, and `not()`, using columns from the same table. Projections narrow the returned row type. Ordering supports scalar columns other than JSON. `count()` counts matching rows and rejects queries with a limit or offset, matching Python. Joins are not yet supported.
 
 Use `openTable(path, schema)` to open an existing base table with runtime schema verification. `createTable` fails if the table exists unless `ifExists: 'ignore'` is specified; an ignored existing table must still match the supplied schema. These table methods reject views and specialized types outside the supported scalar schema; use `openView` for supported views. To open existing computed columns, include `computed: true` in their schema definitions; the SDK verifies that they are computed and excludes them from writes. Creation does not replace tables.
 
@@ -299,7 +299,24 @@ const summaries = await sales
   .collect();
 ```
 
-`sum` and `mean` accept numeric expressions; `min` and `max` accept strings, numbers, and booleans; `count` accepts every supported column type and counts non-null values. Empty/all-null inputs return null for all except `count`, which returns zero. Aggregation without `groupBy()` summarizes the whole filtered input. `groupBy()` accepts column names or same-table expressions and can be specified once per query. Select grouping expressions alongside aggregates; Python validates invalid mixed selections and nested aggregates. `where()` filters input rows. Grouped `count()` returns the number of groups; limits/offsets apply to collected groups and remain unsupported by `count()`. Custom aggregate declarations, window functions, and grouping component views by base rows are not implemented yet.
+`sum` and `mean` accept numeric expressions; `min` and `max` accept strings, numbers, and booleans; `count` accepts every supported column type and counts non-null values. Empty/all-null inputs return null for all except `count`, which returns zero. Aggregation without `groupBy()` summarizes the whole filtered input. `groupBy()` accepts column names or same-table expressions and can be specified once per query. Select grouping expressions alongside aggregates; Python validates invalid mixed selections and nested aggregates. `where()` filters input rows. Grouped `count()` returns the number of groups; limits/offsets apply to collected groups and remain unsupported by `count()`. Custom aggregate declarations and grouping component views by base rows are not implemented yet.
+
+Calculate running aggregates by passing window options to `sum`, `min`, `max`, or `count`:
+
+```ts
+const running = events.columns.amount.aggregate('sum', {
+  partitionBy: events.columns.category,
+  orderBy: events.columns.id,
+});
+const rows = await events
+  .query()
+  .selectExpressions({ id: events.columns.id, running })
+  .orderBy('category')
+  .orderBy('id')
+  .collect();
+```
+
+Window options accept one `partitionBy` expression and/or one `orderBy` expression from the same table. They produce one running result per input row, resetting when the partition changes. Ordering is ascending, matching Python, and filters run before accumulation. Use a unique ordering key when deterministic running results matter; partition-only windows leave ordering within a partition unspecified. Query ordering must be compatible with the window ordering: put partition keys first, followed by the ascending ordering key, as above. Python rejects incompatible output ordering or conflicting windows in the same query. Python currently does not support windows for `mean`, descending window order, or configurable frame bounds; those options are rejected rather than silently ignored. An empty window options object is also rejected. Omit the options for ordinary aggregation.
 
 Extract JSON fields with `payload.jsonPath('items', 0, 'name')`. Paths accept string keys, integer indices (including negative indices), `'*'` for array projection, and Python-style slices such as `{ start: 1, stop: 5, step: 2 }`. Chained paths append to the same path. Missing keys, out-of-range indices, and mismatched containers produce null; wildcard/slice projections preserve positions with null entries. The `'*'` key is reserved for projection, as in Python.
 

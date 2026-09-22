@@ -1,4 +1,4 @@
-export type { CatalogJsonPathElement, CatalogCastType } from './catalog-query.js';
+export type { CatalogJsonPathElement, CatalogCastType, CatalogWindow } from './catalog-query.js';
 import { createClient } from './index.js';
 import type { ClientOptions } from './index.js';
 import { decodeProxyFrame, encodeProxyFrame, proxyProtocolVersion, proxySchemaVersion } from './proxy-protocol.js';
