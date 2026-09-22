@@ -258,7 +258,7 @@ const totals = await documents
 
 Result types contain the selected aliases and preserve expression nullability. Aliases follow the SDK's column-name rules. Filters and ordering still refer to source columns; projections do not add reusable table columns. The same method works on views.
 
-Query builders are immutable: filtering or selecting returns a new query. Predicates support comparisons, `isNull()`, `and()`, `or()`, and `not()`, using columns from the same table. Projections narrow the returned row type. Ordering supports scalar columns other than JSON. `count()` counts matching rows and rejects queries with a limit or offset, matching Python. Joins, aggregates, and UDF expressions are not yet supported.
+Query builders are immutable: filtering or selecting returns a new query. Predicates support comparisons, `isNull()`, `and()`, `or()`, and `not()`, using columns from the same table. Projections narrow the returned row type. Ordering supports scalar columns other than JSON. `count()` counts matching rows and rejects queries with a limit or offset, matching Python. Joins and aggregates are not yet supported.
 
 Use `openTable(path, schema)` to open an existing base table with runtime schema verification. `createTable` fails if the table exists unless `ifExists: 'ignore'` is specified; an ignored existing table must still match the supplied schema. These table methods reject views and specialized types outside the supported scalar schema; use `openView` for supported views. To open existing computed columns, include `computed: true` in their schema definitions; the SDK verifies that they are computed and excludes them from writes. Creation does not replace tables.
 
@@ -291,7 +291,23 @@ await scored.insert([{ id: 2, title: 'Next', score: 3, enabled: true, payload: {
 const results = await scored.query().select('id', 'doubled').collect();
 ```
 
-Pixeltable backfills existing rows and maintains computed values on subsequent inserts and updates. The returned handle includes the new column's inferred type and nullability. Keep using that returned handle: the original handle retains its old schema and version, so writes through it become stale. Computed columns cannot be inserted or updated directly. Names must be new; creation does not replace existing columns. Use `openTable(path, scored.schema)` to reopen the resulting schema. Computed columns must be added after creating the base table; `createTable` rejects schemas marked `computed: true`. Python UDF calls and non-stored computed columns are not yet supported.
+Pixeltable backfills existing rows and maintains computed values on subsequent inserts and updates. The returned handle includes the new column's inferred type and nullability. Keep using that returned handle: the original handle retains its old schema and version, so writes through it become stale. Computed columns cannot be inserted or updated directly. Names must be new; creation does not replace existing columns. Use `openTable(path, scored.schema)` to reopen the resulting schema. Computed columns must be added after creating the base table; `createTable` rejects schemas marked `computed: true`. Non-stored computed columns are not yet supported.
+
+Reference scalar Python functions already available on the server:
+
+```typescript
+import { defineCatalogFunction } from '@pixeltable/sdk/experimental/catalog';
+
+const upper = defineCatalogFunction(
+  'pixeltable.functions.string.upper',
+  { self: { type: 'string' } },
+  { type: 'string' },
+);
+const uppercase = documents.callFunction(upper, { self: documents.columns.title });
+const withUppercase = await documents.addComputedColumn('uppercase', uppercase);
+```
+
+Declare the named parameters and scalar return type, including nullability. Arguments may be literals or compatible expressions from the same table or view. All declared arguments are required. Python resolves the import path and validates the actual function binding; missing functions and incompatible signatures produce catalog errors. Custom UDF modules must already be importable by the server. This API references Python functions; it does not deploy code or serialize TypeScript callbacks. Aggregate/window functions, positional-only parameters, and automatic signature discovery are not supported.
 
 Manage B-tree indexes on integer, float, and string columns, including stored computed columns:
 

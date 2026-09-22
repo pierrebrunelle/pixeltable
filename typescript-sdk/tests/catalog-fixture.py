@@ -4,6 +4,8 @@ import json
 import os
 from pathlib import Path
 
+from udf_fixture import decorate
+
 import pixeltable as pxt
 from pixeltable.env import Env
 from pixeltable.runtime import get_runtime
@@ -81,5 +83,12 @@ serialized = json.dumps(table.select(item=table.id, new_score=table.score * 2).a
     str(table._id), '12345678-1234-5678-1234-567812345678'
 )
 Path(__file__).with_name('fixtures').joinpath('catalog-projection.json').write_text(
+    json.dumps(json.loads(serialized), indent=2) + '\n'
+)
+
+serialized = json.dumps(decorate(text=table.title, prefix='Hi ').as_dict()).replace(
+    str(table._id), '12345678-1234-5678-1234-567812345678'
+)
+Path(__file__).with_name('fixtures').joinpath('catalog-function.json').write_text(
     json.dumps(json.loads(serialized), indent=2) + '\n'
 )

@@ -190,6 +190,79 @@ export function updateValue(value: unknown, column: CatalogColumn, tableId: stri
   return value instanceof ColumnExpression ? value.toUpdateWire(tableId, column) : columnValue(value, column, true);
 }
 
+export interface CatalogFunction<P extends CatalogSchema, C extends CatalogColumn> {
+  readonly path: string;
+  readonly parameters: P;
+  readonly returns: C;
+}
+export type CatalogFunctionArgs<P extends CatalogSchema> = {
+  [K in keyof P & string]: CatalogRow<P>[K] | CatalogExpression<CatalogRow<P>[K]>;
+};
+export function defineCatalogFunction<const P extends CatalogSchema, const C extends CatalogColumn>(
+  path: string,
+  parameters: P,
+  returns: C,
+): CatalogFunction<P, C> {
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)+$/.test(path))
+    throw new TypeError('A Python function import path is required');
+  const copied = Object.keys(parameters).length ? copySchema(parameters) : Object.freeze({ ...parameters });
+  const result = copySchema({ result: returns }).result;
+  for (const column of [...Object.values(copied), result])
+    if (column.computed || column.primaryKey) throw new TypeError('Function types cannot be computed or primary keys');
+  return Object.freeze({ path, parameters: copied, returns: result });
+}
+export function callCatalogFunction<P extends CatalogSchema, C extends CatalogColumn>(
+  tableId: string,
+  fn: CatalogFunction<P, C>,
+  args: CatalogFunctionArgs<P>,
+): CatalogExpression<CatalogRow<{ result: C }>['result']> {
+  const definition = defineCatalogFunction(fn.path, fn.parameters, fn.returns);
+  if (typeof args !== 'object' || args === null || Array.isArray(args))
+    throw new TypeError('Expected named function arguments');
+  const names = Object.keys(definition.parameters);
+  if (Object.keys(args).length !== names.length || names.some((name) => !Object.hasOwn(args, name)))
+    throw new TypeError('Function arguments must match the declared parameters');
+  const typeWire = (column: CatalogColumn): Wire => ({
+    _classname: columnClasses[column.type],
+    nullable: column.nullable ?? false,
+  });
+  const components = names.map((name) => {
+    const value = args[name];
+    const column = definition.parameters[name]!;
+    if (value instanceof ColumnExpression) return value.toUpdateWire(tableId, column).v;
+    return { _classname: 'Literal', val: columnValue(value, column, true), col_type: typeWire(column) };
+  });
+  const returnType = typeWire(definition.returns);
+  return new ColumnExpression(tableId, definition.returns, {
+    _classname: 'FunctionCall',
+    fn: {
+      _classpath: 'pixeltable.func.callable_function.CallableFunction',
+      path: definition.path,
+      signatures: [
+        {
+          return_type: returnType,
+          is_batched: false,
+          parameters: names.map((name) => ({
+            name,
+            col_type: typeWire(definition.parameters[name]!),
+            kind: 'POSITIONAL_OR_KEYWORD',
+            is_batched: false,
+            default: null,
+          })),
+        },
+      ],
+    },
+    return_type: returnType,
+    arg_idxs: [],
+    kwarg_idxs: Object.fromEntries(names.map((name, index) => [name, index])),
+    group_by_start_idx: 0,
+    group_by_stop_idx: 0,
+    order_by_start_idx: components.length,
+    is_method_call: false,
+    components,
+  });
+}
+
 export type CatalogProjection<E extends Record<string, CatalogExpression<unknown>>> = {
   [K in keyof E & string]: E[K] extends CatalogExpression<infer T> ? T : never;
 };
