@@ -64,6 +64,30 @@ class ColumnExpression<T> {
     private readonly column: CatalogColumn,
     private readonly expression: Wire,
   ) {}
+  arrayElement(
+    ...indices: Exclude<T, null> extends CatalogArray ? number[] : never
+  ): ColumnExpression<number | boolean | Extract<T, null>> {
+    if (this.column.type !== 'array' || !this.column.dtype || !this.column.shape)
+      throw new TypeError('Array elements require a declared dtype and shape');
+    if (indices.length !== this.column.shape.length)
+      throw new TypeError('Specify one integer index for every array dimension');
+    indices.forEach((index, axis) => {
+      if (!Number.isSafeInteger(index)) throw new TypeError('Array indices must be safe integers');
+      const dimension = this.column.shape![axis];
+      if (dimension !== null && dimension !== undefined && (index < -dimension || index >= dimension))
+        throw new TypeError('Array index is out of bounds');
+    });
+    const type = this.column.dtype === 'bool' ? 'bool' : this.column.dtype.startsWith('float') ? 'float' : 'int';
+    return new ColumnExpression(
+      this.tableId,
+      { type, nullable: this.column.nullable ?? false },
+      {
+        _classname: 'ArraySlice',
+        index: [...indices],
+        components: [this.expression],
+      },
+    );
+  }
   arraySlice(
     ...slices: Exclude<T, null> extends CatalogArray ? CatalogArraySlice[] : never
   ): ColumnExpression<CatalogArray | Extract<T, null>> {
@@ -423,26 +447,27 @@ class ColumnExpression<T> {
   }
 }
 export type CatalogExpression<T> = ColumnExpression<T>;
+type ComputedValueType<T> = T extends CatalogArray
+  ? 'array'
+  : T extends CatalogUuid
+    ? 'uuid'
+    : T extends Uint8Array
+      ? 'binary'
+      : T extends CatalogDate
+        ? 'date'
+        : T extends CatalogTimestamp
+          ? 'timestamp'
+          : T extends number
+            ? 'int' | 'float'
+            : T extends string
+              ? 'string'
+              : T extends boolean
+                ? 'bool'
+                : 'json';
 export type ComputedSchema<N extends string, T> = Record<
   N,
   {
-    type: Exclude<T, null> extends CatalogArray
-      ? 'array'
-      : Exclude<T, null> extends CatalogUuid
-        ? 'uuid'
-        : Exclude<T, null> extends Uint8Array
-          ? 'binary'
-          : Exclude<T, null> extends CatalogDate
-            ? 'date'
-            : Exclude<T, null> extends CatalogTimestamp
-              ? 'timestamp'
-              : Exclude<T, null> extends number
-                ? 'int' | 'float'
-                : Exclude<T, null> extends string
-                  ? 'string'
-                  : Exclude<T, null> extends boolean
-                    ? 'bool'
-                    : 'json';
+    type: ComputedValueType<Exclude<T, null>>;
     nullable: null extends T ? true : false;
     computed: true;
   }
