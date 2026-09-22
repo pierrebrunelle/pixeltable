@@ -197,6 +197,10 @@ const job = usePixeltableJob(jobHandleOrNull, {
 
 Reactivity uses polling and cache invalidation. It provides no cross-query snapshot or transaction guarantee. Queries may also refresh according to your TanStack Query provider defaults. The source checkout includes a compiled example in `examples/react.ts`. Generated named calls can be wrapped with `defineQuery`. When the service includes version 1 `x-pixeltable` metadata, generation also provides `service.queries(scope)` and `service.mutations`.
 
+## Authenticated backend example
+
+The source checkout includes [an authenticated document backend](examples/AUTHENTICATED-BACKEND.md) with a Next.js Route Handler adapter. It selects a separate service for each verified tenant, keeps service credentials on the server, allows only the fixture's routes, and rewrites job tickets for authenticated polling. Supply your application's session verification and shared job store. Tests exercise the handler with both mocked services and the real Pixeltable fixture; a full Next.js deployment remains unverified.
+
 ## Verify
 
 ```bash
