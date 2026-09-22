@@ -49,6 +49,24 @@ class ColumnExpression<T> {
     private readonly column: CatalogColumn,
     private readonly expression: Wire,
   ) {}
+  similarity(query: Exclude<T, null> extends string ? string : never, indexName?: string): ColumnExpression<number> {
+    if (this.column.type !== 'string' || this.expression._classname !== 'ColumnRef')
+      throw new TypeError('Similarity requires a string column reference');
+    if (typeof query !== 'string') throw new TypeError('Similarity requires a string query');
+    if (indexName !== undefined && (typeof indexName !== 'string' || !indexName))
+      throw new TypeError('An index name must be a nonempty string');
+    return new ColumnExpression(
+      this.tableId,
+      { type: 'float' },
+      {
+        _classname: 'SimilarityExpr',
+        idx_name: indexName ?? null,
+        table_version_key: { id: this.tableId, effective_version: null },
+        qcol_id: { tbl_id: this.expression.col_tbl_id, col_id: this.expression.col_id },
+        components: [{ _classname: 'Literal', val: query, col_type: { _classname: 'StringType', nullable: false } }],
+      },
+    );
+  }
   computedDefinition(tableId: string): { column: CatalogColumn; wire: Wire } {
     if (tableId !== this.tableId) throw new TypeError('A computed expression must belong to the table');
     return {
@@ -273,7 +291,10 @@ export interface CatalogQuery<S extends CatalogSchema, R = CatalogRow<S>> {
   selectExpressions<const E extends Record<string, CatalogExpression<unknown>>>(
     expressions: E,
   ): CatalogQuery<S, CatalogProjection<E>>;
-  orderBy(column: SortableName<S>, direction?: 'asc' | 'desc'): CatalogQuery<S, R>;
+  orderBy(
+    column: SortableName<S> | CatalogExpression<string | number | boolean | null>,
+    direction?: 'asc' | 'desc',
+  ): CatalogQuery<S, R>;
   limit(value: number): CatalogQuery<S, R>;
   offset(value: number): CatalogQuery<S, R>;
   collect(options?: { signal?: AbortSignal }): Promise<R[]>;
@@ -377,8 +398,10 @@ export function createTableQueries<S extends CatalogSchema>(
       },
       orderBy(name, direction = 'asc') {
         if (direction !== 'asc' && direction !== 'desc') throw new TypeError('Invalid sort direction');
-        const reference = columnReference(name);
-        if (schema[name]!.type === 'json') throw new TypeError('JSON columns cannot be sorted');
+        const definition = name instanceof ColumnExpression ? name.computedDefinition(tableId) : null;
+        const reference = definition ? definition.wire.v : columnReference(name as string);
+        const column = definition ? definition.column : schema[name as string]!;
+        if (column.type === 'json') throw new TypeError('JSON columns cannot be sorted');
         return build<R>(selected, predicate, [...order, [reference, direction === 'asc']], limit, offset);
       },
       limit(value) {

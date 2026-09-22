@@ -32,6 +32,20 @@ export type BtreeColumn<S extends CatalogSchema> = {
   [K in keyof S & string]: S[K]['type'] extends 'int' | 'float' | 'string' ? K : never;
 }[keyof S & string];
 
+export type TextColumn<S extends CatalogSchema> = {
+  [K in keyof S & string]: S[K]['type'] extends 'string' ? K : never;
+}[keyof S & string];
+
+export interface TextEmbeddingOptions {
+  /** Importable Python UDF path. The server validates its string input and vector return type. */
+  embedding: string;
+  name?: string;
+  metric?: 'cosine' | 'ip' | 'l2';
+  precision?: 'fp16' | 'fp32';
+  ifExists?: 'error' | 'ignore';
+  signal?: AbortSignal;
+}
+
 export interface CatalogVersion {
   version: number;
   createdAt: string;
@@ -79,6 +93,7 @@ export interface CatalogTable<S extends CatalogSchema> {
     name: K,
     options?: { signal?: AbortSignal },
   ): Promise<CatalogTable<Omit<S, K>>>;
+  addEmbeddingIndex(column: TextColumn<S>, options: TextEmbeddingOptions): Promise<void>;
   addBtreeIndex(
     column: BtreeColumn<S>,
     options?: { name?: string; ifExists?: 'error' | 'ignore'; signal?: AbortSignal },
@@ -103,6 +118,7 @@ export interface CatalogView<S extends CatalogSchema> extends Pick<
   | 'count'
   | 'createView'
   | 'addBtreeIndex'
+  | 'addEmbeddingIndex'
   | 'dropIndex'
   | 'getVersions'
 > {
@@ -497,6 +513,40 @@ export function createCatalogClient(options: ClientOptions) {
         const nextSchema = Object.fromEntries(Object.entries(schema).filter(([key]) => key !== name)) as Omit<S, K>;
         return changeSchema('drop_column', { column: name, if_not_exists: 'error' }, nextSchema, options.signal);
       },
+      async addEmbeddingIndex(column, options): Promise<void> {
+        if (!Object.hasOwn(schema, column) || schema[column]!.type !== 'string')
+          throw new TypeError('Text embedding indexes require a string column');
+        if (typeof options.embedding !== 'string' || !/^[A-Za-z_]\w*(\.[A-Za-z_]\w*)+$/.test(options.embedding))
+          throw new TypeError('Embedding must be an importable Python function path');
+        if (options.name !== undefined && (typeof options.name !== 'string' || !options.name))
+          throw new TypeError('An index name must be a nonempty string');
+        if (options.metric !== undefined && !['cosine', 'ip', 'l2'].includes(options.metric))
+          throw new TypeError('Invalid embedding metric');
+        if (options.precision !== undefined && !['fp16', 'fp32'].includes(options.precision))
+          throw new TypeError('Invalid embedding precision');
+        if (options.ifExists !== undefined && !['error', 'ignore'].includes(options.ifExists))
+          throw new TypeError('Invalid ifExists option');
+        await mutateMetadata(
+          'add_embedding_index',
+          {
+            column,
+            idx_name: options.name ?? null,
+            embedding: {
+              $pxt: 'Function',
+              v: {
+                _classpath: 'pixeltable.func.callable_function.CallableFunction',
+                path: options.embedding,
+              },
+            },
+            string_embed: null,
+            image_embed: null,
+            metric: options.metric ?? 'cosine',
+            precision: options.precision ?? 'fp16',
+            if_exists: options.ifExists ?? 'error',
+          },
+          options.signal,
+        );
+      },
       async addBtreeIndex(column, options = {}): Promise<void> {
         if (!Object.hasOwn(schema, column) || !['int', 'float', 'string'].includes(schema[column]!.type))
           throw new TypeError('B-tree indexes require an integer, float, or string column');
@@ -641,6 +691,7 @@ export function createCatalogClient(options: ClientOptions) {
       count: table.count,
       createView: table.createView,
       addBtreeIndex: table.addBtreeIndex,
+      addEmbeddingIndex: table.addEmbeddingIndex,
       dropIndex: table.dropIndex,
       getVersions: table.getVersions,
       async addComputedColumn(name, expression, options) {

@@ -281,7 +281,7 @@ const enabledDocuments = await documents.createView('documents/enabled', {
 const visible = await enabledDocuments.query().select('id', 'title').collect();
 ```
 
-Views inherit the base table's schema, including computed columns, and reflect inserts, updates, and deletes in the base. Use `openView(path, schema)` to reopen a live view with schema verification. View handles expose queries, history, computed-column creation, B-tree indexes, and nested view creation. They do not expose row insertion, updates, or deletion. Creation fails if the destination exists. Add a view-specific computed column with `const enriched = await enabledDocuments.addComputedColumn('adjusted', enabledDocuments.columns.score.add(1))`, then use the returned handle. Computed values propagate through nested views when the base changes. Schema and index mutations validate versions for the complete base chain; reopen a view after base writes before modifying its schema. Snapshots, iterators, and projected views are not yet supported.
+Views inherit the base table's schema, including computed columns, and reflect inserts, updates, and deletes in the base. Use `openView(path, schema)` to reopen a live view with schema verification. View handles expose queries, history, computed-column creation, B-tree and text embedding indexes, and nested view creation. They do not expose row insertion, updates, or deletion. Creation fails if the destination exists. Add a view-specific computed column with `const enriched = await enabledDocuments.addComputedColumn('adjusted', enabledDocuments.columns.score.add(1))`, then use the returned handle. Computed values propagate through nested views when the base changes. Schema and index mutations validate versions for the complete base chain; reopen a view after base writes before modifying its schema. Snapshots, iterators, and projected views are not yet supported.
 
 Add stored computed columns from same-table expressions:
 
@@ -316,7 +316,28 @@ await scored.addBtreeIndex('doubled', { name: 'doubled_idx' });
 await scored.dropIndex('doubled_idx');
 ```
 
-Index mutations refresh the handle's version. Creation fails on duplicates unless `ifExists: 'ignore'` is specified; removal fails on missing indexes unless `ifNotExists: 'ignore'` is specified. Omitting the index name during creation lets Python generate it. Tables created with automatic default indexes do not allow separate B-tree index management. Boolean and JSON columns are excluded, matching Python. Embedding indexes remain unsupported.
+Index mutations refresh the handle's version. Creation fails on duplicates unless `ifExists: 'ignore'` is specified; removal fails on missing indexes unless `ifNotExists: 'ignore'` is specified. Omitting the index name during creation lets Python generate it. Tables created with automatic default indexes do not allow separate B-tree index management. Boolean and JSON columns are excluded, matching Python.
+
+Create a text embedding index using an importable Python embedding UDF, then rank a query:
+
+```typescript
+await documents.addEmbeddingIndex('title', {
+  embedding: 'my_app.embeddings.embed_text',
+  name: 'title_vectors',
+  metric: 'cosine',
+});
+const similarity = documents.columns.title.similarity('search terms', 'title_vectors');
+const matches = await documents
+  .query()
+  .selectExpressions({ title: documents.columns.title, score: similarity })
+  .orderBy(similarity, 'desc')
+  .limit(10)
+  .collect();
+```
+
+The UDF must already be installed on the Python server and accept a string, returning a fixed-length float array. Python validates the signature and computes embeddings, including backfilling existing rows and maintaining them after writes. This call can invoke the UDF's external provider and incur its costs. The SDK sends an import path; it does not upload an implementation or bind additional UDF parameters. Use a Python wrapper when parameters need binding.
+
+`metric` accepts `cosine` (default), `ip`, or `l2`; `precision` accepts `fp16` (default) or `fp32`. Rank cosine and inner-product scores descending, and L2 distances ascending. Similarity supports projections, predicates, and ordering on tables and live views. Only string-column queries are supported here; image, audio, video, and explicit vector queries remain unsupported. Similarity expressions cannot be stored as computed columns. Index creation uses the same version checks and duplicate policy as B-tree indexes; remove by name with `dropIndex()`.
 
 Update or delete matching rows:
 

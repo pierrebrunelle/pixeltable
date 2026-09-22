@@ -1,3 +1,5 @@
+import numpy as np
+
 import pixeltable as pxt
 
 
@@ -9,3 +11,8 @@ def decorate(text: str, prefix: str) -> str:
 @pxt.udf
 def constant() -> int:
     return 42
+
+
+@pxt.udf
+def text_embedding(text: str) -> pxt.Array[(3,), pxt.Float]:
+    return np.array([text.count('a'), text.count('b'), 1], dtype=np.float32)
