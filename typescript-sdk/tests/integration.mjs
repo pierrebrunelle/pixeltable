@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
+import { decodeNpy, encodeNpy } from '../dist/catalog-npy.js';
 import { createClient, multipartBody, PixeltableHttpError } from '../dist/index.js';
 
 import { loadGeneratedClient, loadTypeScriptModule } from './load-generated.mjs';
@@ -23,6 +24,36 @@ import {
 
 if (!process.env.PXT_TEST_PYTHON)
   throw new Error('Set PXT_TEST_PYTHON to a Python executable with pixeltable[serve] installed');
+
+const npyFixtures = JSON.parse(await readFile(new URL('./fixtures/catalog-npy.json', import.meta.url), 'utf8'));
+const npyRoundTrip = spawnSync(
+  process.env.PXT_TEST_PYTHON,
+  [
+    '-c',
+    `
+import base64, io, json, sys
+import numpy as np
+for case in json.load(sys.stdin):
+    original = np.load(io.BytesIO(base64.b64decode(case['original'])), allow_pickle=False)
+    encoded = np.load(io.BytesIO(base64.b64decode(case['encoded'])), allow_pickle=False)
+    assert original.dtype == encoded.dtype
+    assert original.shape == encoded.shape
+    assert original.tobytes(order='A') == encoded.tobytes(order='A')
+    assert original.flags.f_contiguous == encoded.flags.f_contiguous
+`,
+  ],
+  {
+    input: JSON.stringify(
+      Object.values(npyFixtures).map((fixture) => ({
+        original: fixture.npy,
+        encoded: Buffer.from(encodeNpy(decodeNpy(Buffer.from(fixture.npy, 'base64')))).toString('base64'),
+      })),
+    ),
+    encoding: 'utf8',
+    timeout: 30000,
+  },
+);
+assert.equal(npyRoundTrip.status, 0, npyRoundTrip.stderr || String(npyRoundTrip.error));
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const temp = await mkdtemp(join(tmpdir(), 'pxt-sdk-integration-'));
 const portProbe = createServer().listen(0, '127.0.0.1');
