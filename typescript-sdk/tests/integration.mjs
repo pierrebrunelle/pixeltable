@@ -572,11 +572,46 @@ try {
   await catalog.dropDirectory('typescript_lifecycle_moved', { force: true });
   await catalog.dropDirectory('typescript_lifecycle_moved', { ifNotExists: 'ignore' });
   await assert.rejects(catalog.dropDirectory('typescript_lifecycle_moved'), CatalogError);
+  const failedRows = await catalog.openTable('sdk_test/errors', {
+    text: { type: 'string' },
+    number: { type: 'int', computed: true },
+  });
+  const errorRows = await failedRows
+    .query()
+    .where(failedRows.columns.number.errorType.ne(null))
+    .selectExpressions({
+      text: failedRows.columns.text,
+      error_type: failedRows.columns.number.errorType,
+      error_message: failedRows.columns.number.errorMessage,
+    })
+    .collect();
+  assert.equal(errorRows.length, 1);
+  assert.equal(errorRows[0].text, 'invalid');
+  assert.equal(errorRows[0].error_type, 'ValueError');
+  assert.match(errorRows[0].error_message, /invalid literal/);
+  assert.deepEqual(
+    await failedRows
+      .query()
+      .where(failedRows.columns.text.eq('42'))
+      .selectExpressions({ error_type: failedRows.columns.number.errorType })
+      .collect(),
+    [{ error_type: null }],
+  );
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );
 } finally {
+  const postmaster = await readFile(join(temp, 'home', 'pgdata', 'postmaster.pid'), 'utf8').catch(() => null);
+  const postgresPid = postmaster === null ? null : Number(postmaster.split('\n')[0]);
   if (service.exitCode === null) service.kill('SIGTERM');
   await exited;
+  if (postgresPid !== null) {
+    assert.ok(Number.isSafeInteger(postgresPid) && postgresPid > 0);
+    assert.throws(
+      () => process.kill(postgresPid, 0),
+      { code: 'ESRCH' },
+      'Temporary PostgreSQL must stop with the service',
+    );
+  }
   await rm(temp, { recursive: true, force: true });
 }

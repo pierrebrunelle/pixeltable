@@ -226,3 +226,25 @@ test('text similarity ranking matches Python serialization', async () => {
   assert.throws(() => query().orderBy(setup('other').columns.title.similarity('a')), TypeError);
   assert.throws(() => query().orderBy(columns.payload), TypeError);
 });
+
+test('computed error properties match Python and reject non-column expressions', async () => {
+  let actual;
+  const { columns, query } = createTableQueries(
+    tableId,
+    { double_id: { type: 'int', computed: true } },
+    { double_id: 5 },
+    async (wire) => {
+      actual = wire;
+      return [];
+    },
+    async () => 0,
+  );
+  await query()
+    .selectExpressions({ error_type: columns.double_id.errorType, error_message: columns.double_id.errorMessage })
+    .collect();
+  const expected = JSON.parse(await readFile(new URL('fixtures/catalog-errors.json', import.meta.url), 'utf8'));
+  assert.deepEqual(actual, expected);
+  assert.throws(() => setup().columns.id.errorType, /stored computed/);
+  assert.throws(() => columns.double_id.multiply(2).errorMessage, /stored computed/);
+  assert.throws(() => setup('other').query().where(columns.double_id.errorType.ne(null)), /queried table/);
+});

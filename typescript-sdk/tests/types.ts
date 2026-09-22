@@ -364,3 +364,14 @@ export async function checkTextSearchTypes(): Promise<void> {
   // @ts-expect-error JSON expressions cannot be sorted.
   table.query().orderBy(table.columns.payload);
 }
+
+export async function checkErrorPropertyTypes(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.openTable('errors', { result: { type: 'int', computed: true } });
+  const rows = await table.query().selectExpressions({ message: table.columns.result.errorMessage }).collect();
+  const message: string | null = rows[0]!.message;
+  void message;
+  // @ts-expect-error Error properties are nullable even when the computed column is required.
+  const required: string = rows[0]!.message;
+  void required;
+}

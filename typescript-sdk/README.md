@@ -339,6 +339,22 @@ The UDF must already be installed on the Python server and accept a string, retu
 
 `metric` accepts `cosine` (default), `ip`, or `l2`; `precision` accepts `fp16` (default) or `fp32`. Rank cosine and inner-product scores descending, and L2 distances ascending. Similarity supports projections, predicates, and ordering on tables and live views. Only string-column queries are supported here; image, audio, video, and explicit vector queries remain unsupported. Similarity expressions cannot be stored as computed columns. Index creation uses the same version checks and duplicate policy as B-tree indexes; remove by name with `dropIndex()`.
 
+Inspect errors retained in stored computed columns:
+
+```typescript
+const failures = await scored
+  .query()
+  .where(scored.columns.doubled.errorType.ne(null))
+  .selectExpressions({
+    id: scored.columns.id,
+    type: scored.columns.doubled.errorType,
+    message: scored.columns.doubled.errorMessage,
+  })
+  .collect();
+```
+
+`errorType` and `errorMessage` are nullable string expressions: successful rows return `null`. They require stored computed column references; ordinary scalar columns and inline calculations are rejected. The SDK can inspect errors retained by Python with `on_error='ignore'`; SDK inserts and computed-column creation currently abort on computation errors. Select the error properties instead of a failed required value, whose stored null would not match its declared TypeScript type.
+
 Catalog lifecycle operations use slash-separated paths:
 
 ```typescript
