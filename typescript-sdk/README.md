@@ -230,6 +230,21 @@ const count = await documents.count();
 
 Column names must be lowercase identifiers starting with a letter. Nullable inputs can be omitted and become null. Other inputs are required. Numeric values must be finite; integer-valued numbers must be within JavaScript's safe integer range. JSON inputs must contain only JSON values; reserved `$pxt` keys are escaped. Collection validates response types and retains nullable output types. Row order is unspecified.
 
+Build filtered queries with typed projections:
+
+```typescript
+const matches = await documents
+  .query()
+  .where(documents.columns.score.gte(0.5).and(documents.columns.enabled.eq(true)))
+  .select('id', 'title')
+  .orderBy('id', 'desc')
+  .limit(10)
+  .offset(5)
+  .collect();
+```
+
+Query builders are immutable: filtering or selecting returns a new query. Predicates support comparisons, `isNull()`, `and()`, `or()`, and `not()`, using columns from the same table. Projections narrow the returned row type. Ordering supports scalar columns other than JSON. `count()` counts matching rows and rejects queries with a limit or offset, matching Python. Joins, aggregates, arithmetic, and UDF expressions are not yet supported.
+
 Use `openTable(path, schema)` to open an existing base table with runtime schema verification. `createTable` fails if the table exists unless `ifExists: 'ignore'` is specified; an ignored existing table must still match the supplied schema. Both methods reject computed columns, views, and specialized types outside the supported scalar schema. Creation does not replace tables.
 
 Handles retain the catalog version for writes. A concurrent write or schema change can cause `CatalogStaleError` before insertion. Reopen the table, review its schema, and explicitly retry if appropriate. The SDK never automatically replays a write. A network failure after submission can leave its outcome unknown. These operations apply immediately; previewing schema changes remains a subsequent phase.

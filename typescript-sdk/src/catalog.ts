@@ -2,6 +2,8 @@ import { createClient } from './index.js';
 import type { ClientOptions } from './index.js';
 import { decodeProxyFrame, encodeProxyFrame, proxyProtocolVersion, proxySchemaVersion } from './proxy-protocol.js';
 
+import { createTableQueries } from './catalog-query.js';
+export type { CatalogQuery, CatalogColumns, CatalogPredicate } from './catalog-query.js';
 import { columnClasses, columnValue, copySchema } from './catalog-schema.js';
 import type { CatalogSchema, CatalogInsertRow, CatalogRow } from './catalog-schema.js';
 export type { CatalogColumn, CatalogSchema, CatalogRow, CatalogInsertRow, JsonValue } from './catalog-schema.js';
@@ -104,7 +106,7 @@ export function createCatalogClient(options: ClientOptions) {
     return (await rpc(method, args, signal)).result;
   }
   function tableHandle<S extends CatalogSchema>(path: string, schema: S, metadata: unknown) {
-    function readMetadata(value: unknown): { id: string; version: number } {
+    function readMetadata(value: unknown): { id: string; version: number; columnIds: Record<string, number> } {
       if (!Array.isArray(value) || value.length !== 1) throw new TypeError('Expected base-table metadata');
       const md = record(tagged(value[0], 'TableVersionMd'));
       const table = record(md.tbl_md);
@@ -112,6 +114,14 @@ export function createCatalogClient(options: ClientOptions) {
       const version = record(md.version_md).version;
       if (typeof version !== 'number' || !Number.isSafeInteger(version) || version < 0)
         throw new TypeError('Invalid table version');
+      const columnIds: Record<string, number> = {};
+      for (const [id, value] of Object.entries(record(record(md.schema_version_md).columns))) {
+        const name = record(value).name;
+        if (typeof name === 'string') {
+          if (!Number.isSafeInteger(Number(id)) || Number(id) < 0) throw new TypeError('Invalid column ID');
+          columnIds[name] = Number(id);
+        }
+      }
       const columns = Object.values(record(record(md.schema_version_md).columns))
         .map(record)
         .filter((column) => column.name !== null);
@@ -132,32 +142,47 @@ export function createCatalogClient(options: ClientOptions) {
         )
           throw new TypeError(`Schema mismatch for column ${name}`);
       }
-      return { id: table.tbl_id, version };
+      return { id: table.tbl_id, version, columnIds };
     }
     let state = readMetadata(metadata);
     const id = state.id;
     const pathKey = { tbl_version: { id, effective_version: null }, base: null };
-    function query(limit: number | null) {
-      return {
-        _classname: 'Query',
-        from_clause: { tbls: [pathKey], join_clauses: [] },
-        select_list: null,
-        where_clause: null,
-        group_by_clause: null,
-        grouping_tbl: null,
-        order_by_clause: null,
-        limit_val:
-          limit === null
-            ? null
-            : { _classname: 'Literal', val: limit, col_type: { _classname: 'IntType', nullable: false } },
-        offset_val: null,
-        sample_clause: null,
-      };
+    const queries = createTableQueries(id, schema, state.columnIds, collectQuery, countQuery);
+    async function collectQuery(
+      query: Record<string, unknown>,
+      selected: readonly string[],
+      signal?: AbortSignal,
+    ): Promise<CatalogRow<S>[]> {
+      const response = await rpc('collect', { query }, signal, { class_name: 'Query' });
+      const result = record(response.result);
+      const columns = Object.entries(record(result.schema));
+      if (columns.length !== selected.length || columns.some(([name]) => !selected.includes(name)))
+        throw new TypeError('Query schema changed');
+      for (const [name, wrapped] of columns) {
+        const column = schema[name];
+        const type = record(tagged(wrapped, 'ColumnType'));
+        if (!column || type._classname !== columnClasses[column.type] || type.nullable !== (column.nullable ?? false))
+          throw new TypeError('Query schema changed');
+      }
+      if (!Array.isArray(result.rows)) throw new TypeError('Invalid query rows');
+      return result.rows.map((row: unknown) => {
+        if (!Array.isArray(row) || row.length !== columns.length) throw new TypeError('Invalid query row');
+        return Object.fromEntries(
+          columns.map(([name], index) => [name, columnValue(row[index], schema[name]!, false)]),
+        ) as CatalogRow<S>;
+      });
+    }
+    async function countQuery(query: Record<string, unknown>, signal?: AbortSignal): Promise<number> {
+      const { result } = await rpc('count', { query }, signal, { class_name: 'Query' });
+      if (typeof result !== 'number' || !Number.isSafeInteger(result) || result < 0)
+        throw new TypeError('Invalid row count');
+      return result;
     }
     return {
       id,
       path,
       schema,
+      ...queries,
       async insert(
         rows: readonly CatalogInsertRow<S>[],
         options: { signal?: AbortSignal } = {},
@@ -197,32 +222,12 @@ export function createCatalogClient(options: ClientOptions) {
         return { insertedRows };
       },
       async collect(options: { limit?: number; signal?: AbortSignal } = {}): Promise<CatalogRow<S>[]> {
-        const limit = options.limit ?? null;
-        if (limit !== null && (!Number.isSafeInteger(limit) || limit < 0))
-          throw new TypeError('limit must be a nonnegative safe integer');
-        const response = await rpc('collect', { query: query(limit) }, options.signal, { class_name: 'Query' });
-        const result = record(response.result);
-        const columns = Object.entries(record(result.schema));
-        if (columns.length !== Object.keys(schema).length) throw new TypeError('Query schema changed');
-        for (const [name, wrapped] of columns) {
-          const column = schema[name];
-          const type = record(tagged(wrapped, 'ColumnType'));
-          if (!column || type._classname !== columnClasses[column.type] || type.nullable !== (column.nullable ?? false))
-            throw new TypeError('Query schema changed');
-        }
-        if (!Array.isArray(result.rows)) throw new TypeError('Invalid query rows');
-        return result.rows.map((row: unknown) => {
-          if (!Array.isArray(row) || row.length !== columns.length) throw new TypeError('Invalid query row');
-          return Object.fromEntries(
-            columns.map(([name], index) => [name, columnValue(row[index], schema[name]!, false)]),
-          ) as CatalogRow<S>;
-        });
+        let query = queries.query();
+        if (options.limit !== undefined) query = query.limit(options.limit);
+        return query.collect(options.signal ? { signal: options.signal } : {});
       },
       async count(options: { signal?: AbortSignal } = {}): Promise<number> {
-        const { result } = await rpc('count', { query: query(null) }, options.signal, { class_name: 'Query' });
-        if (typeof result !== 'number' || !Number.isSafeInteger(result) || result < 0)
-          throw new TypeError('Invalid row count');
-        return result;
+        return queries.query().count(options);
       },
     };
   }

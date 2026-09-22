@@ -201,6 +201,31 @@ try {
     (await catalog.createTable('typescript_catalog/docs', schemaDefinition, { ifExists: 'ignore' })).id,
     authored.id,
   );
+  await reopened.insert([
+    { ...authoredRow, id: 3, title: 'third', score: 3.5 },
+    { ...authoredRow, id: 4, title: 'fourth', active: false },
+  ]);
+  const query = reopened.query().where(reopened.columns.id.gt(1).and(reopened.columns.active.eq(true)));
+  assert.deepEqual(await query.select('id', 'title').orderBy('id', 'desc').limit(1).collect(), [
+    { id: 3, title: 'third' },
+  ]);
+  assert.deepEqual(await query.select('id').orderBy('id').offset(1).collect(), [{ id: 3 }]);
+  assert.equal(await query.count(), 2);
+  await assert.rejects(query.limit(1).count(), /count\(\) cannot be used/);
+  assert.deepEqual(await reopened.query().where(reopened.columns.score.isNull()).select('id').orderBy('id').collect(), [
+    { id: 1 },
+    { id: 4 },
+  ]);
+  assert.equal(await reopened.query().where(reopened.columns.score.eq(null).not()).count(), 2);
+  assert.equal(
+    await reopened
+      .query()
+      .where(reopened.columns.id.lt(2).or(reopened.columns.title.eq('fourth')))
+      .count(),
+    2,
+  );
+  assert.equal(await reopened.query().where(reopened.columns.id.gte(2.5)).count(), 2);
+  assert.equal(await reopened.query().where(reopened.columns.payload.eq(authoredRow.payload)).count(), 4);
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );
