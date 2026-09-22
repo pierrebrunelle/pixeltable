@@ -137,3 +137,114 @@ test('catalog rejects malformed responses and preserves abort signals', async ()
   });
   await assert.rejects(client.listDirectory('', { signal: AbortSignal.abort() }), { name: 'AbortError' });
 });
+
+const tableResponse = JSON.parse(await readFile(new URL('./fixtures/catalog-table.json', import.meta.url), 'utf8'));
+const schemaDefinition = {
+  id: { type: 'int', primaryKey: true },
+  title: { type: 'string' },
+  score: { type: 'float', nullable: true },
+};
+
+test('typed table creation, insertion, and collection follow Python metadata and query encoding', async () => {
+  const requests = [];
+  const metadata = structuredClone(tableResponse.result.v[0]);
+  const catalog = createCatalogClient({
+    baseUrl: 'https://catalog.test',
+    fetch: async (request) => {
+      const head = JSON.parse(decoder.decode(decodeProxyFrame(new Uint8Array(await request.arrayBuffer())).head));
+      requests.push(head);
+      if (head.method === 'create_table') return response(tableResponse.result);
+      if (head.method === 'insert') {
+        metadata[0].v.version_md.version++;
+        return new Response(
+          encodeProxyFrame(
+            encoder.encode(
+              JSON.stringify({
+                result: { $pxt: 'UpdateStatus', v: { row_count_stats: { ins_rows: head.args.rows.length } } },
+                error: null,
+                current_md: metadata,
+                is_stale_md: false,
+              }),
+            ),
+            [],
+          ),
+        );
+      }
+      if (head.method === 'count') return response(1);
+      return response({
+        schema: {
+          id: { $pxt: 'ColumnType', v: { _classname: 'IntType', nullable: false } },
+          title: { $pxt: 'ColumnType', v: { _classname: 'StringType', nullable: false } },
+          score: { $pxt: 'ColumnType', v: { _classname: 'FloatType', nullable: true } },
+        },
+        rows: [[1, 'hello', null]],
+      });
+    },
+  });
+  const table = await catalog.createTable('test/docs', schemaDefinition);
+  assert.equal(requests[0].args.schema.id.type.v._classname, 'IntType');
+  assert.equal(requests[0].args.schema.id.primary_key, true);
+  assert.equal(requests[0].args.schema.score.type.v.nullable, true);
+  assert.deepEqual(await table.insert([{ id: 1, title: 'hello' }]), { insertedRows: 1 });
+  assert.equal(requests[1].class_name, 'Table');
+  assert.equal(requests[1].snapshot_path_key.tbl_version.effective_version, 0);
+  assert.deepEqual(requests[1].args.rows, [{ id: 1, title: 'hello', score: null }]);
+  await table.insert([{ id: 2, title: 'two', score: 2.5 }]);
+  assert.equal(requests[2].snapshot_path_key.tbl_version.effective_version, 1);
+  assert.deepEqual(await table.collect({ limit: 1 }), [{ id: 1, title: 'hello', score: null }]);
+  assert.deepEqual(requests[3].args.query.limit_val, {
+    _classname: 'Literal',
+    val: 1,
+    col_type: { _classname: 'IntType', nullable: false },
+  });
+  assert.equal(await table.count(), 1);
+  const sent = requests.length;
+  for (const row of [
+    { id: '1', title: 'bad' },
+    { id: 1 },
+    { id: 1, title: 'bad', unknown: 1 },
+    { id: Number.MAX_SAFE_INTEGER + 1, title: 'bad' },
+  ])
+    await assert.rejects(table.insert([row]), TypeError);
+  await assert.rejects(table.collect({ limit: -1 }), TypeError);
+  assert.equal(requests.length, sent);
+});
+
+test('schema mismatches and stale versions fail without retrying a write', async () => {
+  let requests = 0;
+  const catalog = createCatalogClient({
+    baseUrl: 'https://catalog.test',
+    fetch: async (request) => {
+      requests++;
+      const head = JSON.parse(decoder.decode(decodeProxyFrame(new Uint8Array(await request.arrayBuffer())).head));
+      if (head.method === 'get_table') return response(tableResponse.result.v[0]);
+      return new Response(
+        encodeProxyFrame(
+          encoder.encode(
+            JSON.stringify({ result: null, error: null, current_md: tableResponse.result.v[0], is_stale_md: true }),
+          ),
+          [],
+        ),
+      );
+    },
+  });
+  await assert.rejects(
+    catalog.openTable('test/docs', { ...schemaDefinition, title: { type: 'bool' } }),
+    /Schema mismatch/,
+  );
+  const table = await catalog.openTable('test/docs', schemaDefinition);
+  await assert.rejects(table.insert([{ id: 1, title: 'hello' }]), { name: 'CatalogStaleError' });
+  assert.equal(requests, 3);
+});
+
+test('JSON cells preserve reserved keys and reject values that JSON would silently change', async () => {
+  const { jsonValue, decodeJson, columnValue } = await import('../dist/catalog-schema.js');
+  const input = JSON.parse('{"$pxt":"literal","__proto__":{"safe":true},"nested":[{"$pxt":"more"},false,null]}');
+  const encoded = jsonValue(input, true);
+  assert.equal(encoded.$pxt, 'rawdict');
+  assert.deepEqual(decodeJson(encoded), input);
+  assert.equal(Object.getPrototypeOf(decodeJson(encoded)), Object.prototype);
+  for (const value of [undefined, new Date(), NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, { x: undefined }])
+    assert.throws(() => jsonValue(value, true), TypeError);
+  assert.throws(() => columnValue(null, { type: 'json' }, true), TypeError);
+});

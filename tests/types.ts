@@ -1,3 +1,4 @@
+import { createCatalogClient } from '@pixeltable/sdk/experimental/catalog';
 import { createServiceClient } from './fixtures/client.js';
 import { createClient, defineQuery, multipartBody } from '../src/index.js';
 import type { JobHandle } from '../src/index.js';
@@ -88,4 +89,28 @@ export function checkGeneratedHandles(): void {
   service.mutations.query_search_search_post;
   // @ts-expect-error Generated query handles preserve input types.
   usePixeltableQuery(queries.query_search_search_post, { id: '1' });
+}
+
+export async function checkCatalogTypes(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.createTable('docs', {
+    id: { type: 'int', primaryKey: true },
+    title: { type: 'string' },
+    score: { type: 'float', nullable: true },
+    active: { type: 'bool' },
+    payload: { type: 'json' },
+  });
+  await table.insert([{ id: 1, title: 'hello', active: true, payload: { nested: [null, 1] } }]);
+  const rows = await table.collect();
+  const title: string | undefined = rows[0]?.title;
+  const score: number | null | undefined = rows[0]?.score;
+  void [title, score];
+  // @ts-expect-error Insert requires non-nullable columns.
+  await table.insert([{ id: 1 }]);
+  // @ts-expect-error Boolean columns require booleans.
+  await table.insert([{ id: 1, title: 'hello', active: 'yes', payload: {} }]);
+  // @ts-expect-error Non-nullable JSON columns reject null.
+  await table.insert([{ id: 1, title: 'hello', active: true, payload: null }]);
+  // @ts-expect-error Creation cannot replace existing tables.
+  await catalog.createTable('docs', { id: { type: 'int' } }, { ifExists: 'replace' });
 }

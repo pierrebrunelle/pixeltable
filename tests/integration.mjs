@@ -169,6 +169,38 @@ try {
   assert.ok(entries.some((entry) => entry.name === 'typescript_catalog' && entry.isDirectory));
   const tables = await catalog.listDirectory('sdk_test');
   assert.ok(tables.some((entry) => entry.name === 'docs' && entry.tableId !== null));
+  const schemaDefinition = {
+    id: { type: 'int', primaryKey: true },
+    title: { type: 'string' },
+    score: { type: 'float', nullable: true },
+    active: { type: 'bool' },
+    payload: { type: 'json' },
+  };
+  const authored = await catalog.createTable('typescript_catalog/docs', schemaDefinition);
+  const stale = await catalog.openTable('typescript_catalog/docs', schemaDefinition);
+  const authoredRow = {
+    id: 1,
+    title: 'from TypeScript',
+    active: true,
+    payload: { $pxt: 'literal user data', nested: [1, null, false] },
+  };
+  assert.deepEqual(await authored.insert([authoredRow]), { insertedRows: 1 });
+  assert.equal(await authored.count(), 1);
+  assert.deepEqual(await authored.collect(), [{ ...authoredRow, score: null }]);
+  assert.deepEqual(await authored.collect({ limit: 0 }), []);
+  await assert.rejects(stale.insert([{ ...authoredRow, id: 2 }]), { name: 'CatalogStaleError' });
+  assert.equal(await authored.count(), 1);
+  const reopened = await catalog.openTable('typescript_catalog/docs', schemaDefinition);
+  assert.deepEqual(await reopened.insert([{ ...authoredRow, id: 2, score: 2.5 }]), { insertedRows: 1 });
+  assert.equal(await reopened.count(), 2);
+  await assert.rejects(
+    catalog.openTable('typescript_catalog/docs', { ...schemaDefinition, title: { type: 'int' } }),
+    /Schema mismatch/,
+  );
+  assert.equal(
+    (await catalog.createTable('typescript_catalog/docs', schemaDefinition, { ifExists: 'ignore' })).id,
+    authored.id,
+  );
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );
