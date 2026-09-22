@@ -7,6 +7,8 @@ Run package commands in `typescript-sdk/`. The package has its own dependency lo
 - `src/react.ts`: optional TanStack Query hooks for reads, writes, and job status.
 - `bin/generate.mjs`: local OpenAPI JSON to TypeScript declarations. Binary schemas become `Blob` inputs.
 - `bin/client-source.mjs`: optional named calls for supported service routes, enabled by `--client`.
+- `examples/authenticated-backend.ts`: explicit document routes behind an application session and tenant-to-service map.
+- `tests/backend.test.mjs`: authentication, tenant selection, credential boundaries, and job-ticket tests.
 - `tests/service.py`: actual Pixeltable service used for integration and schema generation.
 - `tests/fixtures/`: the service's OpenAPI snapshot, generated declarations, and generated client.
 - `tests/types.ts`: successful calls and compile-time rejection cases.

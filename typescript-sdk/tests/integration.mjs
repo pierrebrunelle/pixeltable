@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createClient, multipartBody, PixeltableHttpError } from '../dist/index.js';
 
-import { loadGeneratedClient } from './load-generated.mjs';
+import { loadGeneratedClient, loadTypeScriptModule } from './load-generated.mjs';
 
 if (!process.env.PXT_TEST_PYTHON)
   throw new Error('Set PXT_TEST_PYTHON to a Python executable with pixeltable[serve] installed');
@@ -117,8 +117,45 @@ try {
   );
   assert.deepEqual((await api.POST('/remove', { body: { id: 1 } })).data, { num_rows: 1 });
   assert.deepEqual((await api.GET('/lookup', { params: { query: { id: 1 } } })).data, { rows: [] });
+  const { createDocumentBackend } = await loadTypeScriptModule(
+    new URL('../examples/authenticated-backend.ts', import.meta.url),
+  );
+  const tickets = new Map();
+  const backend = createDocumentBackend({
+    applicationUrl: 'https://app.test/api/pxt',
+    authenticate: async (request) => (request.headers.get('cookie') === 'test-session' ? { tenantId: 'test' } : null),
+    services: new Map([['test', { baseUrl }]]),
+    jobs: {
+      get: async (tenant, id) => tickets.get(JSON.stringify([tenant, id])),
+      put: async (tenant, ticket) => {
+        tickets.set(JSON.stringify([tenant, ticket.id]), ticket);
+      },
+    },
+  });
+  const browser = createServiceClient({
+    baseUrl: 'https://app.test/api/pxt',
+    headers: { cookie: 'test-session', origin: 'https://app.test' },
+    fetch: (input, init) => backend(new Request(input, init)),
+  });
+  assert.deepEqual(
+    await browser.mutations.insert_upload_upload_post({
+      id: 20,
+      title: 'through backend',
+      image: new Blob([png], { type: 'image/png' }),
+    }),
+    { id: 20, title_upper: 'THROUGH BACKEND' },
+  );
+  assert.deepEqual(await browser.queries(['test-session']).query_lookup_lookup_get.run({ id: 20 }), {
+    rows: [{ id: 20, title_upper: 'THROUGH BACKEND' }],
+  });
+  const browserTicket = await browser.mutations.compute_background_background_post({ id: 21, title: 'backend job' });
+  assert.ok(browserTicket.job_url.startsWith('/api/pxt/jobs/'));
+  assert.deepEqual(await browser.job(browserTicket).wait({ timeoutMs: 20_000, pollIntervalMs: 20 }), {
+    title_upper: 'BACKEND JOB',
+  });
+  assert.equal((await backend(new Request('https://app.test/api/pxt/lookup?id=20'))).status, 401);
   console.log(
-    'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation.',
+    'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend.',
   );
 } finally {
   if (service.exitCode === null) service.kill('SIGTERM');
