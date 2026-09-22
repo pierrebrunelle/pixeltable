@@ -680,3 +680,19 @@ export async function checkArraySliceTypes(): Promise<void> {
   table.columns.value.arraySlice(1);
   void [value, required];
 }
+
+export async function checkArrayElementTypes(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.openTable('elements', {
+    value: { type: 'array', dtype: 'float32', shape: [2], nullable: true },
+  });
+  const element = table.columns.value.arrayElement(0);
+  const copy = await table.addComputedColumn('element', element);
+  const row = (await copy.collect())[0]!;
+  const scalar: number | boolean | null = row.element;
+  // @ts-expect-error Scalar indexing does not return an array.
+  const array: import('@pixeltable/sdk/experimental/catalog').CatalogArray = row.element;
+  // @ts-expect-error Integer indexing does not accept slice objects.
+  table.columns.value.arrayElement({ start: 0 });
+  void [scalar, array];
+}

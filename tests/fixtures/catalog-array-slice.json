@@ -1,4 +1,28 @@
 {
+  "element": {
+    "expression": {
+      "_classname": "ArraySlice",
+      "index": [
+        -1,
+        2
+      ],
+      "components": [
+        {
+          "_classname": "ColumnRef",
+          "tbl_id": "12345678-1234-5678-1234-567812345678",
+          "effective_version": null,
+          "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+          "col_tbl_effective_version": null,
+          "col_id": 0,
+          "perform_validation": false
+        }
+      ]
+    },
+    "type": {
+      "_classname": "FloatType",
+      "nullable": false
+    }
+  },
   "reverse": {
     "expression": {
       "_classname": "ArraySlice",

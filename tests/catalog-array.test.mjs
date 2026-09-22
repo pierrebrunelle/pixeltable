@@ -131,6 +131,7 @@ test('array slice expressions and inferred shapes match Python', async () => {
     async () => 0,
   );
   const cases = {
+    element: columns.value.arrayElement(-1, 2),
     reverse: columns.value.arraySlice({ step: -1 }, { start: 1, step: 2 }),
     empty: columns.value.arraySlice({ start: 2, stop: 1 }),
     clamped: columns.value.arraySlice({ start: -100, stop: 100, step: 2 }, { step: -1 }),
@@ -142,6 +143,8 @@ test('array slice expressions and inferred shapes match Python', async () => {
     assert.deepEqual(definition.wire.v, python[name].expression);
     assert.deepEqual(columnWire(definition.column), python[name].type);
   }
+  for (const indices of [[], [0], [0, 0, 0], [3, 0], [-4, 0], [0.5, 1]])
+    assert.throws(() => columns.value.arrayElement(...indices));
   for (const args of [[], [1], [{ step: 0 }], [{ start: 0.5 }], [{ unknown: 1 }], [{}, {}, {}]])
     assert.throws(() => columns.value.arraySlice(...args));
 });

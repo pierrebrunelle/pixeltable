@@ -1317,14 +1317,34 @@ try {
   );
   const slicedCopy = await arrayCopy.addComputedColumn('slice_tail', arrayCopy.columns.vector.arraySlice({ start: 1 }));
   assert.deepEqual((await slicedCopy.collect())[0].slice_tail.toTypedArray(), new Float32Array([-2]));
-  const arrayOpened = await catalog.openTable('sdk_test/arrays', slicedCopy.schema);
+  const element = slicedCopy.columns.vector.arrayElement(-1);
+  assert.deepEqual(await slicedCopy.query().selectExpressions({ last_value: element }).collect(), [{ last_value: -2 }]);
+  const scalarCopy = await slicedCopy.addComputedColumn('last_value', element);
+  assert.equal((await scalarCopy.collect())[0].last_value, -2);
+  const arrayOpened = await catalog.openTable('sdk_test/arrays', scalarCopy.schema);
   assert.deepEqual((await arrayOpened.collect())[0].vector.data, vector.data);
   await assert.rejects(
     catalog.openTable('sdk_test/arrays', {
-      ...slicedCopy.schema,
+      ...scalarCopy.schema,
       vector: { type: 'array', dtype: 'float32', shape: [3] },
     }),
     /Schema mismatch/,
+  );
+  const flags = await catalog.createTable('sdk_test/array_flags', {
+    id: { type: 'int' },
+    value: { type: 'array', dtype: 'bool', shape: [2], nullable: true },
+  });
+  await flags.insert([
+    { id: 1, value: new CatalogArray({ descr: '|b1', shape: [2], fortranOrder: false, data: new Uint8Array([1, 0]) }) },
+    { id: 2, value: null },
+  ]);
+  assert.deepEqual(
+    await flags
+      .query()
+      .selectExpressions({ first_flag: flags.columns.value.arrayElement(0) })
+      .orderBy('id')
+      .collect(),
+    [{ first_flag: true }, { first_flag: null }],
   );
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
