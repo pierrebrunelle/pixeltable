@@ -46,6 +46,13 @@ export interface TextEmbeddingOptions {
   signal?: AbortSignal;
 }
 
+export interface CatalogDropOptions {
+  ifNotExists?: 'error' | 'ignore';
+  /** Remove dependent views for tables, or recursively remove directory contents. */
+  force?: boolean;
+  signal?: AbortSignal;
+}
+
 export interface CatalogVersion {
   version: number;
   createdAt: string;
@@ -699,7 +706,58 @@ export function createCatalogClient(options: ClientOptions) {
       },
     };
   }
+  async function dropObject(
+    method: 'drop_table' | 'drop_dir',
+    path: string,
+    options: CatalogDropOptions,
+  ): Promise<void> {
+    if (!path) throw new TypeError('A non-root catalog path is required');
+    if (options.ifNotExists !== undefined && !['error', 'ignore'].includes(options.ifNotExists))
+      throw new TypeError('Invalid ifNotExists option');
+    if (options.force !== undefined && typeof options.force !== 'boolean')
+      throw new TypeError('Force must be a boolean');
+    await call(
+      method,
+      {
+        path: pathValue(path),
+        if_not_exists: { $pxt: 'IfNotExistsParam', v: options.ifNotExists === 'ignore' ? 'IGNORE' : 'ERROR' },
+        force: options.force ?? false,
+      },
+      options.signal,
+    );
+  }
   return {
+    async dropTable(path: string, options: CatalogDropOptions = {}): Promise<void> {
+      await dropObject('drop_table', path, options);
+    },
+    async dropDirectory(path: string, options: CatalogDropOptions = {}): Promise<void> {
+      await dropObject('drop_dir', path, options);
+    },
+    async move(
+      path: string,
+      newPath: string,
+      options: {
+        ifExists?: 'error' | 'ignore';
+        ifNotExists?: 'error' | 'ignore';
+        signal?: AbortSignal;
+      } = {},
+    ): Promise<void> {
+      if (!path || !newPath) throw new TypeError('Non-root source and destination paths are required');
+      if (options.ifExists !== undefined && !['error', 'ignore'].includes(options.ifExists))
+        throw new TypeError('Invalid ifExists option');
+      if (options.ifNotExists !== undefined && !['error', 'ignore'].includes(options.ifNotExists))
+        throw new TypeError('Invalid ifNotExists option');
+      await call(
+        'move',
+        {
+          path: pathValue(path),
+          new_path: pathValue(newPath),
+          if_exists: { $pxt: 'IfExistsParam', v: options.ifExists === 'ignore' ? 'IGNORE' : 'ERROR' },
+          if_not_exists: { $pxt: 'IfNotExistsParam', v: options.ifNotExists === 'ignore' ? 'IGNORE' : 'ERROR' },
+        },
+        options.signal,
+      );
+    },
     async createTable<const S extends CatalogSchema>(
       path: string,
       definition: S,

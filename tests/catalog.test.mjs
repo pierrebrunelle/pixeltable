@@ -427,3 +427,38 @@ test('view mutations send concrete versions for the entire base chain', async ()
   assert.equal(requests[2].snapshot_path_key.tbl_version.effective_version, 2);
   assert.equal(requests[2].snapshot_path_key.base.tbl_version.effective_version, 3);
 });
+
+test('catalog lifecycle validates destructive options before transport and preserves Python enums', async () => {
+  const requests = [];
+  const catalog = createCatalogClient({
+    baseUrl: 'https://catalog.test',
+    fetch: async (request) => {
+      requests.push(JSON.parse(decoder.decode(decodeProxyFrame(new Uint8Array(await request.arrayBuffer())).head)));
+      return response(null);
+    },
+  });
+  await catalog.dropTable('workspace/docs');
+  await catalog.dropDirectory('workspace', { force: true, ifNotExists: 'ignore' });
+  await catalog.move('old', 'new', { ifExists: 'ignore' });
+  assert.deepEqual(
+    requests.map((request) => request.method),
+    ['drop_table', 'drop_dir', 'move'],
+  );
+  assert.equal(requests[0].args.force, false);
+  assert.deepEqual(requests[0].args.if_not_exists, { $pxt: 'IfNotExistsParam', v: 'ERROR' });
+  assert.equal(requests[1].args.force, true);
+  assert.deepEqual(requests[1].args.if_not_exists, { $pxt: 'IfNotExistsParam', v: 'IGNORE' });
+  assert.deepEqual(requests[2].args.new_path, { $pxt: 'Path', v: { components: ['new'], version: null } });
+  assert.deepEqual(requests[2].args.if_exists, { $pxt: 'IfExistsParam', v: 'IGNORE' });
+  for (const method of ['dropTable', 'dropDirectory']) {
+    await assert.rejects(catalog[method](''), TypeError);
+    await assert.rejects(catalog[method]('valid', { force: 'false' }), TypeError);
+    await assert.rejects(catalog[method]('valid', { ifNotExists: 'replace' }), TypeError);
+    await assert.rejects(catalog[method]('bad/path/'), TypeError);
+  }
+  await assert.rejects(catalog.move('', 'new'), TypeError);
+  await assert.rejects(catalog.move('old', ''), TypeError);
+  await assert.rejects(catalog.move('old', 'new', { ifExists: 'replace' }), TypeError);
+  await assert.rejects(catalog.move('old', 'new', { ifNotExists: 'replace' }), TypeError);
+  assert.equal(requests.length, 3);
+});
