@@ -211,7 +211,28 @@ const entries = await catalog.listDirectory('', { recursive: true });
 
 `baseUrl` must identify an existing protected catalog proxy with a `/rpc` endpoint. An application service URL is insufficient. This adapter does not establish the hosted Python client's TLS tunnel or handle `pxt://` connection discovery. Keep it in trusted server code; the catalog endpoint grants broader access than application routes.
 
-Paths use slash-separated identifiers. Entries include directory names, table IDs, and nested children when requested. The adapter currently supports only directory creation and listing. It is tested against protocol version 4 and metadata schema version 56 in this checkout. Table creation, expression authoring, query execution, media localization, and schema-conflict handling remain in progress. This experimental API can change alongside the Python protocol.
+Paths use slash-separated identifiers. Entries include directory names, table IDs, and nested children when requested. The adapter supports directory creation/listing and scalar table creation, opening, insertion, collection, and counts. It is tested against protocol version 4 and metadata schema version 56 in this checkout. Computed columns, expression filters, views, indexes, media localization, and schema diffs remain in progress. This experimental API can change alongside the Python protocol.
+
+Create a table with an inferred row type:
+
+```typescript
+const documents = await catalog.createTable('documents/items', {
+  id: { type: 'int', primaryKey: true },
+  title: { type: 'string' },
+  score: { type: 'float', nullable: true },
+  enabled: { type: 'bool' },
+  payload: { type: 'json' },
+});
+await documents.insert([{ id: 1, title: 'Hello', enabled: true, payload: { source: 'TypeScript' } }]);
+const rows = await documents.collect({ limit: 10 });
+const count = await documents.count();
+```
+
+Column names must be lowercase identifiers starting with a letter. Nullable inputs can be omitted and become null. Other inputs are required. Numeric values must be finite; integer-valued numbers must be within JavaScript's safe integer range. JSON inputs must contain only JSON values; reserved `$pxt` keys are escaped. Collection validates response types and retains nullable output types. Row order is unspecified.
+
+Use `openTable(path, schema)` to open an existing base table with runtime schema verification. `createTable` fails if the table exists unless `ifExists: 'ignore'` is specified; an ignored existing table must still match the supplied schema. Both methods reject computed columns, views, and specialized types outside the supported scalar schema. Creation does not replace tables.
+
+Handles retain the catalog version for writes. A concurrent write or schema change can cause `CatalogStaleError` before insertion. Reopen the table, review its schema, and explicitly retry if appropriate. The SDK never automatically replays a write. A network failure after submission can leave its outcome unknown. These operations apply immediately; previewing schema changes remains a subsequent phase.
 
 ## Authenticated backend example
 
