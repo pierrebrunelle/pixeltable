@@ -38,6 +38,10 @@ export type CatalogPredicate = Predicate;
 
 declare const expressionValue: unique symbol;
 
+type NumericOperand<T> = Exclude<T, null> extends number ? number | ColumnExpression<number | null> : never;
+type ArithmeticValue<T, O> =
+  number | Extract<T, null> | (O extends ColumnExpression<infer V> ? Extract<V, null> : never);
+
 class ColumnExpression<T> {
   declare readonly [expressionValue]: T;
   constructor(
@@ -54,67 +58,83 @@ class ColumnExpression<T> {
       throw new TypeError('Update expression type does not match the target column');
     return { $pxt: 'Expr', v: this.expression };
   }
-  add(value: Exclude<T, null> extends number ? number : never): ColumnExpression<T> {
+  add<O extends NumericOperand<T>>(value: O): ColumnExpression<ArithmeticValue<T, O>> {
     return this.arithmetic(0, value);
   }
-  subtract(value: Exclude<T, null> extends number ? number : never): ColumnExpression<T> {
+  subtract<O extends NumericOperand<T>>(value: O): ColumnExpression<ArithmeticValue<T, O>> {
     return this.arithmetic(1, value);
   }
-  multiply(value: Exclude<T, null> extends number ? number : never): ColumnExpression<T> {
+  multiply<O extends NumericOperand<T>>(value: O): ColumnExpression<ArithmeticValue<T, O>> {
     return this.arithmetic(2, value);
   }
-  divide(value: Exclude<T, null> extends number ? number : never): ColumnExpression<T> {
+  divide<O extends NumericOperand<T>>(value: O): ColumnExpression<ArithmeticValue<T, O>> {
     return this.arithmetic(3, value);
   }
-  modulo(value: Exclude<T, null> extends number ? number : never): ColumnExpression<T> {
+  modulo<O extends NumericOperand<T>>(value: O): ColumnExpression<ArithmeticValue<T, O>> {
     return this.arithmetic(4, value);
   }
-  floorDivide(value: Exclude<T, null> extends number ? number : never): ColumnExpression<T> {
+  floorDivide<O extends NumericOperand<T>>(value: O): ColumnExpression<ArithmeticValue<T, O>> {
     return this.arithmetic(5, value);
   }
-  pow(value: Exclude<T, null> extends number ? number : never): ColumnExpression<T> {
+  pow<O extends NumericOperand<T>>(value: O): ColumnExpression<ArithmeticValue<T, O>> {
     return this.arithmetic(6, value);
   }
-  private arithmetic(operator: number, value: number): ColumnExpression<T> {
+  private arithmetic<O extends number | ColumnExpression<number | null>>(
+    operator: number,
+    value: O,
+  ): ColumnExpression<ArithmeticValue<T, O>> {
     if (!['int', 'float'].includes(this.column.type)) throw new TypeError('Arithmetic requires numeric columns');
-    columnValue(value, { type: 'float' }, true);
+    const operand = this.operand(value);
+    if (!['int', 'float'].includes(operand.column.type)) throw new TypeError('Arithmetic requires numeric operands');
     const type =
-      this.column.type === 'float' || !Number.isInteger(value) || operator === 3 || (operator === 6 && value < 0)
+      this.column.type === 'float' ||
+      operand.column.type === 'float' ||
+      operator === 3 ||
+      (operator === 6 && !(typeof value === 'number' && Number.isInteger(value) && value >= 0))
         ? 'float'
         : 'int';
     return new ColumnExpression(
       this.tableId,
-      { type, nullable: this.column.nullable ?? false },
       {
-        _classname: 'ArithmeticExpr',
-        operator,
-        components: [
-          this.expression,
-          {
-            _classname: 'Literal',
-            val: value,
-            col_type: { _classname: Number.isInteger(value) ? 'IntType' : 'FloatType', nullable: false },
-          },
-        ],
+        type,
+        nullable: Boolean(this.column.nullable || operand.column.nullable),
       },
+      { _classname: 'ArithmeticExpr', operator, components: [this.expression, operand.expression] },
     );
   }
-  eq(value: T): Predicate {
+  private operand(value: unknown): { column: CatalogColumn; expression: Wire } {
+    if (value instanceof ColumnExpression) {
+      if (value.tableId !== this.tableId) throw new TypeError('Operands must belong to the same table');
+      return { column: value.column, expression: value.expression };
+    }
+    const numeric = this.column.type === 'int' || this.column.type === 'float';
+    const literalValue = columnValue(value, numeric ? { type: 'float' } : { ...this.column, nullable: false }, true);
+    const type = numeric ? (Number.isInteger(value) ? 'int' : 'float') : this.column.type;
+    return {
+      column: { type, nullable: false },
+      expression: {
+        _classname: 'Literal',
+        val: literalValue,
+        col_type: { _classname: columnClasses[type], nullable: false },
+      },
+    };
+  }
+  eq(value: T | ColumnExpression<T | null>): Predicate {
     return value === null ? this.isNull() : this.compare(2, value);
   }
-  ne(value: T): Predicate {
+  ne(value: T | ColumnExpression<T | null>): Predicate {
     return value === null ? this.isNull().not() : this.compare(3, value);
   }
-  lt(value: OrderedValue<T>): Predicate {
+  lt(value: OrderedValue<T> | ColumnExpression<OrderedValue<T> | null>): Predicate {
     return this.compare(0, value);
   }
-  lte(value: OrderedValue<T>): Predicate {
+  lte(value: OrderedValue<T> | ColumnExpression<OrderedValue<T> | null>): Predicate {
     return this.compare(1, value);
   }
-  gt(value: OrderedValue<T>): Predicate {
+  gt(value: OrderedValue<T> | ColumnExpression<OrderedValue<T> | null>): Predicate {
     return this.compare(4, value);
   }
-  gte(value: OrderedValue<T>): Predicate {
+  gte(value: OrderedValue<T> | ColumnExpression<OrderedValue<T> | null>): Predicate {
     return this.compare(5, value);
   }
   isNull(): Predicate {
@@ -124,16 +144,14 @@ class ColumnExpression<T> {
     if (value === null) throw new TypeError('Use isNull() to test for null');
     if (![2, 3].includes(operator) && !['int', 'float', 'string'].includes(this.column.type))
       throw new TypeError('Ordering comparisons require numeric or string columns');
-    const numeric = this.column.type === 'int' || this.column.type === 'float';
-    const literalValue = columnValue(value, numeric ? { type: 'float' } : { ...this.column, nullable: false }, true);
-    const type = numeric ? (Number.isInteger(value) ? 'IntType' : 'FloatType') : columnClasses[this.column.type];
+    const operand = this.operand(value);
+    const numeric = ['int', 'float'].includes(this.column.type) && ['int', 'float'].includes(operand.column.type);
+    if (this.column.type !== operand.column.type && !numeric)
+      throw new TypeError('Comparison operand types must match');
     return new Predicate(this.tableId, {
       _classname: 'Comparison',
       operator,
-      components: [
-        this.expression,
-        { _classname: 'Literal', val: literalValue, col_type: { _classname: type, nullable: false } },
-      ],
+      components: [this.expression, operand.expression],
     });
   }
 }

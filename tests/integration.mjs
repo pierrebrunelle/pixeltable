@@ -226,6 +226,16 @@ try {
   );
   assert.equal(await reopened.query().where(reopened.columns.id.gte(2.5)).count(), 2);
   assert.equal(await reopened.query().where(reopened.columns.payload.eq(authoredRow.payload)).count(), 4);
+  assert.equal(await reopened.query().where(reopened.columns.score.gt(reopened.columns.id)).count(), 2);
+  assert.deepEqual(await reopened.update({ score: reopened.columns.id.multiply(reopened.columns.score) }), {
+    updatedRows: 4,
+  });
+  assert.deepEqual(await reopened.query().select('id', 'score').orderBy('id').collect(), [
+    { id: 1, score: null },
+    { id: 2, score: 5 },
+    { id: 3, score: 10.5 },
+    { id: 4, score: null },
+  ]);
   assert.deepEqual(
     await reopened.update(
       { score: reopened.columns.id.add(2).multiply(3).divide(2) },

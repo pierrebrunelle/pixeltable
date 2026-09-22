@@ -107,3 +107,23 @@ test('arithmetic expressions match Python and enforce assignment types and table
   assert.throws(() => columns.id.add(NaN), /Invalid float/);
   assert.throws(() => columns.id.add(Number.MAX_SAFE_INTEGER + 1), /Unsafe/);
 });
+
+test('column operands match Python, propagate nullable types, and reject unrelated tables', async () => {
+  const { columns } = setup();
+  const python = JSON.parse(
+    await readFile(new URL('./fixtures/catalog-column-expressions.json', import.meta.url), 'utf8'),
+  );
+  assert.deepEqual(
+    columns.id.multiply(columns.score).toUpdateWire(tableId, { type: 'float', nullable: true }).v,
+    python.multiply,
+  );
+  assert.deepEqual(columns.id.pow(columns.id).toUpdateWire(tableId, { type: 'float' }).v, python.power);
+  assert.deepEqual(columns.id.gt(columns.score).toWire(tableId), python.compare);
+  assert.throws(() => columns.id.multiply(columns.score).toUpdateWire(tableId, { type: 'float' }), /expression type/);
+  assert.throws(() => columns.id.pow(columns.id).toUpdateWire(tableId, { type: 'int' }), /expression type/);
+  assert.throws(() => columns.id.add(columns.title), /numeric operands/);
+  assert.throws(() => columns.id.eq(columns.title), /types must match/);
+  const other = setup('other').columns.id;
+  assert.throws(() => columns.id.add(other), /same table/);
+  assert.throws(() => columns.id.eq(other), /same table/);
+});
