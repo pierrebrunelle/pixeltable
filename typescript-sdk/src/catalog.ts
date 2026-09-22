@@ -67,10 +67,26 @@ export interface CatalogTable<S extends CatalogSchema> {
   ): Promise<CatalogTable<S & ComputedSchema<N, T>>>;
 }
 
-export type CatalogView<S extends CatalogSchema> = Pick<
+export interface CatalogView<S extends CatalogSchema> extends Pick<
   CatalogTable<S>,
-  'id' | 'path' | 'schema' | 'columns' | 'query' | 'collect' | 'count'
->;
+  | 'id'
+  | 'path'
+  | 'schema'
+  | 'columns'
+  | 'query'
+  | 'collect'
+  | 'count'
+  | 'createView'
+  | 'addBtreeIndex'
+  | 'dropIndex'
+  | 'getVersions'
+> {
+  addComputedColumn<const N extends string, T>(
+    name: N,
+    expression: CatalogExpression<T>,
+    options?: { signal?: AbortSignal },
+  ): Promise<CatalogView<S & ComputedSchema<N, T>>>;
+}
 
 export class CatalogStaleError extends Error {
   constructor() {
@@ -180,6 +196,7 @@ export function createCatalogClient(options: ClientOptions) {
       version: number;
       columnIds: Record<string, { id: number; tableId: string }>;
       pathKey: Record<string, unknown>;
+      snapshotKey: Record<string, unknown>;
     } {
       if (!Array.isArray(value) || value.length === 0 || (!isView && value.length !== 1))
         throw new TypeError('Unexpected table metadata');
@@ -193,6 +210,7 @@ export function createCatalogClient(options: ClientOptions) {
       const columnIds: Record<string, { id: number; tableId: string }> = {};
       const visible = new Map<string, Record<string, unknown>>();
       let pathKey: Record<string, unknown> | null = null;
+      let snapshotKey: Record<string, unknown> | null = null;
       for (const level of [...levels].reverse()) {
         const owner = record(level.tbl_md);
         if (typeof owner.tbl_id !== 'string') throw new TypeError('Invalid table identity');
@@ -201,6 +219,10 @@ export function createCatalogClient(options: ClientOptions) {
           if (view.is_snapshot || !view.include_base_columns || view.iterator_call !== null)
             throw new TypeError('Only live views with inherited columns are supported');
         }
+        const concreteVersion = record(level.version_md).version;
+        if (typeof concreteVersion !== 'number' || !Number.isSafeInteger(concreteVersion) || concreteVersion < 0)
+          throw new TypeError('Invalid base version');
+        snapshotKey = { tbl_version: { id: owner.tbl_id, effective_version: concreteVersion }, base: snapshotKey };
         pathKey = { tbl_version: { id: owner.tbl_id, effective_version: null }, base: pathKey };
         for (const [id, raw] of Object.entries(record(record(level.schema_version_md).columns))) {
           const column = record(raw);
@@ -229,7 +251,7 @@ export function createCatalogClient(options: ClientOptions) {
         )
           throw new TypeError(`Schema mismatch for column ${name}`);
       }
-      return { id: table.tbl_id, version, columnIds, pathKey: pathKey! };
+      return { id: table.tbl_id, version, columnIds, pathKey: pathKey!, snapshotKey: snapshotKey! };
     }
     let state = readMetadata(metadata);
     const id = state.id;
@@ -273,7 +295,7 @@ export function createCatalogClient(options: ClientOptions) {
       const response = await rpc(method, args, signal, {
         class_name: 'Table',
         path_key: pathKey,
-        snapshot_path_key: { tbl_version: { id, effective_version: state.version }, base: null },
+        snapshot_path_key: state.snapshotKey,
       });
       const updated = readMetadata(response.current_md);
       if (updated.id !== id) throw new TypeError('Table identity changed');
@@ -335,7 +357,7 @@ export function createCatalogClient(options: ClientOptions) {
         const { result } = await rpc('get_versions', { n: options.limit ?? null }, options.signal, {
           class_name: 'Table',
           path_key: pathKey,
-          snapshot_path_key: { tbl_version: { id, effective_version: state.version }, base: null },
+          snapshot_path_key: state.snapshotKey,
         });
         if (!Array.isArray(result)) throw new TypeError('Invalid version history');
         return result.map((value: unknown) => {
@@ -375,7 +397,7 @@ export function createCatalogClient(options: ClientOptions) {
         const response = await rpc('revert', {}, options.signal, {
           class_name: 'Table',
           path_key: pathKey,
-          snapshot_path_key: { tbl_version: { id, effective_version: state.version }, base: null },
+          snapshot_path_key: state.snapshotKey,
         });
         const reverted = tableHandle(path, nextSchema, response.current_md);
         if (reverted.id !== id) throw new TypeError('Table identity changed');
@@ -436,10 +458,10 @@ export function createCatalogClient(options: ClientOptions) {
           {
             class_name: 'Table',
             path_key: pathKey,
-            snapshot_path_key: { tbl_version: { id, effective_version: state.version }, base: null },
+            snapshot_path_key: state.snapshotKey,
           },
         );
-        return tableHandle(path, nextSchema, response.current_md);
+        return tableHandle(path, nextSchema, response.current_md, isView);
       },
       async insert(
         rows: readonly CatalogInsertRow<S>[],
@@ -511,15 +533,24 @@ export function createCatalogClient(options: ClientOptions) {
     };
   }
   function viewHandle<S extends CatalogSchema>(path: string, schema: S, metadata: unknown): CatalogView<S> {
-    const table = tableHandle(path, schema, metadata, true);
+    return asView(tableHandle(path, schema, metadata, true));
+  }
+  function asView<S extends CatalogSchema>(table: CatalogTable<S>): CatalogView<S> {
     return {
       id: table.id,
-      path,
-      schema,
+      path: table.path,
+      schema: table.schema,
       columns: table.columns,
       query: table.query,
       collect: table.collect,
       count: table.count,
+      createView: table.createView,
+      addBtreeIndex: table.addBtreeIndex,
+      dropIndex: table.dropIndex,
+      getVersions: table.getVersions,
+      async addComputedColumn(name, expression, options) {
+        return asView(await table.addComputedColumn(name, expression, options));
+      },
     };
   }
   return {
