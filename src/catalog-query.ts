@@ -49,6 +49,25 @@ class ColumnExpression<T> {
     private readonly column: CatalogColumn,
     private readonly expression: Wire,
   ) {}
+  get errorType(): ColumnExpression<string | null> {
+    return this.errorProperty(0);
+  }
+  get errorMessage(): ColumnExpression<string | null> {
+    return this.errorProperty(1);
+  }
+  private errorProperty(prop: number): ColumnExpression<string | null> {
+    if (!this.column.computed || this.expression._classname !== 'ColumnRef')
+      throw new TypeError('Error properties require a stored computed column');
+    return new ColumnExpression(
+      this.tableId,
+      { type: 'string', nullable: true },
+      {
+        _classname: 'ColumnPropertyRef',
+        prop,
+        components: [this.expression],
+      },
+    );
+  }
   similarity(query: Exclude<T, null> extends string ? string : never, indexName?: string): ColumnExpression<number> {
     if (this.column.type !== 'string' || this.expression._classname !== 'ColumnRef')
       throw new TypeError('Similarity requires a string column reference');

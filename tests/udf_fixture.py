@@ -16,3 +16,8 @@ def constant() -> int:
 @pxt.udf
 def text_embedding(text: str) -> pxt.Array[(3,), pxt.Float]:
     return np.array([text.count('a'), text.count('b'), 1], dtype=np.float32)
+
+
+@pxt.udf
+def parse_number(text: str) -> int:
+    return int(text)

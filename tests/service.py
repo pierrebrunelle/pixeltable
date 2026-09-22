@@ -1,10 +1,14 @@
 import argparse
+import asyncio
 import json
 import os
 from pathlib import Path
+from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator
 
 import fastapi
 import uvicorn
+from udf_fixture import parse_number
 
 import pixeltable as pxt
 from pixeltable.env import Env
@@ -49,7 +53,22 @@ router.add_delete_route(docs, path='/remove')
 router.add_insert_route(
     docs, path='/upload', inputs=['id', 'title'], uploadfile_inputs=['image'], outputs=['id', 'title_upper']
 )
-app = fastapi.FastAPI()
+errors = pxt.create_table('sdk_test.errors', {'text': pxt.String})
+errors.add_computed_column(number=parse_number(errors.text))
+errors.insert([{'text': '42'}, {'text': 'invalid'}], on_error='ignore')
+
+
+@asynccontextmanager
+async def lifespan(app: fastapi.FastAPI) -> AsyncIterator[None]:
+    try:
+        yield
+    finally:
+        Env.get().engine.dispose()
+        if database_server is not None:
+            await asyncio.to_thread(database_server.cleanup)
+
+
+app = fastapi.FastAPI(lifespan=lifespan)
 app.include_router(router)
 if args.catalog:
     from pixeltable.service.proxy_daemon import _build_app

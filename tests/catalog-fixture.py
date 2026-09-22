@@ -102,3 +102,12 @@ serialized = json.dumps(
 Path(__file__).with_name('fixtures').joinpath('catalog-similarity.json').write_text(
     json.dumps(json.loads(serialized), indent=2) + '\n'
 )
+
+
+table.add_computed_column(double_id=table.id * 2)
+serialized = json.dumps(
+    table.select(error_type=table.double_id.errortype, error_message=table.double_id.errormsg).as_dict()
+).replace(str(table._id), '12345678-1234-5678-1234-567812345678')
+Path(__file__).with_name('fixtures').joinpath('catalog-errors.json').write_text(
+    json.dumps(json.loads(serialized), indent=2) + '\n'
+)
