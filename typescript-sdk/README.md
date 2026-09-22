@@ -258,7 +258,7 @@ const totals = await documents
 
 Result types contain the selected aliases and preserve expression nullability. Aliases follow the SDK's column-name rules. Filters and ordering still refer to source columns; projections do not add reusable table columns. The same method works on views.
 
-Query builders are immutable: filtering or selecting returns a new query. Predicates support comparisons, `isNull()`, `and()`, `or()`, and `not()`, using columns from the same table. Projections narrow the returned row type. Ordering supports scalar columns other than JSON. `count()` counts matching rows and rejects queries with a limit or offset, matching Python. Joins and aggregates are not yet supported.
+Query builders are immutable: filtering or selecting returns a new query. Predicates support comparisons, `isNull()`, `and()`, `or()`, and `not()`, using columns from the same table. Projections narrow the returned row type. Ordering supports scalar columns other than JSON. `count()` counts matching rows and rejects queries with a limit or offset, matching Python. Joins and window functions are not yet supported.
 
 Use `openTable(path, schema)` to open an existing base table with runtime schema verification. `createTable` fails if the table exists unless `ifExists: 'ignore'` is specified; an ignored existing table must still match the supplied schema. These table methods reject views and specialized types outside the supported scalar schema; use `openView` for supported views. To open existing computed columns, include `computed: true` in their schema definitions; the SDK verifies that they are computed and excludes them from writes. Creation does not replace tables.
 
@@ -282,6 +282,24 @@ const visible = await enabledDocuments.query().select('id', 'title').collect();
 ```
 
 Views inherit the base table's schema, including computed columns, and reflect inserts, updates, and deletes in the base. Use `openView(path, schema)` to reopen a live view with schema verification. View handles expose queries, history, computed-column creation, B-tree and text embedding indexes, and nested view creation. They do not expose row insertion, updates, or deletion. Creation fails if the destination exists. Add a view-specific computed column with `const enriched = await enabledDocuments.addComputedColumn('adjusted', enabledDocuments.columns.score.add(1))`, then use the returned handle. Computed values propagate through nested views when the base changes. Schema and index mutations validate versions for the complete base chain; reopen a view after base writes before modifying its schema. Iterators and projected views are not yet supported.
+
+Summarize rows with `aggregate()` expressions and optional `groupBy()`:
+
+```ts
+const summaries = await sales
+  .query()
+  .groupBy('category')
+  .selectExpressions({
+    category: sales.columns.category,
+    total: sales.columns.amount.aggregate('sum'),
+    average: sales.columns.amount.aggregate('mean'),
+    present: sales.columns.amount.aggregate('count'),
+  })
+  .orderBy('category')
+  .collect();
+```
+
+`sum` and `mean` accept numeric expressions; `min` and `max` accept strings, numbers, and booleans; `count` accepts every supported column type and counts non-null values. Empty/all-null inputs return null for all except `count`, which returns zero. Aggregation without `groupBy()` summarizes the whole filtered input. `groupBy()` accepts column names or same-table expressions and can be specified once per query. Select grouping expressions alongside aggregates; Python validates invalid mixed selections and nested aggregates. `where()` filters input rows. Grouped `count()` returns the number of groups; limits/offsets apply to collected groups and remain unsupported by `count()`. Custom aggregate declarations, window functions, and grouping component views by base rows are not implemented yet.
 
 Extract JSON fields with `payload.jsonPath('items', 0, 'name')`. Paths accept string keys, integer indices (including negative indices), `'*'` for array projection, and Python-style slices such as `{ start: 1, stop: 5, step: 2 }`. Chained paths append to the same path. Missing keys, out-of-range indices, and mismatched containers produce null; wildcard/slice projections preserve positions with null entries. The `'*'` key is reserved for projection, as in Python.
 

@@ -323,3 +323,32 @@ test('JSON paths and casts match Python and validate path elements', async () =>
   assert.throws(() => columns.payload.asType({ type: 'int', computed: true }), TypeError);
   assert.throws(() => expressions.nested.computedDefinition('another-table'), TypeError);
 });
+
+test('grouped aggregate queries match Python and preserve immutable query branches', async () => {
+  const { columns, query, calls } = setup();
+  const base = query();
+  const grouped = base.groupBy('title');
+  await grouped
+    .selectExpressions({
+      title: columns.title,
+      total: columns.score.aggregate('sum'),
+      average: columns.score.aggregate('mean'),
+      minimum: columns.score.aggregate('min'),
+      maximum: columns.score.aggregate('max'),
+      present: columns.score.aggregate('count'),
+    })
+    .orderBy('title')
+    .collect();
+  const python = JSON.parse(await readFile(new URL('./fixtures/catalog-aggregate.json', import.meta.url), 'utf8'));
+  assert.deepEqual(calls[0].wire, python);
+  await base.collect();
+  assert.equal(calls[1].wire.group_by_clause, null);
+  await grouped.where(columns.id.gt(0)).select('title').limit(2).offset(1).collect();
+  assert.deepEqual(calls[2].wire.group_by_clause, python.group_by_clause);
+  assert.throws(() => grouped.groupBy('id'), /already specified/);
+  assert.throws(() => base.groupBy('unknown'), /Unknown/);
+  assert.throws(() => base.groupBy(setup('other').columns.id), /belong/);
+  assert.throws(() => columns.title.aggregate('sum'), /numeric/);
+  assert.throws(() => columns.payload.aggregate('max'), /scalar/);
+  assert.throws(() => columns.id.aggregate('median'), /Unsupported/);
+});

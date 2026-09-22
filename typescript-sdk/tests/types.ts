@@ -503,3 +503,35 @@ export async function checkJsonPathTypes(): Promise<void> {
   const computedValue: number | null = computedRows[0]!.score;
   void computedValue;
 }
+
+export async function checkAggregateTypes(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.openTable('items', {
+    category: { type: 'string' },
+    amount: { type: 'int' },
+    payload: { type: 'json' },
+  });
+  const rows = await table
+    .query()
+    .groupBy('category')
+    .selectExpressions({
+      category: table.columns.category,
+      total: table.columns.amount.aggregate('sum'),
+      present: table.columns.payload.aggregate('count'),
+      earliest: table.columns.category.aggregate('min'),
+    })
+    .collect();
+  const total: number | null = rows[0]!.total;
+  const present: number = rows[0]!.present;
+  const earliest: string | null = rows[0]!.earliest;
+  void [total, present, earliest];
+  // @ts-expect-error Empty aggregate input can return null even for required columns.
+  const required: number = rows[0]!.total;
+  void required;
+  // @ts-expect-error Sum requires numbers.
+  table.columns.category.aggregate('sum');
+  // @ts-expect-error JSON is not an ordered scalar.
+  table.columns.payload.aggregate('min');
+  // @ts-expect-error Group keys must be known columns or expressions.
+  table.query().groupBy('unknown');
+}

@@ -1,0 +1,329 @@
+{
+  "_classname": "Query",
+  "from_clause": {
+    "tbls": [
+      {
+        "tbl_version": {
+          "id": "12345678-1234-5678-1234-567812345678",
+          "effective_version": null
+        },
+        "base": null
+      }
+    ],
+    "join_clauses": []
+  },
+  "select_list": [
+    [
+      {
+        "_classname": "ColumnRef",
+        "tbl_id": "12345678-1234-5678-1234-567812345678",
+        "effective_version": null,
+        "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+        "col_tbl_effective_version": null,
+        "col_id": 1,
+        "perform_validation": false
+      },
+      "title"
+    ],
+    [
+      {
+        "_classname": "FunctionCall",
+        "fn": {
+          "_classpath": "pixeltable.func.aggregate_function.AggregateFunction",
+          "path": "pixeltable.functions.globals.sum",
+          "signatures": [
+            {
+              "return_type": {
+                "_classname": "FloatType",
+                "nullable": true
+              },
+              "parameters": [
+                {
+                  "name": "val",
+                  "col_type": {
+                    "_classname": "FloatType",
+                    "nullable": true
+                  },
+                  "kind": "POSITIONAL_OR_KEYWORD",
+                  "is_batched": false,
+                  "default": null
+                }
+              ],
+              "is_batched": false
+            }
+          ]
+        },
+        "return_type": {
+          "_classname": "FloatType",
+          "nullable": true
+        },
+        "arg_idxs": [
+          0
+        ],
+        "kwarg_idxs": {},
+        "group_by_start_idx": 0,
+        "group_by_stop_idx": 0,
+        "order_by_start_idx": 1,
+        "is_method_call": false,
+        "components": [
+          {
+            "_classname": "ColumnRef",
+            "tbl_id": "12345678-1234-5678-1234-567812345678",
+            "effective_version": null,
+            "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+            "col_tbl_effective_version": null,
+            "col_id": 2,
+            "perform_validation": false
+          }
+        ]
+      },
+      "total"
+    ],
+    [
+      {
+        "_classname": "FunctionCall",
+        "fn": {
+          "_classpath": "pixeltable.func.aggregate_function.AggregateFunction",
+          "path": "pixeltable.functions.globals.mean",
+          "signatures": [
+            {
+              "return_type": {
+                "_classname": "FloatType",
+                "nullable": true
+              },
+              "parameters": [
+                {
+                  "name": "val",
+                  "col_type": {
+                    "_classname": "FloatType",
+                    "nullable": true
+                  },
+                  "kind": "POSITIONAL_OR_KEYWORD",
+                  "is_batched": false,
+                  "default": null
+                }
+              ],
+              "is_batched": false
+            }
+          ]
+        },
+        "return_type": {
+          "_classname": "FloatType",
+          "nullable": true
+        },
+        "arg_idxs": [
+          0
+        ],
+        "kwarg_idxs": {},
+        "group_by_start_idx": 0,
+        "group_by_stop_idx": 0,
+        "order_by_start_idx": 1,
+        "is_method_call": false,
+        "components": [
+          {
+            "_classname": "ColumnRef",
+            "tbl_id": "12345678-1234-5678-1234-567812345678",
+            "effective_version": null,
+            "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+            "col_tbl_effective_version": null,
+            "col_id": 2,
+            "perform_validation": false
+          }
+        ]
+      },
+      "average"
+    ],
+    [
+      {
+        "_classname": "FunctionCall",
+        "fn": {
+          "_classpath": "pixeltable.func.aggregate_function.AggregateFunction",
+          "path": "pixeltable.functions.globals.min",
+          "signatures": [
+            {
+              "return_type": {
+                "_classname": "FloatType",
+                "nullable": true
+              },
+              "parameters": [
+                {
+                  "name": "val",
+                  "col_type": {
+                    "_classname": "FloatType",
+                    "nullable": true
+                  },
+                  "kind": "POSITIONAL_OR_KEYWORD",
+                  "is_batched": false,
+                  "default": null
+                }
+              ],
+              "is_batched": false
+            }
+          ]
+        },
+        "return_type": {
+          "_classname": "FloatType",
+          "nullable": true
+        },
+        "arg_idxs": [
+          0
+        ],
+        "kwarg_idxs": {},
+        "group_by_start_idx": 0,
+        "group_by_stop_idx": 0,
+        "order_by_start_idx": 1,
+        "is_method_call": false,
+        "components": [
+          {
+            "_classname": "ColumnRef",
+            "tbl_id": "12345678-1234-5678-1234-567812345678",
+            "effective_version": null,
+            "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+            "col_tbl_effective_version": null,
+            "col_id": 2,
+            "perform_validation": false
+          }
+        ]
+      },
+      "minimum"
+    ],
+    [
+      {
+        "_classname": "FunctionCall",
+        "fn": {
+          "_classpath": "pixeltable.func.aggregate_function.AggregateFunction",
+          "path": "pixeltable.functions.globals.max",
+          "signatures": [
+            {
+              "return_type": {
+                "_classname": "FloatType",
+                "nullable": true
+              },
+              "parameters": [
+                {
+                  "name": "val",
+                  "col_type": {
+                    "_classname": "FloatType",
+                    "nullable": true
+                  },
+                  "kind": "POSITIONAL_OR_KEYWORD",
+                  "is_batched": false,
+                  "default": null
+                }
+              ],
+              "is_batched": false
+            }
+          ]
+        },
+        "return_type": {
+          "_classname": "FloatType",
+          "nullable": true
+        },
+        "arg_idxs": [
+          0
+        ],
+        "kwarg_idxs": {},
+        "group_by_start_idx": 0,
+        "group_by_stop_idx": 0,
+        "order_by_start_idx": 1,
+        "is_method_call": false,
+        "components": [
+          {
+            "_classname": "ColumnRef",
+            "tbl_id": "12345678-1234-5678-1234-567812345678",
+            "effective_version": null,
+            "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+            "col_tbl_effective_version": null,
+            "col_id": 2,
+            "perform_validation": false
+          }
+        ]
+      },
+      "maximum"
+    ],
+    [
+      {
+        "_classname": "FunctionCall",
+        "fn": {
+          "_classpath": "pixeltable.func.aggregate_function.AggregateFunction",
+          "path": "pixeltable.functions.globals.count",
+          "signatures": [
+            {
+              "return_type": {
+                "_classname": "IntType",
+                "nullable": false
+              },
+              "parameters": [
+                {
+                  "name": "val",
+                  "col_type": {
+                    "_classname": "FloatType",
+                    "nullable": true
+                  },
+                  "kind": "POSITIONAL_OR_KEYWORD",
+                  "is_batched": false,
+                  "default": null
+                }
+              ],
+              "is_batched": false
+            }
+          ]
+        },
+        "return_type": {
+          "_classname": "IntType",
+          "nullable": false
+        },
+        "arg_idxs": [
+          0
+        ],
+        "kwarg_idxs": {},
+        "group_by_start_idx": 0,
+        "group_by_stop_idx": 0,
+        "order_by_start_idx": 1,
+        "is_method_call": false,
+        "components": [
+          {
+            "_classname": "ColumnRef",
+            "tbl_id": "12345678-1234-5678-1234-567812345678",
+            "effective_version": null,
+            "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+            "col_tbl_effective_version": null,
+            "col_id": 2,
+            "perform_validation": false
+          }
+        ]
+      },
+      "present"
+    ]
+  ],
+  "where_clause": null,
+  "group_by_clause": [
+    {
+      "_classname": "ColumnRef",
+      "tbl_id": "12345678-1234-5678-1234-567812345678",
+      "effective_version": null,
+      "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+      "col_tbl_effective_version": null,
+      "col_id": 1,
+      "perform_validation": false
+    }
+  ],
+  "grouping_tbl": null,
+  "order_by_clause": [
+    [
+      {
+        "_classname": "ColumnRef",
+        "tbl_id": "12345678-1234-5678-1234-567812345678",
+        "effective_version": null,
+        "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+        "col_tbl_effective_version": null,
+        "col_id": 1,
+        "perform_validation": false
+      },
+      true
+    ]
+  ],
+  "limit_val": null,
+  "offset_val": null,
+  "sample_clause": null
+}

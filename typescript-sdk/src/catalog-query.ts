@@ -99,6 +99,52 @@ class ColumnExpression<T> {
       components: [this.expression],
     });
   }
+  aggregate<
+    K extends
+      | 'count'
+      | (Exclude<T, null> extends number ? 'sum' | 'mean' : never)
+      | (Exclude<T, null> extends string | number | boolean ? 'min' | 'max' : never),
+  >(kind: K): ColumnExpression<K extends 'count' ? number : K extends 'sum' | 'mean' ? number | null : T | null> {
+    if (!['count', 'sum', 'mean', 'min', 'max'].includes(kind)) throw new TypeError('Unsupported aggregate');
+    if (['sum', 'mean'].includes(kind) && !['int', 'float'].includes(this.column.type))
+      throw new TypeError('Sum and mean require numeric expressions');
+    if (['min', 'max'].includes(kind) && this.column.type === 'json')
+      throw new TypeError('Min and max require ordered scalar expressions');
+    const column: CatalogColumn = {
+      type: kind === 'count' ? 'int' : kind === 'mean' ? 'float' : this.column.type,
+      nullable: kind !== 'count',
+    };
+    return new ColumnExpression(this.tableId, column, {
+      _classname: 'FunctionCall',
+      fn: {
+        _classpath: 'pixeltable.func.aggregate_function.AggregateFunction',
+        path: `pixeltable.functions.globals.${kind}`,
+        signatures: [
+          {
+            return_type: { _classname: columnClasses[column.type], nullable: column.nullable },
+            parameters: [
+              {
+                name: 'val',
+                col_type: { _classname: columnClasses[this.column.type], nullable: true },
+                kind: 'POSITIONAL_OR_KEYWORD',
+                is_batched: false,
+                default: null,
+              },
+            ],
+            is_batched: false,
+          },
+        ],
+      },
+      return_type: { _classname: columnClasses[column.type], nullable: column.nullable },
+      arg_idxs: [0],
+      kwarg_idxs: {},
+      group_by_start_idx: 0,
+      group_by_stop_idx: 0,
+      order_by_start_idx: 1,
+      is_method_call: false,
+      components: [this.expression],
+    });
+  }
   get errorType(): ColumnExpression<string | null> {
     return this.errorProperty(0);
   }
@@ -393,6 +439,7 @@ export interface CatalogQuery<S extends CatalogSchema, R = CatalogRow<S>> {
     column: SortableName<S> | CatalogExpression<string | number | boolean | null>,
     direction?: 'asc' | 'desc',
   ): CatalogQuery<S, R>;
+  groupBy(...columns: (ColumnName<S> | ProjectionExpression)[]): CatalogQuery<S, R>;
   limit(value: number): CatalogQuery<S, R>;
   offset(value: number): CatalogQuery<S, R>;
   collect(options?: { signal?: AbortSignal }): Promise<R[]>;
@@ -461,6 +508,7 @@ export function createTableQueries<S extends CatalogSchema>(
     order: readonly unknown[] = [],
     limit: Wire | null = null,
     offset: Wire | null = null,
+    grouping: readonly Wire[] | null = null,
   ): CatalogQuery<S, R> {
     function wire(): Wire {
       return {
@@ -471,7 +519,7 @@ export function createTableQueries<S extends CatalogSchema>(
         },
         select_list: selected.map(({ expression, alias }) => [expression, alias]),
         where_clause: predicate?.toWire(tableId) ?? null,
-        group_by_clause: null,
+        group_by_clause: grouping,
         grouping_tbl: null,
         order_by_clause: order.length ? order : null,
         limit_val: limit,
@@ -483,13 +531,13 @@ export function createTableQueries<S extends CatalogSchema>(
       where(next) {
         if (!(next instanceof Predicate)) throw new TypeError('Expected a catalog predicate');
         next.toWire(tableId);
-        return build<R>(selected, predicate ? predicate.and(next) : next, order, limit, offset);
+        return build<R>(selected, predicate ? predicate.and(next) : next, order, limit, offset, grouping);
       },
       select(...names) {
         if (names.length === 0 || new Set(names).size !== names.length)
           throw new TypeError('Select distinct column names');
         names.forEach(columnReference);
-        return build(namedSelections(names), predicate, order, limit, offset);
+        return build(namedSelections(names), predicate, order, limit, offset, grouping);
       },
       selectExpressions(expressions) {
         const entries = Object.entries(expressions);
@@ -500,7 +548,7 @@ export function createTableQueries<S extends CatalogSchema>(
           return { name, expression: definition.wire.v as Wire, alias: name, column: definition.column };
         });
         copySchema(Object.fromEntries(projected.map(({ name, column }) => [name, column])));
-        return build(projected, predicate, order, limit, offset);
+        return build(projected, predicate, order, limit, offset, grouping);
       },
       orderBy(name, direction = 'asc') {
         if (direction !== 'asc' && direction !== 'desc') throw new TypeError('Invalid sort direction');
@@ -508,13 +556,22 @@ export function createTableQueries<S extends CatalogSchema>(
         const reference = definition ? definition.wire.v : columnReference(name as string);
         const column = definition ? definition.column : schema[name as string]!;
         if (column.type === 'json') throw new TypeError('JSON columns cannot be sorted');
-        return build<R>(selected, predicate, [...order, [reference, direction === 'asc']], limit, offset);
+        return build<R>(selected, predicate, [...order, [reference, direction === 'asc']], limit, offset, grouping);
+      },
+      groupBy(...items) {
+        if (grouping !== null) throw new TypeError('groupBy() is already specified');
+        const expressions = items.map((item) => {
+          if (typeof item === 'string') return columnReference(item);
+          if (!(item instanceof ColumnExpression)) throw new TypeError('Expected a column name or catalog expression');
+          return item.computedDefinition(tableId).wire.v as Wire;
+        });
+        return build<R>(selected, predicate, order, limit, offset, expressions);
       },
       limit(value) {
-        return build<R>(selected, predicate, order, integerLiteral(value), offset);
+        return build<R>(selected, predicate, order, integerLiteral(value), offset, grouping);
       },
       offset(value) {
-        return build<R>(selected, predicate, order, limit, integerLiteral(value));
+        return build<R>(selected, predicate, order, limit, integerLiteral(value), grouping);
       },
       async collect(options = {}) {
         return collect(
