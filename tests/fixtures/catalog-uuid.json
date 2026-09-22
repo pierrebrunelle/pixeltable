@@ -1,0 +1,68 @@
+{
+  "equality": {
+    "_classname": "Comparison",
+    "operator": 2,
+    "components": [
+      {
+        "_classname": "ColumnRef",
+        "tbl_id": "12345678-1234-5678-1234-567812345678",
+        "effective_version": null,
+        "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+        "col_tbl_effective_version": null,
+        "col_id": 0,
+        "perform_validation": false
+      },
+      {
+        "_classname": "Literal",
+        "val": "abcdef01-2345-6789-abcd-ef0123456789",
+        "col_type": {
+          "_classname": "UUIDType",
+          "nullable": false
+        }
+      }
+    ]
+  },
+  "ordering": {
+    "_classname": "Comparison",
+    "operator": 0,
+    "components": [
+      {
+        "_classname": "ColumnRef",
+        "tbl_id": "12345678-1234-5678-1234-567812345678",
+        "effective_version": null,
+        "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+        "col_tbl_effective_version": null,
+        "col_id": 0,
+        "perform_validation": false
+      },
+      {
+        "_classname": "Literal",
+        "val": "abcdef01-2345-6789-abcd-ef0123456789",
+        "col_type": {
+          "_classname": "UUIDType",
+          "nullable": false
+        }
+      }
+    ]
+  },
+  "membership": {
+    "_classname": "InPredicate",
+    "value_list": [
+      {
+        "$pxt": "UUID",
+        "v": "abcdef01-2345-6789-abcd-ef0123456789"
+      }
+    ],
+    "components": [
+      {
+        "_classname": "ColumnRef",
+        "tbl_id": "12345678-1234-5678-1234-567812345678",
+        "effective_version": null,
+        "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+        "col_tbl_effective_version": null,
+        "col_id": 0,
+        "perform_validation": false
+      }
+    ]
+  }
+}

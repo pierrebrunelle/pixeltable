@@ -633,3 +633,18 @@ export async function checkBinaryTypes(): Promise<void> {
   table.columns.content.isIn([bytes]);
   void bytes;
 }
+
+export async function checkUuidTypes(): Promise<void> {
+  const { catalogUuid } = await import('@pixeltable/sdk/experimental/catalog');
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.openTable('uuid', { id: { type: 'uuid' } });
+  await table.insert([{ id: catalogUuid('00000000-0000-0000-0000-000000000000') }]);
+  // @ts-expect-error UUIDs require validated branded values.
+  await table.insert([{ id: 'not-a-uuid' }]);
+  const copied = await table.addComputedColumn('copy', table.columns.id);
+  const rows = await copied.collect();
+  const value: import('@pixeltable/sdk/experimental/catalog').CatalogUuid = rows[0]!.copy;
+  // @ts-expect-error Python min/max do not accept UUID.
+  table.columns.id.aggregate('min');
+  void value;
+}

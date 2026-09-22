@@ -3,6 +3,7 @@
 import datetime
 import json
 import os
+import uuid
 from pathlib import Path
 
 from udf_fixture import decorate, text_embedding
@@ -239,5 +240,20 @@ Path(__file__).with_name('fixtures').joinpath('catalog-joins.json').write_text(
 distinct = table.where(table.id > 0).select(title=table.title, adjusted=table.score + 1).distinct()
 serialized = json.dumps(distinct.as_dict()).replace(str(table._id), '12345678-1234-5678-1234-567812345678')
 Path(__file__).with_name('fixtures').joinpath('catalog-distinct.json').write_text(
+    json.dumps(json.loads(serialized), indent=2) + '\n'
+)
+
+
+uuid_table = pxt.create_table('inspect/uuid_values', {'value': pxt.UUID})
+identifier = uuid.UUID('ABCDEF01-2345-6789-ABCD-EF0123456789')
+uuid_expressions = {
+    'equality': (uuid_table.value == identifier).as_dict(),
+    'ordering': (uuid_table.value < identifier).as_dict(),
+    'membership': uuid_table.value.isin([identifier]).as_dict(),
+}
+serialized = json.dumps(proxy_protocol.serialize_args(uuid_expressions, proxy_protocol.InlinePartSink())).replace(
+    str(uuid_table._id), '12345678-1234-5678-1234-567812345678'
+)
+Path(__file__).with_name('fixtures').joinpath('catalog-uuid.json').write_text(
     json.dumps(json.loads(serialized), indent=2) + '\n'
 )
