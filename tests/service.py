@@ -12,6 +12,7 @@ from pixeltable.serving import FastAPIRouter
 parser = argparse.ArgumentParser()
 parser.add_argument('--schema', type=Path)
 parser.add_argument('--port', type=int, default=8765)
+parser.add_argument('--catalog', action='store_true')
 args = parser.parse_args()
 
 pxt.create_dir('sdk_test', if_exists='ignore')
@@ -42,6 +43,10 @@ router.add_insert_route(
 )
 app = fastapi.FastAPI()
 app.include_router(router)
+if args.catalog:
+    from pixeltable.service.proxy_daemon import _build_app
+
+    app.mount('/catalog', _build_app())
 
 if args.schema:
     args.schema.write_text(json.dumps(app.openapi(), indent=2) + '\n')

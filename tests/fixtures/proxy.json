@@ -1,0 +1,90 @@
+{
+  "protocol_version": 4,
+  "schema_version": 56,
+  "wire": {
+    "text": "caf\u00e9 / \u65e5\u672c\u8a9e",
+    "bytes": {
+      "$pxt": "bytes",
+      "v": 0
+    },
+    "empty": {
+      "$pxt": "bytes",
+      "v": 1
+    },
+    "reserved": {
+      "$pxt": "rawdict",
+      "v": [
+        [
+          "$pxt",
+          "user data"
+        ],
+        [
+          "__proto__",
+          {
+            "safe": true
+          }
+        ]
+      ]
+    },
+    "values": [
+      null,
+      true,
+      false,
+      42,
+      1.25,
+      {
+        "$pxt": "float",
+        "v": "nan"
+      },
+      {
+        "$pxt": "float",
+        "v": "inf"
+      },
+      {
+        "$pxt": "float",
+        "v": "-inf"
+      }
+    ],
+    "date": {
+      "$pxt": "date",
+      "v": "2026-09-21"
+    },
+    "timestamp": {
+      "$pxt": "datetime",
+      "v": "2026-09-21T12:30:01.123456+00:00"
+    },
+    "uuid": {
+      "$pxt": "UUID",
+      "v": "12345678-1234-5678-1234-567812345678"
+    },
+    "type": {
+      "$pxt": "ColumnType",
+      "v": {
+        "_classname": "IntType",
+        "nullable": true
+      }
+    },
+    "path": {
+      "$pxt": "Path",
+      "v": {
+        "components": [
+          "sdk_test",
+          "docs"
+        ],
+        "version": null
+      }
+    },
+    "tuple": {
+      "$pxt": "tuple",
+      "v": [
+        1,
+        "two"
+      ]
+    }
+  },
+  "frame": "AAACk3sidGV4dCI6ImNhZsOpIC8g5pel5pys6KqeIiwiYnl0ZXMiOnsiJHB4dCI6ImJ5dGVzIiwidiI6MH0sImVtcHR5Ijp7IiRweHQiOiJieXRlcyIsInYiOjF9LCJyZXNlcnZlZCI6eyIkcHh0IjoicmF3ZGljdCIsInYiOltbIiRweHQiLCJ1c2VyIGRhdGEiXSxbIl9fcHJvdG9fXyIseyJzYWZlIjp0cnVlfV1dfSwidmFsdWVzIjpbbnVsbCx0cnVlLGZhbHNlLDQyLDEuMjUseyIkcHh0IjoiZmxvYXQiLCJ2IjoibmFuIn0seyIkcHh0IjoiZmxvYXQiLCJ2IjoiaW5mIn0seyIkcHh0IjoiZmxvYXQiLCJ2IjoiLWluZiJ9XSwiZGF0ZSI6eyIkcHh0IjoiZGF0ZSIsInYiOiIyMDI2LTA5LTIxIn0sInRpbWVzdGFtcCI6eyIkcHh0IjoiZGF0ZXRpbWUiLCJ2IjoiMjAyNi0wOS0yMVQxMjozMDowMS4xMjM0NTYrMDA6MDAifSwidXVpZCI6eyIkcHh0IjoiVVVJRCIsInYiOiIxMjM0NTY3OC0xMjM0LTU2NzgtMTIzNC01Njc4MTIzNDU2NzgifSwidHlwZSI6eyIkcHh0IjoiQ29sdW1uVHlwZSIsInYiOnsiX2NsYXNzbmFtZSI6IkludFR5cGUiLCJudWxsYWJsZSI6dHJ1ZX19LCJwYXRoIjp7IiRweHQiOiJQYXRoIiwidiI6eyJjb21wb25lbnRzIjpbInNka190ZXN0IiwiZG9jcyJdLCJ2ZXJzaW9uIjpudWxsfX0sInR1cGxlIjp7IiRweHQiOiJ0dXBsZSIsInYiOlsxLCJ0d28iXX19AAAAAgAAAAMA/xAAAAAA",
+  "parts": [
+    "AP8Q",
+    ""
+  ]
+}

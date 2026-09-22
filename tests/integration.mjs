@@ -11,6 +11,8 @@ import { createClient, multipartBody, PixeltableHttpError } from '../dist/index.
 
 import { loadGeneratedClient, loadTypeScriptModule } from './load-generated.mjs';
 
+import { createCatalogClient } from '../dist/catalog.js';
+
 if (!process.env.PXT_TEST_PYTHON)
   throw new Error('Set PXT_TEST_PYTHON to a Python executable with pixeltable[serve] installed');
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -19,11 +21,15 @@ const portProbe = createServer().listen(0, '127.0.0.1');
 await once(portProbe, 'listening');
 const port = portProbe.address().port;
 await new Promise((resolve) => portProbe.close(resolve));
-const service = spawn(process.env.PXT_TEST_PYTHON, ['typescript-sdk/tests/service.py', '--port', String(port)], {
-  cwd: root,
-  env: { ...process.env, PIXELTABLE_HOME: join(temp, 'home'), PYTHONPATH: root },
-  stdio: ['ignore', 'pipe', 'pipe'],
-});
+const service = spawn(
+  process.env.PXT_TEST_PYTHON,
+  ['typescript-sdk/tests/service.py', '--port', String(port), '--catalog'],
+  {
+    cwd: root,
+    env: { ...process.env, PIXELTABLE_HOME: join(temp, 'home'), PYTHONPATH: root },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  },
+);
 const exited = once(service, 'exit');
 let logs = '';
 service.stdout.on('data', (chunk) => {
@@ -154,8 +160,17 @@ try {
     title_upper: 'BACKEND JOB',
   });
   assert.equal((await backend(new Request('https://app.test/api/pxt/lookup?id=20'))).status, 401);
+  const catalog = createCatalogClient({ baseUrl: `${baseUrl}/catalog` });
+  const createdDirectory = await catalog.createDirectory('typescript_catalog');
+  assert.match(createdDirectory, /^[0-9a-f-]+$/);
+  assert.equal(await catalog.createDirectory('typescript_catalog', { ifExists: 'ignore' }), createdDirectory);
+  await assert.rejects(catalog.createDirectory('typescript_catalog'), { name: 'CatalogError' });
+  const entries = await catalog.listDirectory();
+  assert.ok(entries.some((entry) => entry.name === 'typescript_catalog' && entry.isDirectory));
+  const tables = await catalog.listDirectory('sdk_test');
+  assert.ok(tables.some((entry) => entry.name === 'docs' && entry.tableId !== null));
   console.log(
-    'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend.',
+    'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );
 } finally {
   if (service.exitCode === null) service.kill('SIGTERM');
