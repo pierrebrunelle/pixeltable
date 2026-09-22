@@ -1,5 +1,12 @@
+import { CatalogArray } from './catalog-array.js';
+
 /** Convert already-tagged catalog values to inline binary references. */
 export function encodeBinaryParts(value: unknown, parts: Uint8Array[]): unknown {
+  if (value instanceof CatalogArray) {
+    const index = parts.length;
+    parts.push(value.toNpy());
+    return { $pxt: 'ndarray', v: index };
+  }
   if (value instanceof Uint8Array) {
     const index = parts.length;
     parts.push(new Uint8Array(value));
@@ -18,12 +25,12 @@ export function decodeBinaryParts(value: unknown, parts: readonly Uint8Array[]):
     if (Array.isArray(item)) return item.map(decode);
     if (typeof item !== 'object' || item === null) return item;
     const object = item as Record<string, unknown>;
-    if (object.$pxt === 'bytes') {
+    if (object.$pxt === 'bytes' || object.$pxt === 'ndarray') {
       const index = object.v;
       if (typeof index !== 'number' || !Number.isSafeInteger(index) || index < 0 || index >= parts.length)
         throw new TypeError('Invalid inline binary part reference');
       used.add(index);
-      return new Uint8Array(parts[index]!);
+      return object.$pxt === 'ndarray' ? CatalogArray.fromNpy(parts[index]!) : new Uint8Array(parts[index]!);
     }
     return Object.fromEntries(Object.entries(object).map(([key, child]) => [key, decode(child)]));
   }
