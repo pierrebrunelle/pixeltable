@@ -20,6 +20,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Query Search
+         * @description Wrapper for an endpoint `Callable` that carries additional metadata about the endpoint operation.
+         */
+        post: operations["query_search_search_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/docs": {
         parameters: {
             query?: never;
@@ -186,6 +206,11 @@ export interface components {
             /** Image */
             image?: Blob;
         };
+        /** Body_query_search_search_post */
+        Body_query_search_search_post: {
+            /** Id */
+            id: number;
+        };
         /** Body_update_edit_edit_post */
         Body_update_edit_edit_post: {
             /** Id */
@@ -240,6 +265,21 @@ export interface components {
             /** Title Upper */
             title_upper: string;
         };
+        /** SearchResponse */
+        SearchResponse: {
+            /**
+             * Rows
+             * @description Query result rows
+             */
+            rows: components["schemas"]["SearchRowResponse"][];
+        };
+        /** SearchRowResponse */
+        SearchRowResponse: {
+            /** Id */
+            id: number;
+            /** Title Upper */
+            title_upper: string;
+        };
         /** UploadResponse */
         UploadResponse: {
             /** Id */
@@ -287,6 +327,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LookupResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    query_search_search_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Body_query_search_search_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResponse"];
                 };
             };
             /** @description Validation Error */

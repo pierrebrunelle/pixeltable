@@ -71,3 +71,21 @@ export async function checkNamedCalls(): Promise<void> {
   // @ts-expect-error Only declared outputs are available.
   inserted.title;
 }
+
+export function checkGeneratedHandles(): void {
+  const service = createServiceClient({ baseUrl: 'https://service.test' });
+  const queries = service.queries(['session']);
+  const result = usePixeltableQuery(queries.query_search_search_post, { id: 1 });
+  const title: string | undefined = result.data?.rows[0]?.title_upper;
+  void title;
+  const mutation = usePixeltableMutation(service.mutations.insert_docs_docs_post, {
+    invalidate: [queries.query_search_search_post],
+  });
+  mutation.mutate({ id: 1, title: 'hello' });
+  // @ts-expect-error Writes do not become query handles.
+  queries.insert_docs_docs_post;
+  // @ts-expect-error POST reads do not become mutations.
+  service.mutations.query_search_search_post;
+  // @ts-expect-error Generated query handles preserve input types.
+  usePixeltableQuery(queries.query_search_search_post, { id: '1' });
+}

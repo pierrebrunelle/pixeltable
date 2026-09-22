@@ -52,12 +52,26 @@ try {
   assert.ok(schema, `Service did not start:\n${logs}`);
   const expectedSchema = JSON.parse(await readFile(new URL('./fixtures/openapi.json', import.meta.url), 'utf8'));
   assert.deepEqual(schema, expectedSchema);
+  for (const [path, kind] of Object.entries({
+    '/docs': 'insert',
+    '/edit': 'update',
+    '/remove': 'delete',
+    '/preview': 'compute',
+    '/search': 'query',
+    '/background': 'compute',
+  })) {
+    assert.deepEqual(schema.paths[path].post['x-pixeltable'], { version: 1, kind, background: path === '/background' });
+  }
   const { api, job } = createClient({ baseUrl });
   const { createServiceClient } = await loadGeneratedClient();
-  const named = createServiceClient({ baseUrl }).operations;
+  const generated = createServiceClient({ baseUrl });
+  const named = generated.operations;
   assert.deepEqual(await named.insert_docs_docs_post({ id: 10, title: 'named' }), { id: 10, title_upper: 'NAMED' });
   assert.deepEqual(await named.query_lookup_lookup_get({ id: 10 }), { rows: [{ id: 10, title_upper: 'NAMED' }] });
   assert.deepEqual(await named.update_edit_edit_post({ id: 10, title: 'renamed' }), { id: 10, title_upper: 'RENAMED' });
+  assert.deepEqual(await generated.queries(['test-session']).query_search_search_post.run({ id: 10 }), {
+    rows: [{ id: 10, title_upper: 'RENAMED' }],
+  });
   assert.deepEqual(await named.delete_remove_remove_post({ id: 10 }), { num_rows: 1 });
   assert.deepEqual((await api.POST('/docs', { body: { id: 1, title: 'hello' } })).data, {
     id: 1,

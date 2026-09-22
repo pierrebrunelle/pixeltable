@@ -31,6 +31,7 @@ def lookup(id: int) -> pxt.Query:
 
 router = FastAPIRouter(name='sdk-test')
 router.add_query_route(path='/lookup', query=lookup, method='get')
+router.add_query_route(path='/search', query=lookup, method='post')
 router.add_insert_route(docs, path='/docs', inputs=['id', 'title'], outputs=['id', 'title_upper'])
 router.add_compute_route(docs, path='/preview', inputs=['id', 'title'], outputs=['title_upper'])
 router.add_compute_route(docs, path='/background', inputs=['id', 'title'], outputs=['title_upper'], background=True)
