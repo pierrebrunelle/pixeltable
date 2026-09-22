@@ -1,0 +1,88 @@
+{
+  "date_compare": {
+    "_classname": "Comparison",
+    "operator": 5,
+    "components": [
+      {
+        "_classname": "ColumnRef",
+        "tbl_id": "12345678-1234-5678-1234-567812345678",
+        "effective_version": null,
+        "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+        "col_tbl_effective_version": null,
+        "col_id": 0,
+        "perform_validation": false
+      },
+      {
+        "_classname": "Literal",
+        "val": "2026-09-22",
+        "col_type": {
+          "_classname": "DateType",
+          "nullable": false
+        }
+      }
+    ]
+  },
+  "timestamp_compare": {
+    "_classname": "Comparison",
+    "operator": 0,
+    "components": [
+      {
+        "_classname": "ColumnRef",
+        "tbl_id": "12345678-1234-5678-1234-567812345678",
+        "effective_version": null,
+        "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+        "col_tbl_effective_version": null,
+        "col_id": 1,
+        "perform_validation": false
+      },
+      {
+        "_classname": "Literal",
+        "val": "2026-09-22T12:30:01.123456+00:00",
+        "col_type": {
+          "_classname": "TimestampType",
+          "nullable": false
+        }
+      }
+    ]
+  },
+  "date_membership": {
+    "_classname": "InPredicate",
+    "value_list": [
+      {
+        "$pxt": "date",
+        "v": "2026-09-22"
+      }
+    ],
+    "components": [
+      {
+        "_classname": "ColumnRef",
+        "tbl_id": "12345678-1234-5678-1234-567812345678",
+        "effective_version": null,
+        "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+        "col_tbl_effective_version": null,
+        "col_id": 0,
+        "perform_validation": false
+      }
+    ]
+  },
+  "timestamp_membership": {
+    "_classname": "InPredicate",
+    "value_list": [
+      {
+        "$pxt": "datetime",
+        "v": "2026-09-22T12:30:01.123456+00:00"
+      }
+    ],
+    "components": [
+      {
+        "_classname": "ColumnRef",
+        "tbl_id": "12345678-1234-5678-1234-567812345678",
+        "effective_version": null,
+        "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+        "col_tbl_effective_version": null,
+        "col_id": 1,
+        "perform_validation": false
+      }
+    ]
+  }
+}

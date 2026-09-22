@@ -1,5 +1,6 @@
 """Generate scalar table metadata in an explicitly selected temporary Pixeltable home."""
 
+import datetime
 import json
 import os
 from pathlib import Path
@@ -181,5 +182,24 @@ window_query = table.select(
 )
 serialized = json.dumps(window_query.as_dict()).replace(str(table._id), '12345678-1234-5678-1234-567812345678')
 Path(__file__).with_name('fixtures').joinpath('catalog-window.json').write_text(
+    json.dumps(json.loads(serialized), indent=2) + '\n'
+)
+
+
+temporal = pxt.create_table('inspect/temporal', {'day': pxt.Date, 'at': pxt.Timestamp})
+day = datetime.date(2026, 9, 22)
+at = datetime.datetime(2026, 9, 22, 12, 30, 1, 123456, tzinfo=datetime.timezone.utc)
+expressions = {
+    'date_compare': temporal.day >= day,
+    'timestamp_compare': temporal.at < at,
+    'date_membership': temporal.day.isin([day]),
+    'timestamp_membership': temporal.at.isin([at]),
+}
+serialized = json.dumps(
+    proxy_protocol.serialize_args(
+        {name: expr.as_dict() for name, expr in expressions.items()}, proxy_protocol.InlinePartSink()
+    )
+).replace(str(temporal._id), '12345678-1234-5678-1234-567812345678')
+Path(__file__).with_name('fixtures').joinpath('catalog-temporal.json').write_text(
     json.dumps(json.loads(serialized), indent=2) + '\n'
 )

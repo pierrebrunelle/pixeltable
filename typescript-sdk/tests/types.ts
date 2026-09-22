@@ -554,3 +554,24 @@ export async function checkWindowTypes(): Promise<void> {
   // @ts-expect-error Window ordering uses expressions, not unresolved names.
   table.columns.value.aggregate('sum', { orderBy: 'id' });
 }
+
+export async function checkTemporalTypes(): Promise<void> {
+  const { catalogDate, catalogTimestamp } = await import('@pixeltable/sdk/experimental/catalog');
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.openTable('times', { day: { type: 'date' }, at: { type: 'timestamp', nullable: true } });
+  const day = catalogDate('2026-09-22');
+  const at = catalogTimestamp('2026-09-22T12:30:01.123456Z');
+  await table.insert([{ day, at }]);
+  table.query().where(table.columns.at.lt(at)).orderBy('day');
+  // @ts-expect-error Temporal input requires validated values.
+  await table.insert([{ day: '2026-09-22' }]);
+  // @ts-expect-error Dates and timestamps are distinct types.
+  await table.insert([{ day: at }]);
+  // @ts-expect-error Python's min aggregate does not support dates.
+  table.columns.day.aggregate('min');
+  const computed = await table.addComputedColumn('copy', table.columns.at);
+  const rows = await computed.collect();
+  const timestamp: import('@pixeltable/sdk/experimental/catalog').CatalogTimestamp | null = rows[0]!.copy;
+  const date: import('@pixeltable/sdk/experimental/catalog').CatalogDate = rows[0]!.day;
+  void [timestamp, date];
+}
