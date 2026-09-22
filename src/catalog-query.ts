@@ -489,6 +489,7 @@ export function createTableQueries<S extends CatalogSchema>(
   ) => Promise<Record<string, unknown>[]>,
   count: (query: Wire, signal?: AbortSignal) => Promise<number>,
   pathKey: Wire = { tbl_version: { id: tableId, effective_version: null }, base: null },
+  joined?: { references: Record<string, Wire>; fromClause: Wire },
 ): { columns: CatalogColumns<S>; query: () => CatalogQuery<S> } {
   const queryVersion = pathKey.tbl_version as { id: string; effective_version: number | null };
   const ownerVersions = new Map<string, number | null>();
@@ -498,20 +499,22 @@ export function createTableQueries<S extends CatalogSchema>(
     ownerVersions.set(version.id, version.effective_version);
     current = current.base as Wire | null;
   }
-  const references = Object.fromEntries(
-    Object.entries(columnIds).map(([name, id]) => [
-      name,
-      {
-        _classname: 'ColumnRef',
-        tbl_id: queryVersion.id,
-        effective_version: queryVersion.effective_version,
-        col_tbl_id: typeof id === 'number' ? tableId : id.tableId,
-        col_tbl_effective_version: ownerVersions.get(typeof id === 'number' ? tableId : id.tableId) ?? null,
-        col_id: typeof id === 'number' ? id : id.id,
-        perform_validation: false,
-      },
-    ]),
-  );
+  const references =
+    joined?.references ??
+    Object.fromEntries(
+      Object.entries(columnIds).map(([name, id]) => [
+        name,
+        {
+          _classname: 'ColumnRef',
+          tbl_id: queryVersion.id,
+          effective_version: queryVersion.effective_version,
+          col_tbl_id: typeof id === 'number' ? tableId : id.tableId,
+          col_tbl_effective_version: ownerVersions.get(typeof id === 'number' ? tableId : id.tableId) ?? null,
+          col_id: typeof id === 'number' ? id : id.id,
+          perform_validation: false,
+        },
+      ]),
+    );
   function columnReference(name: string): Wire {
     if (!Object.hasOwn(references, name)) throw new TypeError(`Unknown query column: ${name}`);
     return references[name]!;
@@ -531,7 +534,12 @@ export function createTableQueries<S extends CatalogSchema>(
   }
   type Selection = { name: string; expression: Wire; alias: string | null; column: CatalogColumn };
   function namedSelections(names: readonly string[]): Selection[] {
-    return names.map((name) => ({ name, expression: columnReference(name), alias: null, column: schema[name]! }));
+    return names.map((name) => ({
+      name,
+      expression: columnReference(name),
+      alias: joined ? name : null,
+      column: schema[name]!,
+    }));
   }
   function build<R>(
     selected: readonly Selection[],
@@ -544,7 +552,7 @@ export function createTableQueries<S extends CatalogSchema>(
     function wire(): Wire {
       return {
         _classname: 'Query',
-        from_clause: {
+        from_clause: joined?.fromClause ?? {
           tbls: [pathKey],
           join_clauses: [],
         },

@@ -203,3 +203,34 @@ serialized = json.dumps(
 Path(__file__).with_name('fixtures').joinpath('catalog-temporal.json').write_text(
     json.dumps(json.loads(serialized), indent=2) + '\n'
 )
+
+
+left = pxt.create_table('inspect/join_left', {'key': pxt.Int, 'label': pxt.String})
+right = pxt.create_table('inspect/join_right', {'key': pxt.Int, 'amount': pxt.Int})
+left.insert([{'key': 1, 'label': 'one'}, {'key': 2, 'label': 'two'}])
+right.insert([{'key': 2, 'amount': 20}, {'key': 3, 'amount': 30}])
+join_cases = {}
+for how in ('inner', 'left', 'full_outer', 'cross'):
+    joined = left.join(right, how=how, on=None if how == 'cross' else left.key == right.key).select(
+        left_key=left.key, label=left.label, right_key=right.key, amount=right.amount
+    )
+    results = joined.collect()
+    join_cases[how] = {
+        'query': joined.as_dict(),
+        'schema': {name: col_type.as_dict() for name, col_type in joined.schema.items()},
+        'rows': sorted(results, key=lambda row: (row['left_key'] or 0, row['right_key'] or 0)),
+    }
+with catalog.begin_xact(for_write=False):
+    source_metadata = {side: catalog.read_md_for_export(source) for side, source in [('left', left), ('right', right)]}
+join_cases['sources'] = proxy_protocol.serialize_args(source_metadata, proxy_protocol.InlinePartSink())
+for entries in join_cases['sources'].values():
+    for entry in entries:
+        entry['v']['version_md']['created_at'] = 0
+serialized = (
+    json.dumps(join_cases)
+    .replace(str(left._id), '12345678-1234-5678-1234-567812345678')
+    .replace(str(right._id), '23456789-2345-6789-2345-678923456789')
+)
+Path(__file__).with_name('fixtures').joinpath('catalog-joins.json').write_text(
+    json.dumps(json.loads(serialized), indent=2) + '\n'
+)

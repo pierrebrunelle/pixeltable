@@ -277,7 +277,21 @@ await events.insert([
 
 `CatalogDate` and `CatalogTimestamp` are distinct branded string types returned by these helpers and by collected rows. Dates use `YYYY-MM-DD` and years 0001–9999. Timestamps require a `T` separator, seconds, an explicit `Z` or `±HH:MM` timezone, and at most six fractional digits. They normalize to UTC without losing microseconds; timezone-free inputs, invalid dates, leap seconds, and excessive precision are rejected. JavaScript `Date` objects are not accepted. Reads also normalize timestamp values to UTC. Date/timestamp comparisons, literal-list membership, sorting, B-tree indexes, computed columns, updates, and compute previews use the same representations. Timestamp `min`/`max` work; Python's built-in `min`/`max` do not support date columns. Temporal literals in declared Python function calls use Python's expression encoding.
 
-Query builders are immutable: filtering or selecting returns a new query. Predicates support comparisons, `isNull()`, `and()`, `or()`, and `not()`, using columns from the same table. Projections narrow the returned row type. Ordering supports scalar columns other than JSON. `count()` counts matching rows and rejects queries with a limit or offset, matching Python. Joins are not yet supported.
+Query builders are immutable: filtering or selecting returns a new query. Predicates support comparisons, `isNull()`, `and()`, `or()`, and `not()`, using columns from the same table. Projections narrow the returned row type. Ordering supports scalar columns other than JSON. `count()` counts matching rows and rejects queries with a limit or offset, matching Python. Two-source joins use their own expression scope, as shown below.
+
+Join tables, inherited-column views, or snapshots opened by the same catalog client:
+
+```ts
+const joined = catalog.join(documents, scores, {
+  how: 'left',
+  on: ({ left, right }) => left.id.eq(right.id),
+});
+const { left, right } = joined.columns;
+const rows = await joined.query().selectExpressions({ title: left.title, score: right.score }).collect();
+// score includes null when no matching score exists.
+```
+
+Use `joined.columns` in predicates and projections; original table columns belong to a different expression scope. Supported kinds are `inner`, `left`, `full_outer`, and `cross`. Cross joins omit `on`; other joins require it. Default projections prefix names with `left_` and `right_`, such as `left_id`. Left joins make the right side nullable; full outer joins make both sides nullable, including arithmetic derived from those columns. Python currently reports the original column nullability, so the SDK widens outer-join result decoding. Filtering, ordering, grouping, and pagination use the normal immutable query builder. Self joins, chained joins, and right joins are not supported.
 
 Use `openTable(path, schema)` to open an existing base table with runtime schema verification. `createTable` fails if the table exists unless `ifExists: 'ignore'` is specified; an ignored existing table must still match the supplied schema. These table methods reject views and specialized types outside the supported scalar schema; use `openView` for supported views. To open existing computed columns, include `computed: true` in their schema definitions; the SDK verifies that they are computed and excludes them from writes. Creation does not replace tables.
 

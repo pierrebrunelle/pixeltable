@@ -514,3 +514,55 @@ test('compute validates row batches and cell errors without mutating handles', a
   await assert.rejects(table.compute([{ id: 1, title: 'hello' }], { onError: 'skip' }), TypeError);
   assert.equal(requests.length, sent);
 });
+
+test('joins match Python wire queries, decode outer nulls, and reject schema or client mismatches', async () => {
+  const cases = JSON.parse(await readFile(new URL('./fixtures/catalog-joins.json', import.meta.url), 'utf8'));
+  let current = 'left';
+  let malformed = false;
+  const catalog = createCatalogClient({
+    baseUrl: 'https://catalog.test',
+    fetch: async (request) => {
+      const head = JSON.parse(decoder.decode(decodeProxyFrame(new Uint8Array(await request.arrayBuffer())).head));
+      if (head.method === 'get_table') return response(cases.sources[head.args.path.v.components[0]]);
+      assert.deepEqual(head.args.query, cases[current].query);
+      return response({
+        schema: Object.fromEntries(
+          Object.entries(cases[current].schema).map(([name, type]) => [
+            name,
+            {
+              $pxt: 'ColumnType',
+              v: malformed && name === 'amount' ? { _classname: 'StringType', nullable: false } : type,
+            },
+          ]),
+        ),
+        rows: cases[current].rows.map((row) => Object.values(row)),
+      });
+    },
+  });
+  const left = await catalog.openTable('left', { key: { type: 'int' }, label: { type: 'string' } });
+  const right = await catalog.openTable('right', { key: { type: 'int' }, amount: { type: 'int' } });
+  for (const how of ['inner', 'left', 'full_outer', 'cross']) {
+    current = how;
+    const join = catalog.join(left, right, {
+      how,
+      ...(how === 'cross' ? {} : { on: ({ left, right }) => left.key.eq(right.key) }),
+    });
+    const cols = join.columns;
+    const query = join.query().selectExpressions({
+      left_key: cols.left.key,
+      label: cols.left.label,
+      right_key: cols.right.key,
+      amount: cols.right.amount,
+    });
+    assert.deepEqual(await query.collect(), cases[how].rows);
+    malformed = true;
+    await assert.rejects(query.collect(), /schema changed/);
+    malformed = false;
+  }
+  const other = createCatalogClient({
+    baseUrl: 'https://catalog.test',
+    fetch: async () => response(cases.sources.right),
+  });
+  const foreign = await other.openTable('right', right.schema);
+  assert.throws(() => catalog.join(left, foreign, { how: 'cross' }), /this catalog client/);
+});

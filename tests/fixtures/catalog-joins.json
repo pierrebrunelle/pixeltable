@@ -1,0 +1,787 @@
+{
+  "inner": {
+    "query": {
+      "_classname": "Query",
+      "from_clause": {
+        "tbls": [
+          {
+            "tbl_version": {
+              "id": "12345678-1234-5678-1234-567812345678",
+              "effective_version": null
+            },
+            "base": null
+          },
+          {
+            "tbl_version": {
+              "id": "23456789-2345-6789-2345-678923456789",
+              "effective_version": null
+            },
+            "base": null
+          }
+        ],
+        "join_clauses": [
+          {
+            "join_type": "INNER",
+            "join_predicate": {
+              "_classname": "Comparison",
+              "operator": 2,
+              "components": [
+                {
+                  "_classname": "ColumnRef",
+                  "tbl_id": "12345678-1234-5678-1234-567812345678",
+                  "effective_version": null,
+                  "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+                  "col_tbl_effective_version": null,
+                  "col_id": 0,
+                  "perform_validation": false
+                },
+                {
+                  "_classname": "ColumnRef",
+                  "tbl_id": "23456789-2345-6789-2345-678923456789",
+                  "effective_version": null,
+                  "col_tbl_id": "23456789-2345-6789-2345-678923456789",
+                  "col_tbl_effective_version": null,
+                  "col_id": 0,
+                  "perform_validation": false
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "select_list": [
+        [
+          {
+            "_classname": "ColumnRef",
+            "tbl_id": "12345678-1234-5678-1234-567812345678",
+            "effective_version": null,
+            "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+            "col_tbl_effective_version": null,
+            "col_id": 0,
+            "perform_validation": false
+          },
+          "left_key"
+        ],
+        [
+          {
+            "_classname": "ColumnRef",
+            "tbl_id": "12345678-1234-5678-1234-567812345678",
+            "effective_version": null,
+            "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+            "col_tbl_effective_version": null,
+            "col_id": 1,
+            "perform_validation": false
+          },
+          "label"
+        ],
+        [
+          {
+            "_classname": "ColumnRef",
+            "tbl_id": "23456789-2345-6789-2345-678923456789",
+            "effective_version": null,
+            "col_tbl_id": "23456789-2345-6789-2345-678923456789",
+            "col_tbl_effective_version": null,
+            "col_id": 0,
+            "perform_validation": false
+          },
+          "right_key"
+        ],
+        [
+          {
+            "_classname": "ColumnRef",
+            "tbl_id": "23456789-2345-6789-2345-678923456789",
+            "effective_version": null,
+            "col_tbl_id": "23456789-2345-6789-2345-678923456789",
+            "col_tbl_effective_version": null,
+            "col_id": 1,
+            "perform_validation": false
+          },
+          "amount"
+        ]
+      ],
+      "where_clause": null,
+      "group_by_clause": null,
+      "grouping_tbl": null,
+      "order_by_clause": null,
+      "limit_val": null,
+      "offset_val": null,
+      "sample_clause": null
+    },
+    "schema": {
+      "left_key": {
+        "_classname": "IntType",
+        "nullable": false
+      },
+      "label": {
+        "_classname": "StringType",
+        "nullable": false
+      },
+      "right_key": {
+        "_classname": "IntType",
+        "nullable": false
+      },
+      "amount": {
+        "_classname": "IntType",
+        "nullable": false
+      }
+    },
+    "rows": [
+      {
+        "left_key": 2,
+        "label": "two",
+        "right_key": 2,
+        "amount": 20
+      }
+    ]
+  },
+  "left": {
+    "query": {
+      "_classname": "Query",
+      "from_clause": {
+        "tbls": [
+          {
+            "tbl_version": {
+              "id": "12345678-1234-5678-1234-567812345678",
+              "effective_version": null
+            },
+            "base": null
+          },
+          {
+            "tbl_version": {
+              "id": "23456789-2345-6789-2345-678923456789",
+              "effective_version": null
+            },
+            "base": null
+          }
+        ],
+        "join_clauses": [
+          {
+            "join_type": "LEFT",
+            "join_predicate": {
+              "_classname": "Comparison",
+              "operator": 2,
+              "components": [
+                {
+                  "_classname": "ColumnRef",
+                  "tbl_id": "12345678-1234-5678-1234-567812345678",
+                  "effective_version": null,
+                  "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+                  "col_tbl_effective_version": null,
+                  "col_id": 0,
+                  "perform_validation": false
+                },
+                {
+                  "_classname": "ColumnRef",
+                  "tbl_id": "23456789-2345-6789-2345-678923456789",
+                  "effective_version": null,
+                  "col_tbl_id": "23456789-2345-6789-2345-678923456789",
+                  "col_tbl_effective_version": null,
+                  "col_id": 0,
+                  "perform_validation": false
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "select_list": [
+        [
+          {
+            "_classname": "ColumnRef",
+            "tbl_id": "12345678-1234-5678-1234-567812345678",
+            "effective_version": null,
+            "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+            "col_tbl_effective_version": null,
+            "col_id": 0,
+            "perform_validation": false
+          },
+          "left_key"
+        ],
+        [
+          {
+            "_classname": "ColumnRef",
+            "tbl_id": "12345678-1234-5678-1234-567812345678",
+            "effective_version": null,
+            "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+            "col_tbl_effective_version": null,
+            "col_id": 1,
+            "perform_validation": false
+          },
+          "label"
+        ],
+        [
+          {
+            "_classname": "ColumnRef",
+            "tbl_id": "23456789-2345-6789-2345-678923456789",
+            "effective_version": null,
+            "col_tbl_id": "23456789-2345-6789-2345-678923456789",
+            "col_tbl_effective_version": null,
+            "col_id": 0,
+            "perform_validation": false
+          },
+          "right_key"
+        ],
+        [
+          {
+            "_classname": "ColumnRef",
+            "tbl_id": "23456789-2345-6789-2345-678923456789",
+            "effective_version": null,
+            "col_tbl_id": "23456789-2345-6789-2345-678923456789",
+            "col_tbl_effective_version": null,
+            "col_id": 1,
+            "perform_validation": false
+          },
+          "amount"
+        ]
+      ],
+      "where_clause": null,
+      "group_by_clause": null,
+      "grouping_tbl": null,
+      "order_by_clause": null,
+      "limit_val": null,
+      "offset_val": null,
+      "sample_clause": null
+    },
+    "schema": {
+      "left_key": {
+        "_classname": "IntType",
+        "nullable": false
+      },
+      "label": {
+        "_classname": "StringType",
+        "nullable": false
+      },
+      "right_key": {
+        "_classname": "IntType",
+        "nullable": false
+      },
+      "amount": {
+        "_classname": "IntType",
+        "nullable": false
+      }
+    },
+    "rows": [
+      {
+        "left_key": 1,
+        "label": "one",
+        "right_key": null,
+        "amount": null
+      },
+      {
+        "left_key": 2,
+        "label": "two",
+        "right_key": 2,
+        "amount": 20
+      }
+    ]
+  },
+  "full_outer": {
+    "query": {
+      "_classname": "Query",
+      "from_clause": {
+        "tbls": [
+          {
+            "tbl_version": {
+              "id": "12345678-1234-5678-1234-567812345678",
+              "effective_version": null
+            },
+            "base": null
+          },
+          {
+            "tbl_version": {
+              "id": "23456789-2345-6789-2345-678923456789",
+              "effective_version": null
+            },
+            "base": null
+          }
+        ],
+        "join_clauses": [
+          {
+            "join_type": "FULL_OUTER",
+            "join_predicate": {
+              "_classname": "Comparison",
+              "operator": 2,
+              "components": [
+                {
+                  "_classname": "ColumnRef",
+                  "tbl_id": "12345678-1234-5678-1234-567812345678",
+                  "effective_version": null,
+                  "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+                  "col_tbl_effective_version": null,
+                  "col_id": 0,
+                  "perform_validation": false
+                },
+                {
+                  "_classname": "ColumnRef",
+                  "tbl_id": "23456789-2345-6789-2345-678923456789",
+                  "effective_version": null,
+                  "col_tbl_id": "23456789-2345-6789-2345-678923456789",
+                  "col_tbl_effective_version": null,
+                  "col_id": 0,
+                  "perform_validation": false
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "select_list": [
+        [
+          {
+            "_classname": "ColumnRef",
+            "tbl_id": "12345678-1234-5678-1234-567812345678",
+            "effective_version": null,
+            "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+            "col_tbl_effective_version": null,
+            "col_id": 0,
+            "perform_validation": false
+          },
+          "left_key"
+        ],
+        [
+          {
+            "_classname": "ColumnRef",
+            "tbl_id": "12345678-1234-5678-1234-567812345678",
+            "effective_version": null,
+            "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+            "col_tbl_effective_version": null,
+            "col_id": 1,
+            "perform_validation": false
+          },
+          "label"
+        ],
+        [
+          {
+            "_classname": "ColumnRef",
+            "tbl_id": "23456789-2345-6789-2345-678923456789",
+            "effective_version": null,
+            "col_tbl_id": "23456789-2345-6789-2345-678923456789",
+            "col_tbl_effective_version": null,
+            "col_id": 0,
+            "perform_validation": false
+          },
+          "right_key"
+        ],
+        [
+          {
+            "_classname": "ColumnRef",
+            "tbl_id": "23456789-2345-6789-2345-678923456789",
+            "effective_version": null,
+            "col_tbl_id": "23456789-2345-6789-2345-678923456789",
+            "col_tbl_effective_version": null,
+            "col_id": 1,
+            "perform_validation": false
+          },
+          "amount"
+        ]
+      ],
+      "where_clause": null,
+      "group_by_clause": null,
+      "grouping_tbl": null,
+      "order_by_clause": null,
+      "limit_val": null,
+      "offset_val": null,
+      "sample_clause": null
+    },
+    "schema": {
+      "left_key": {
+        "_classname": "IntType",
+        "nullable": false
+      },
+      "label": {
+        "_classname": "StringType",
+        "nullable": false
+      },
+      "right_key": {
+        "_classname": "IntType",
+        "nullable": false
+      },
+      "amount": {
+        "_classname": "IntType",
+        "nullable": false
+      }
+    },
+    "rows": [
+      {
+        "left_key": null,
+        "label": null,
+        "right_key": 3,
+        "amount": 30
+      },
+      {
+        "left_key": 1,
+        "label": "one",
+        "right_key": null,
+        "amount": null
+      },
+      {
+        "left_key": 2,
+        "label": "two",
+        "right_key": 2,
+        "amount": 20
+      }
+    ]
+  },
+  "cross": {
+    "query": {
+      "_classname": "Query",
+      "from_clause": {
+        "tbls": [
+          {
+            "tbl_version": {
+              "id": "12345678-1234-5678-1234-567812345678",
+              "effective_version": null
+            },
+            "base": null
+          },
+          {
+            "tbl_version": {
+              "id": "23456789-2345-6789-2345-678923456789",
+              "effective_version": null
+            },
+            "base": null
+          }
+        ],
+        "join_clauses": [
+          {
+            "join_type": "CROSS",
+            "join_predicate": null
+          }
+        ]
+      },
+      "select_list": [
+        [
+          {
+            "_classname": "ColumnRef",
+            "tbl_id": "12345678-1234-5678-1234-567812345678",
+            "effective_version": null,
+            "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+            "col_tbl_effective_version": null,
+            "col_id": 0,
+            "perform_validation": false
+          },
+          "left_key"
+        ],
+        [
+          {
+            "_classname": "ColumnRef",
+            "tbl_id": "12345678-1234-5678-1234-567812345678",
+            "effective_version": null,
+            "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+            "col_tbl_effective_version": null,
+            "col_id": 1,
+            "perform_validation": false
+          },
+          "label"
+        ],
+        [
+          {
+            "_classname": "ColumnRef",
+            "tbl_id": "23456789-2345-6789-2345-678923456789",
+            "effective_version": null,
+            "col_tbl_id": "23456789-2345-6789-2345-678923456789",
+            "col_tbl_effective_version": null,
+            "col_id": 0,
+            "perform_validation": false
+          },
+          "right_key"
+        ],
+        [
+          {
+            "_classname": "ColumnRef",
+            "tbl_id": "23456789-2345-6789-2345-678923456789",
+            "effective_version": null,
+            "col_tbl_id": "23456789-2345-6789-2345-678923456789",
+            "col_tbl_effective_version": null,
+            "col_id": 1,
+            "perform_validation": false
+          },
+          "amount"
+        ]
+      ],
+      "where_clause": null,
+      "group_by_clause": null,
+      "grouping_tbl": null,
+      "order_by_clause": null,
+      "limit_val": null,
+      "offset_val": null,
+      "sample_clause": null
+    },
+    "schema": {
+      "left_key": {
+        "_classname": "IntType",
+        "nullable": false
+      },
+      "label": {
+        "_classname": "StringType",
+        "nullable": false
+      },
+      "right_key": {
+        "_classname": "IntType",
+        "nullable": false
+      },
+      "amount": {
+        "_classname": "IntType",
+        "nullable": false
+      }
+    },
+    "rows": [
+      {
+        "left_key": 1,
+        "label": "one",
+        "right_key": 2,
+        "amount": 20
+      },
+      {
+        "left_key": 1,
+        "label": "one",
+        "right_key": 3,
+        "amount": 30
+      },
+      {
+        "left_key": 2,
+        "label": "two",
+        "right_key": 2,
+        "amount": 20
+      },
+      {
+        "left_key": 2,
+        "label": "two",
+        "right_key": 3,
+        "amount": 30
+      }
+    ]
+  },
+  "sources": {
+    "left": [
+      {
+        "$pxt": "TableVersionMd",
+        "v": {
+          "tbl_md": {
+            "tbl_id": "12345678-1234-5678-1234-567812345678",
+            "name": "join_left",
+            "user": null,
+            "current_version": 1,
+            "current_schema_version": 0,
+            "next_col_id": 2,
+            "next_idx_id": 0,
+            "next_row_id": 2,
+            "view_sn": 0,
+            "column_md": {
+              "0": {
+                "id": 0,
+                "schema_version_add": 0,
+                "schema_version_drop": null,
+                "stored": true,
+                "stores_cellmd": false,
+                "sa_col_type": {
+                  "type": "BigInteger"
+                },
+                "destination": null
+              },
+              "1": {
+                "id": 1,
+                "schema_version_add": 0,
+                "schema_version_drop": null,
+                "stored": true,
+                "stores_cellmd": false,
+                "sa_col_type": {
+                  "type": "String"
+                },
+                "destination": null
+              }
+            },
+            "index_md": {},
+            "view_md": null,
+            "additional_md": {},
+            "has_pending_ops": false,
+            "tbl_state": 0,
+            "pending_stmt": null,
+            "is_data_versioned": true,
+            "has_default_idxs": false
+          },
+          "version_md": {
+            "tbl_id": "12345678-1234-5678-1234-567812345678",
+            "created_at": 0,
+            "version": 1,
+            "schema_version": 0,
+            "user": null,
+            "update_status": {
+              "updated_cols": [],
+              "cols_with_excs": [],
+              "rows": null,
+              "row_count_stats": {
+                "ins_rows": 2,
+                "del_rows": 0,
+                "upd_rows": 0,
+                "num_excs": 0,
+                "computed_values": 0
+              },
+              "cascade_row_count_stats": {
+                "ins_rows": 0,
+                "del_rows": 0,
+                "upd_rows": 0,
+                "num_excs": 0,
+                "computed_values": 0
+              }
+            },
+            "additional_md": {}
+          },
+          "schema_version_md": {
+            "tbl_id": "12345678-1234-5678-1234-567812345678",
+            "schema_version": 0,
+            "preceding_schema_version": null,
+            "columns": {
+              "0": {
+                "pos": 0,
+                "name": "key",
+                "col_type": {
+                  "nullable": false,
+                  "_classname": "IntType"
+                },
+                "is_pk": false,
+                "value_expr": null,
+                "media_validation": null,
+                "comment": null,
+                "custom_metadata": null
+              },
+              "1": {
+                "pos": 1,
+                "name": "label",
+                "col_type": {
+                  "nullable": false,
+                  "_classname": "StringType"
+                },
+                "is_pk": false,
+                "value_expr": null,
+                "media_validation": null,
+                "comment": null,
+                "custom_metadata": null
+              }
+            },
+            "comment": null,
+            "media_validation": "on_write",
+            "additional_md": {},
+            "custom_metadata": null,
+            "num_retained_versions": null
+          }
+        }
+      }
+    ],
+    "right": [
+      {
+        "$pxt": "TableVersionMd",
+        "v": {
+          "tbl_md": {
+            "tbl_id": "23456789-2345-6789-2345-678923456789",
+            "name": "join_right",
+            "user": null,
+            "current_version": 1,
+            "current_schema_version": 0,
+            "next_col_id": 2,
+            "next_idx_id": 0,
+            "next_row_id": 2,
+            "view_sn": 0,
+            "column_md": {
+              "0": {
+                "id": 0,
+                "schema_version_add": 0,
+                "schema_version_drop": null,
+                "stored": true,
+                "stores_cellmd": false,
+                "sa_col_type": {
+                  "type": "BigInteger"
+                },
+                "destination": null
+              },
+              "1": {
+                "id": 1,
+                "schema_version_add": 0,
+                "schema_version_drop": null,
+                "stored": true,
+                "stores_cellmd": false,
+                "sa_col_type": {
+                  "type": "BigInteger"
+                },
+                "destination": null
+              }
+            },
+            "index_md": {},
+            "view_md": null,
+            "additional_md": {},
+            "has_pending_ops": false,
+            "tbl_state": 0,
+            "pending_stmt": null,
+            "is_data_versioned": true,
+            "has_default_idxs": false
+          },
+          "version_md": {
+            "tbl_id": "23456789-2345-6789-2345-678923456789",
+            "created_at": 0,
+            "version": 1,
+            "schema_version": 0,
+            "user": null,
+            "update_status": {
+              "updated_cols": [],
+              "cols_with_excs": [],
+              "rows": null,
+              "row_count_stats": {
+                "ins_rows": 2,
+                "del_rows": 0,
+                "upd_rows": 0,
+                "num_excs": 0,
+                "computed_values": 0
+              },
+              "cascade_row_count_stats": {
+                "ins_rows": 0,
+                "del_rows": 0,
+                "upd_rows": 0,
+                "num_excs": 0,
+                "computed_values": 0
+              }
+            },
+            "additional_md": {}
+          },
+          "schema_version_md": {
+            "tbl_id": "23456789-2345-6789-2345-678923456789",
+            "schema_version": 0,
+            "preceding_schema_version": null,
+            "columns": {
+              "0": {
+                "pos": 0,
+                "name": "key",
+                "col_type": {
+                  "nullable": false,
+                  "_classname": "IntType"
+                },
+                "is_pk": false,
+                "value_expr": null,
+                "media_validation": null,
+                "comment": null,
+                "custom_metadata": null
+              },
+              "1": {
+                "pos": 1,
+                "name": "amount",
+                "col_type": {
+                  "nullable": false,
+                  "_classname": "IntType"
+                },
+                "is_pk": false,
+                "value_expr": null,
+                "media_validation": null,
+                "comment": null,
+                "custom_metadata": null
+              }
+            },
+            "comment": null,
+            "media_validation": "on_write",
+            "additional_md": {},
+            "custom_metadata": null,
+            "num_retained_versions": null
+          }
+        }
+      }
+    ]
+  }
+}
