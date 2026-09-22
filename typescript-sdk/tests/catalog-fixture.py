@@ -122,3 +122,16 @@ serialized = (
 Path(__file__).with_name('fixtures').joinpath('catalog-snapshot.json').write_text(
     json.dumps(json.loads(serialized), indent=2) + '\n'
 )
+
+
+expressions = {
+    'integers': table.id.isin([1, 2]),
+    'empty': table.title.isin([]),
+    'nullable': table.score.isin([1.5, None]),
+}
+serialized = json.dumps({name: expression.as_dict() for name, expression in expressions.items()}).replace(
+    str(table._id), '12345678-1234-5678-1234-567812345678'
+)
+Path(__file__).with_name('fixtures').joinpath('catalog-membership.json').write_text(
+    json.dumps(json.loads(serialized), indent=2) + '\n'
+)

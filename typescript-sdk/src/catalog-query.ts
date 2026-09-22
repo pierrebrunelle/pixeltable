@@ -1,5 +1,5 @@
 import { columnClasses, columnValue, copySchema } from './catalog-schema.js';
-import type { CatalogColumn, CatalogRow, CatalogSchema, WritableColumn } from './catalog-schema.js';
+import type { CatalogColumn, CatalogRow, CatalogSchema, WritableColumn, JsonValue } from './catalog-schema.js';
 
 type Wire = Record<string, unknown>;
 type OrderedValue<T> = Exclude<T, null> extends string | number ? Exclude<T, null> : never;
@@ -162,6 +162,34 @@ class ColumnExpression<T> {
         col_type: { _classname: columnClasses[type], nullable: false },
       },
     };
+  }
+  isIn(
+    values: Exclude<T, null> extends string | number | boolean ? readonly T[] | ColumnExpression<JsonValue> : never,
+  ): Predicate {
+    if (this.column.type === 'json') throw new TypeError('Membership requires a scalar expression');
+    if (values instanceof ColumnExpression) {
+      if (values.tableId !== this.tableId || values.column.type !== 'json')
+        throw new TypeError('Membership values must be a JSON expression from the same table');
+      return new Predicate(this.tableId, {
+        _classname: 'InPredicate',
+        value_list: null,
+        components: [this.expression, values.expression],
+      });
+    }
+    if (!Array.isArray(values)) throw new TypeError('Membership requires an array or JSON expression');
+    const validated = Array.from(values, (value) => columnValue(value, this.column, true));
+    const integralFloats =
+      this.column.type === 'float'
+        ? validated.filter((value) => typeof value === 'number' && Number.isInteger(value))
+        : [];
+    let predicate = new Predicate(this.tableId, {
+      _classname: 'InPredicate',
+      value_list: validated.filter((value) => !integralFloats.includes(value)),
+      components: [this.expression],
+    });
+    // JSON encodes 3.0 as 3; Python's IN normalization would discard that integer for a float column.
+    for (const value of integralFloats) predicate = predicate.or(this.compare(2, value));
+    return predicate;
   }
   eq(value: T | ColumnExpression<T | null>): Predicate {
     return value === null ? this.isNull() : this.compare(2, value);

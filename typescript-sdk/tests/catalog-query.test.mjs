@@ -270,3 +270,20 @@ test('snapshot queries preserve frozen logical and physical versions', async () 
   const expected = JSON.parse(await readFile(new URL('fixtures/catalog-snapshot.json', import.meta.url), 'utf8'));
   assert.deepEqual(actual, expected);
 });
+
+test('membership predicates match Python and validate list values and table ownership', async () => {
+  const { columns } = setup();
+  const expected = JSON.parse(await readFile(new URL('fixtures/catalog-membership.json', import.meta.url), 'utf8'));
+  assert.deepEqual(columns.id.isIn([1, 2]).toWire(tableId), expected.integers);
+  assert.deepEqual(columns.title.isIn([]).toWire(tableId), expected.empty);
+  assert.deepEqual(columns.score.isIn([1.5, null]).toWire(tableId), expected.nullable);
+  assert.equal(columns.id.isIn(columns.payload).toWire(tableId).value_list, null);
+  assert.throws(() => columns.id.isIn(['1']), TypeError);
+  assert.throws(() => columns.id.isIn([null]), TypeError);
+  assert.throws(() => columns.id.isIn([Infinity]), TypeError);
+  assert.throws(() => columns.id.isIn('1'), TypeError);
+  assert.throws(() => columns.id.isIn(new Array(1)), TypeError);
+  assert.throws(() => columns.payload.isIn([{}]), TypeError);
+  assert.throws(() => columns.id.isIn(columns.title), TypeError);
+  assert.throws(() => columns.id.isIn(setup('other').columns.payload), TypeError);
+});
