@@ -1,12 +1,22 @@
+import { catalogDate, catalogTimestamp } from './catalog-temporal.js';
+import type { CatalogDate, CatalogTimestamp } from './catalog-temporal.js';
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 export interface CatalogColumn {
-  type: 'int' | 'float' | 'string' | 'bool' | 'json';
+  type: 'int' | 'float' | 'string' | 'bool' | 'json' | 'date' | 'timestamp';
   nullable?: boolean;
   primaryKey?: boolean;
   computed?: boolean;
 }
 export type CatalogSchema = Record<string, CatalogColumn>;
-type ValueTypes = { string: string; bool: boolean; json: Exclude<JsonValue, null>; int: number; float: number };
+type ValueTypes = {
+  date: CatalogDate;
+  timestamp: CatalogTimestamp;
+  string: string;
+  bool: boolean;
+  json: Exclude<JsonValue, null>;
+  int: number;
+  float: number;
+};
 type AllowsNull<C extends CatalogColumn> = 'nullable' extends keyof C
   ? true extends C['nullable']
     ? true
@@ -34,6 +44,8 @@ export const columnClasses = {
   string: 'StringType',
   bool: 'BoolType',
   json: 'JsonType',
+  date: 'DateType',
+  timestamp: 'TimestampType',
 } as const;
 
 export function copySchema<S extends CatalogSchema>(schema: S): S {
@@ -98,6 +110,14 @@ export function columnValue(value: unknown, column: CatalogColumn, input: boolea
     if (!column.nullable) throw new TypeError('A non-nullable column requires a value');
     return null;
   }
+  if (column.type === 'date' || column.type === 'timestamp') {
+    const tag = column.type === 'date' ? 'date' : 'datetime';
+    const parse = column.type === 'date' ? catalogDate : catalogTimestamp;
+    if (input) return { $pxt: tag, v: parse(value as string) };
+    if (typeof value !== 'object' || value === null || !('$pxt' in value) || value.$pxt !== tag || !('v' in value))
+      throw new TypeError(`Invalid ${column.type} wire value`);
+    return parse(value.v as string);
+  }
   if (column.type === 'json') return input ? jsonValue(value, true) : decodeJson(value);
   if (column.type === 'string' && typeof value === 'string') return value;
   if (column.type === 'bool' && typeof value === 'boolean') return value;
@@ -107,4 +127,11 @@ export function columnValue(value: unknown, column: CatalogColumn, input: boolea
     return value;
   }
   throw new TypeError(`Invalid ${column.type} value`);
+}
+
+export function literalValue(value: unknown, column: CatalogColumn): unknown {
+  const encoded = columnValue(value, column, true);
+  return encoded !== null && (column.type === 'date' || column.type === 'timestamp')
+    ? (encoded as { v: string }).v
+    : encoded;
 }

@@ -1,4 +1,5 @@
-import { columnClasses, columnValue, copySchema } from './catalog-schema.js';
+import type { CatalogDate, CatalogTimestamp } from './catalog-temporal.js';
+import { columnClasses, columnValue, copySchema, literalValue } from './catalog-schema.js';
 import type { CatalogColumn, CatalogRow, CatalogSchema, WritableColumn, JsonValue } from './catalog-schema.js';
 
 type Wire = Record<string, unknown>;
@@ -106,7 +107,11 @@ class ColumnExpression<T> {
     K extends
       | 'count'
       | (Exclude<T, null> extends number ? 'sum' | 'mean' : never)
-      | (Exclude<T, null> extends string | number | boolean ? 'min' | 'max' : never),
+      | (Exclude<T, null> extends CatalogDate
+          ? never
+          : Exclude<T, null> extends string | number | boolean
+            ? 'min' | 'max'
+            : never),
   >(
     kind: K,
     window?: NoInfer<K> extends 'mean' ? never : CatalogWindow,
@@ -114,7 +119,7 @@ class ColumnExpression<T> {
     if (!['count', 'sum', 'mean', 'min', 'max'].includes(kind)) throw new TypeError('Unsupported aggregate');
     if (['sum', 'mean'].includes(kind) && !['int', 'float'].includes(this.column.type))
       throw new TypeError('Sum and mean require numeric expressions');
-    if (['min', 'max'].includes(kind) && this.column.type === 'json')
+    if (['min', 'max'].includes(kind) && ['json', 'date'].includes(this.column.type))
       throw new TypeError('Min and max require ordered scalar expressions');
     if (
       window !== undefined &&
@@ -270,13 +275,13 @@ class ColumnExpression<T> {
       return { column: value.column, expression: value.expression };
     }
     const numeric = this.column.type === 'int' || this.column.type === 'float';
-    const literalValue = columnValue(value, numeric ? { type: 'float' } : { ...this.column, nullable: false }, true);
+    const encodedValue = literalValue(value, numeric ? { type: 'float' } : { ...this.column, nullable: false });
     const type = numeric ? (Number.isInteger(value) ? 'int' : 'float') : this.column.type;
     return {
       column: { type, nullable: false },
       expression: {
         _classname: 'Literal',
-        val: literalValue,
+        val: encodedValue,
         col_type: { _classname: columnClasses[type], nullable: false },
       },
     };
@@ -332,8 +337,8 @@ class ColumnExpression<T> {
   }
   private compare(operator: number, value: unknown): Predicate {
     if (value === null) throw new TypeError('Use isNull() to test for null');
-    if (![2, 3].includes(operator) && !['int', 'float', 'string'].includes(this.column.type))
-      throw new TypeError('Ordering comparisons require numeric or string columns');
+    if (![2, 3].includes(operator) && !['int', 'float', 'string', 'date', 'timestamp'].includes(this.column.type))
+      throw new TypeError('Ordering comparisons require numeric, string, date, or timestamp columns');
     const operand = this.operand(value);
     const numeric = ['int', 'float'].includes(this.column.type) && ['int', 'float'].includes(operand.column.type);
     if (this.column.type !== operand.column.type && !numeric)
@@ -349,13 +354,17 @@ export type CatalogExpression<T> = ColumnExpression<T>;
 export type ComputedSchema<N extends string, T> = Record<
   N,
   {
-    type: Exclude<T, null> extends number
-      ? 'int' | 'float'
-      : Exclude<T, null> extends string
-        ? 'string'
-        : Exclude<T, null> extends boolean
-          ? 'bool'
-          : 'json';
+    type: Exclude<T, null> extends CatalogDate
+      ? 'date'
+      : Exclude<T, null> extends CatalogTimestamp
+        ? 'timestamp'
+        : Exclude<T, null> extends number
+          ? 'int' | 'float'
+          : Exclude<T, null> extends string
+            ? 'string'
+            : Exclude<T, null> extends boolean
+              ? 'bool'
+              : 'json';
     nullable: null extends T ? true : false;
     computed: true;
   }
@@ -413,7 +422,7 @@ export function callCatalogFunction<P extends CatalogSchema, C extends CatalogCo
     const value = args[name];
     const column = definition.parameters[name]!;
     if (value instanceof ColumnExpression) return value.toUpdateWire(tableId, column).v;
-    return { _classname: 'Literal', val: columnValue(value, column, true), col_type: typeWire(column) };
+    return { _classname: 'Literal', val: literalValue(value, column), col_type: typeWire(column) };
   });
   const returnType = typeWire(definition.returns);
   return new ColumnExpression(tableId, definition.returns, {

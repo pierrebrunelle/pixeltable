@@ -258,6 +258,25 @@ const totals = await documents
 
 Result types contain the selected aliases and preserve expression nullability. Aliases follow the SDK's column-name rules. Filters and ordering still refer to source columns; projections do not add reusable table columns. The same method works on views.
 
+Date and timestamp columns use validated ISO strings, preserving Python's microsecond precision:
+
+```ts
+import { catalogDate, catalogTimestamp } from '@pixeltable/sdk/experimental/catalog';
+
+const events = await catalog.createTable('app/events', {
+  day: { type: 'date' },
+  occurred_at: { type: 'timestamp', nullable: true },
+});
+await events.insert([
+  {
+    day: catalogDate('2026-09-22'),
+    occurred_at: catalogTimestamp('2026-09-22T05:30:01.123456-07:00'),
+  },
+]);
+```
+
+`CatalogDate` and `CatalogTimestamp` are distinct branded string types returned by these helpers and by collected rows. Dates use `YYYY-MM-DD` and years 0001–9999. Timestamps require a `T` separator, seconds, an explicit `Z` or `±HH:MM` timezone, and at most six fractional digits. They normalize to UTC without losing microseconds; timezone-free inputs, invalid dates, leap seconds, and excessive precision are rejected. JavaScript `Date` objects are not accepted. Reads also normalize timestamp values to UTC. Date/timestamp comparisons, literal-list membership, sorting, B-tree indexes, computed columns, updates, and compute previews use the same representations. Timestamp `min`/`max` work; Python's built-in `min`/`max` do not support date columns. Temporal literals in declared Python function calls use Python's expression encoding.
+
 Query builders are immutable: filtering or selecting returns a new query. Predicates support comparisons, `isNull()`, `and()`, `or()`, and `not()`, using columns from the same table. Projections narrow the returned row type. Ordering supports scalar columns other than JSON. `count()` counts matching rows and rejects queries with a limit or offset, matching Python. Joins are not yet supported.
 
 Use `openTable(path, schema)` to open an existing base table with runtime schema verification. `createTable` fails if the table exists unless `ifExists: 'ignore'` is specified; an ignored existing table must still match the supplied schema. These table methods reject views and specialized types outside the supported scalar schema; use `openView` for supported views. To open existing computed columns, include `computed: true` in their schema definitions; the SDK verifies that they are computed and excludes them from writes. Creation does not replace tables.
@@ -299,7 +318,7 @@ const summaries = await sales
   .collect();
 ```
 
-`sum` and `mean` accept numeric expressions; `min` and `max` accept strings, numbers, and booleans; `count` accepts every supported column type and counts non-null values. Empty/all-null inputs return null for all except `count`, which returns zero. Aggregation without `groupBy()` summarizes the whole filtered input. `groupBy()` accepts column names or same-table expressions and can be specified once per query. Select grouping expressions alongside aggregates; Python validates invalid mixed selections and nested aggregates. `where()` filters input rows. Grouped `count()` returns the number of groups; limits/offsets apply to collected groups and remain unsupported by `count()`. Custom aggregate declarations and grouping component views by base rows are not implemented yet.
+`sum` and `mean` accept numeric expressions; `min` and `max` accept strings, numbers, booleans, and timestamps; `count` accepts every supported column type and counts non-null values. Empty/all-null inputs return null for all except `count`, which returns zero. Aggregation without `groupBy()` summarizes the whole filtered input. `groupBy()` accepts column names or same-table expressions and can be specified once per query. Select grouping expressions alongside aggregates; Python validates invalid mixed selections and nested aggregates. `where()` filters input rows. Grouped `count()` returns the number of groups; limits/offsets apply to collected groups and remain unsupported by `count()`. Custom aggregate declarations and grouping component views by base rows are not implemented yet.
 
 Calculate running aggregates by passing window options to `sum`, `min`, `max`, or `count`:
 

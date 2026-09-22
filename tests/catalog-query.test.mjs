@@ -71,7 +71,7 @@ test('predicates reject mismatched tables and invalid operations before transpor
   assert.throws(() => table.query().limit(-1), /nonnegative/);
   assert.throws(() => table.query().offset(1.5), /nonnegative/);
   assert.throws(() => table.query().orderBy('payload'), /cannot be sorted/);
-  assert.throws(() => table.columns.flag.gt(true), /require numeric or string/);
+  assert.throws(() => table.columns.flag.gt(true), /Ordering comparisons require/);
   assert.throws(() => table.columns.id.eq('wrong'), /Invalid float/);
   assert.equal(table.calls.length, 0);
 });

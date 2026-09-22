@@ -1,3 +1,5 @@
+export { catalogDate, catalogTimestamp } from './catalog-temporal.js';
+export type { CatalogDate, CatalogTimestamp } from './catalog-temporal.js';
 export type { CatalogJsonPathElement, CatalogCastType, CatalogWindow } from './catalog-query.js';
 import { createClient } from './index.js';
 import type { ClientOptions } from './index.js';
@@ -43,7 +45,7 @@ export type {
 } from './catalog-schema.js';
 
 export type BtreeColumn<S extends CatalogSchema> = {
-  [K in keyof S & string]: S[K]['type'] extends 'int' | 'float' | 'string' ? K : never;
+  [K in keyof S & string]: S[K]['type'] extends 'int' | 'float' | 'string' | 'date' | 'timestamp' ? K : never;
 }[keyof S & string];
 
 export type TextColumn<S extends CatalogSchema> = {
@@ -678,8 +680,11 @@ export function createCatalogClient(options: ClientOptions) {
         );
       },
       async addBtreeIndex(column, options = {}): Promise<void> {
-        if (!Object.hasOwn(schema, column) || !['int', 'float', 'string'].includes(schema[column]!.type))
-          throw new TypeError('B-tree indexes require an integer, float, or string column');
+        if (
+          !Object.hasOwn(schema, column) ||
+          !['int', 'float', 'string', 'date', 'timestamp'].includes(schema[column]!.type)
+        )
+          throw new TypeError('B-tree indexes require an integer, float, string, date, or timestamp column');
         if (options.name !== undefined && (typeof options.name !== 'string' || !options.name))
           throw new TypeError('An index name must be a nonempty string');
         if (options.ifExists !== undefined && !['error', 'ignore'].includes(options.ifExists))

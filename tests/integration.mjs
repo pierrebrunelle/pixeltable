@@ -11,7 +11,14 @@ import { createClient, multipartBody, PixeltableHttpError } from '../dist/index.
 
 import { loadGeneratedClient, loadTypeScriptModule } from './load-generated.mjs';
 
-import { createCatalogClient, CatalogError, CatalogStaleError, defineCatalogFunction } from '../dist/catalog.js';
+import {
+  createCatalogClient,
+  CatalogError,
+  CatalogStaleError,
+  defineCatalogFunction,
+  catalogDate,
+  catalogTimestamp,
+} from '../dist/catalog.js';
 
 if (!process.env.PXT_TEST_PYTHON)
   throw new Error('Set PXT_TEST_PYTHON to a Python executable with pixeltable[serve] installed');
@@ -1043,6 +1050,62 @@ try {
     { id: 4, running: 7, seen: 1, low: 7, high: 7 },
     { id: 5, running: 8, seen: 2, low: 1, high: 7 },
   ]);
+  const calendarSchema = { id: { type: 'int' }, day: { type: 'date' }, at: { type: 'timestamp', nullable: true } };
+  const calendar = await catalog.createTable('sdk_test/calendar', calendarSchema);
+  const day = catalogDate('2026-09-22');
+  const instant = catalogTimestamp('2026-09-22T05:30:01.123456-07:00');
+  const later = catalogTimestamp('2026-09-22T12:30:01.123457Z');
+  await calendar.insert([
+    { id: 1, day, at: instant },
+    { id: 2, day, at: later },
+    { id: 3, day, at: null },
+  ]);
+  const reopenedCalendar = await catalog.openTable('sdk_test/calendar', calendarSchema);
+  assert.deepEqual(await reopenedCalendar.query().orderBy('id').collect(), [
+    { id: 1, day, at: instant },
+    { id: 2, day, at: later },
+    { id: 3, day, at: null },
+  ]);
+  assert.deepEqual(await calendar.query().where(calendar.columns.at.lt(later)).select('id').collect(), [{ id: 1 }]);
+  assert.deepEqual(
+    await calendar
+      .query()
+      .where(calendar.columns.at.isIn([instant]))
+      .select('id')
+      .collect(),
+    [{ id: 1 }],
+  );
+  assert.equal(
+    await calendar
+      .query()
+      .where(calendar.columns.day.isIn([day]))
+      .count(),
+    3,
+  );
+  await calendar.addBtreeIndex('day', { name: 'day_idx' });
+  await calendar.addBtreeIndex('at', { name: 'at_idx' });
+  const copied = await calendar.addComputedColumn('copy', calendar.columns.at);
+  assert.deepEqual(await copied.query().select('copy').orderBy('id').collect(), [
+    { copy: instant },
+    { copy: later },
+    { copy: null },
+  ]);
+  await copied.update({ at: later }, { where: copied.columns.id.eq(1) });
+  assert.deepEqual(await copied.query().where(copied.columns.id.eq(1)).select('copy').collect(), [{ copy: later }]);
+  assert.deepEqual(
+    await copied
+      .query()
+      .selectExpressions({ first: copied.columns.at.aggregate('min') })
+      .collect(),
+    [{ first: later }],
+  );
+  const year = copied.callFunction(
+    defineCatalogFunction('pixeltable.functions.timestamp.year', { self: { type: 'timestamp' } }, { type: 'int' }),
+    { self: instant },
+  );
+  assert.deepEqual(await copied.query().selectExpressions({ year }).limit(1).collect(), [{ year: 2026 }]);
+  const preview = await copied.compute([{ id: 4, day, at: instant }]);
+  assert.equal(preview[0].values.copy, instant);
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );
