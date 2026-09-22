@@ -200,3 +200,20 @@ export async function checkColumnOperands(): Promise<void> {
   // @ts-expect-error Comparison operands must have compatible types.
   table.columns.id.eq(table.columns.title);
 }
+
+export async function checkComputedColumns(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const source = await catalog.createTable('docs', { id: { type: 'int' }, score: { type: 'float', nullable: true } });
+  const table = await source.addComputedColumn('doubled', source.columns.score.multiply(2));
+  await table.insert([{ id: 1, score: 2 }]);
+  const rows = await table.collect();
+  const doubled: number | null | undefined = rows[0]?.doubled;
+  void doubled;
+  // @ts-expect-error Computed columns cannot be inserted.
+  await table.insert([{ id: 1, doubled: 2 }]);
+  // @ts-expect-error Computed columns cannot be updated.
+  await table.update({ doubled: 2 });
+  // @ts-expect-error Nullable computed results remain nullable.
+  const required: number = rows[0]!.doubled;
+  void required;
+}

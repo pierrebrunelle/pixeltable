@@ -127,3 +127,15 @@ test('column operands match Python, propagate nullable types, and reject unrelat
   assert.throws(() => columns.id.add(other), /same table/);
   assert.throws(() => columns.id.eq(other), /same table/);
 });
+
+test('computed definitions retain expression types without primary-key flags', () => {
+  const { columns } = setup();
+  assert.deepEqual(columns.id.computedDefinition(tableId).column, { type: 'int', nullable: false, computed: true });
+  assert.deepEqual(columns.score.multiply(2).computedDefinition(tableId).column, {
+    type: 'float',
+    nullable: true,
+    computed: true,
+  });
+  assert.equal(columns.title.computedDefinition(tableId).wire.$pxt, 'Expr');
+  assert.throws(() => columns.id.computedDefinition('other'), /belong to the table/);
+});
