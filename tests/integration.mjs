@@ -783,6 +783,20 @@ try {
   const invalidNumber = backfillView.callFunction(parseNumber, { text: 'not_a_number' });
   const failedView = await backfillView.addComputedColumn('failed', invalidNumber, { onError: 'ignore' });
   assert.equal(await failedView.query().where(failedView.columns.failed.errorType.ne(null)).count(), 2);
+  const beforeCompute = await backfilled.getVersions();
+  assert.deepEqual(await backfilled.compute([{ text: '21' }]), [{ values: { text: '21', number: 21 }, errors: {} }]);
+  await assert.rejects(backfilled.compute([{ text: 'bad' }]), CatalogError);
+  const computedErrors = await backfilled.compute([{ text: 'bad' }], { onError: 'ignore' });
+  assert.deepEqual(computedErrors[0].values, { text: 'bad', number: null });
+  assert.equal(computedErrors[0].errors.number.type, 'ValueError');
+  assert.match(computedErrors[0].errors.number.message, /invalid literal/);
+  assert.equal(await backfilled.count(), 2);
+  assert.deepEqual(await backfilled.getVersions(), beforeCompute);
+  const computeView = await backfilled.createView('sdk_test/compute_view', { where: backfilled.columns.number.gt(10) });
+  assert.deepEqual(await computeView.compute([{ text: '1' }, { text: '20' }]), [
+    { values: { text: '20', number: 20 }, errors: {} },
+  ]);
+  await assert.rejects(backfilled.compute([]), TypeError);
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );

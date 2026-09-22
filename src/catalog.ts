@@ -55,6 +55,16 @@ export interface CatalogInsertOptions {
   signal?: AbortSignal;
 }
 
+export interface CatalogComputeOptions {
+  onError?: 'abort' | 'ignore';
+  signal?: AbortSignal;
+}
+
+export interface CatalogComputedRow<S extends CatalogSchema> {
+  values: { [K in keyof CatalogRow<S>]: CatalogRow<S>[K] | null };
+  errors: Record<string, { type: string; message: string }>;
+}
+
 export interface CatalogComputedColumnOptions {
   onError?: 'abort' | 'ignore';
   signal?: AbortSignal;
@@ -96,6 +106,7 @@ export interface CatalogTable<S extends CatalogSchema> {
     args: CatalogFunctionArgs<P>,
   ): CatalogExpression<CatalogRow<{ result: C }>['result']>;
   query(): CatalogQuery<S>;
+  compute(rows: readonly CatalogInsertRow<S>[], options?: CatalogComputeOptions): Promise<CatalogComputedRow<S>[]>;
   recomputeColumns(
     columns: readonly ComputedColumn<S>[],
     options?: RecomputeOptions,
@@ -159,6 +170,7 @@ export interface CatalogView<S extends CatalogSchema> extends Pick<
   | 'query'
   | 'callFunction'
   | 'recomputeColumns'
+  | 'compute'
   | 'collect'
   | 'count'
   | 'createView'
@@ -440,6 +452,25 @@ export function createCatalogClient(options: ClientOptions) {
       if (updated.id !== id) throw new TypeError('Table identity changed');
       return updated;
     }
+    function encodeRows(rows: readonly CatalogInsertRow<S>[]): Record<string, unknown>[] {
+      return rows.map((row) => {
+        const values = record(row);
+        if (Object.keys(values).some((name) => !Object.hasOwn(schema, name) || schema[name]!.computed))
+          throw new TypeError('Unknown insert column');
+        return Object.fromEntries(
+          Object.entries(schema)
+            .filter(([, column]) => !column.computed)
+            .map(([name, column]) => [
+              name,
+              columnValue(
+                Object.hasOwn(values, name) ? values[name] : column.nullable ? null : undefined,
+                column,
+                true,
+              ),
+            ]),
+        );
+      });
+    }
     function predicateWire(where?: CatalogPredicate): unknown {
       return where === undefined ? null : { $pxt: 'Expr', v: where.toWire(id) };
     }
@@ -686,29 +717,75 @@ export function createCatalogClient(options: ClientOptions) {
         );
         return tableHandle(path, nextSchema, response.current_md, isView);
       },
+      async compute(rows, options = {}): Promise<CatalogComputedRow<S>[]> {
+        if (!Array.isArray(rows) || rows.length === 0) throw new TypeError('Compute requires a nonempty array of rows');
+        if (options.onError !== undefined && !['abort', 'ignore'].includes(options.onError))
+          throw new TypeError('Invalid onError policy');
+        const response = await rpc(
+          'compute',
+          { rows: encodeRows(rows), on_error: options.onError ?? 'abort' },
+          options.signal,
+          {
+            class_name: 'Table',
+            path_key: pathKey,
+            snapshot_path_key: state.snapshotKey,
+          },
+        );
+        const batch = record(tagged(response.result, 'RowBatch'));
+        const columns = Object.entries(record(batch.schema));
+        if (columns.length !== Object.keys(schema).length) throw new TypeError('Compute schema changed');
+        for (const [name, raw] of columns) {
+          const type = record(raw);
+          const expected = schema[name];
+          if (
+            !expected ||
+            type._classname !== columnClasses[expected.type] ||
+            type.nullable !== (expected.nullable ?? false)
+          )
+            throw new TypeError('Compute schema changed');
+        }
+        if (
+          !Array.isArray(batch.rows) ||
+          !Array.isArray(batch.errors) ||
+          !Array.isArray(batch.index_values) ||
+          batch.rows.length !== batch.errors.length ||
+          batch.rows.length !== batch.index_values.length
+        )
+          throw new TypeError('Invalid computed row batch');
+        const errors = batch.errors;
+        const indexes = batch.index_values;
+        return batch.rows.map((row: unknown, index: number) => {
+          if (!Array.isArray(row) || row.length !== columns.length) throw new TypeError('Invalid computed row');
+          if (Object.keys(record(indexes[index])).length)
+            throw new TypeError('Computed index values are not supported yet');
+          const cellErrors = Object.fromEntries(
+            Object.entries(record(errors[index])).map(([name, raw]) => {
+              const error = record(raw);
+              if (typeof error.errortype !== 'string' || typeof error.errormsg !== 'string')
+                throw new TypeError('Invalid computed cell error');
+              return [name, { type: error.errortype, message: error.errormsg }];
+            }),
+          );
+          const values = Object.fromEntries(
+            columns.map(([name], position) => [
+              name,
+              columnValue(
+                row[position],
+                { ...schema[name]!, nullable: Object.hasOwn(cellErrors, name) || schema[name]!.nullable === true },
+                false,
+              ),
+            ]),
+          );
+          return { values: values as CatalogComputedRow<S>['values'], errors: cellErrors };
+        });
+      },
       async insert(
         rows: readonly CatalogInsertRow<S>[],
         options: CatalogInsertOptions = {},
       ): Promise<{ insertedRows: number; errors: number }> {
         if (options.onError !== undefined && !['abort', 'ignore'].includes(options.onError))
           throw new TypeError('Invalid onError policy');
-        const wireRows = rows.map((row) => {
-          const values = record(row);
-          if (Object.keys(values).some((name) => !Object.hasOwn(schema, name) || schema[name]!.computed))
-            throw new TypeError('Unknown insert column');
-          return Object.fromEntries(
-            Object.entries(schema)
-              .filter(([, column]) => !column.computed)
-              .map(([name, column]) => [
-                name,
-                columnValue(
-                  Object.hasOwn(values, name) ? values[name] : column.nullable ? null : undefined,
-                  column,
-                  true,
-                ),
-              ]),
-          );
-        });
+        const wireRows = encodeRows(rows);
         const result = await mutateMetadata(
           'insert',
           { rows: wireRows, on_error: options.onError ?? 'abort', print_stats: false, return_rows: false },
@@ -816,6 +893,7 @@ export function createCatalogClient(options: ClientOptions) {
       query: table.query,
       callFunction: table.callFunction,
       recomputeColumns: table.recomputeColumns,
+      compute: table.compute,
       collect: table.collect,
       count: table.count,
       createView: table.createView,
