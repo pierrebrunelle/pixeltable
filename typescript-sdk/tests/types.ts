@@ -1,3 +1,4 @@
+import { createServiceClient } from './fixtures/client.js';
 import { createClient, defineQuery, multipartBody } from '../src/index.js';
 import type { JobHandle } from '../src/index.js';
 import { usePixeltableQuery, usePixeltableMutation, usePixeltableJob } from '../src/react.js';
@@ -50,4 +51,23 @@ export function checkHookTypes(job: JobHandle): void {
   usePixeltableJob(job, { scope: ['service', 'session'] });
   // @ts-expect-error Jobs require an explicit cache scope.
   usePixeltableJob(job, {});
+}
+
+export async function checkNamedCalls(): Promise<void> {
+  const service = createServiceClient({ baseUrl: 'https://service.test' });
+  const inserted = await service.operations.insert_docs_docs_post({ id: 1, title: 'hello' });
+  const title: string = inserted.title_upper;
+  const lookup = defineQuery(['service', 'session', 'lookup'], service.operations.query_lookup_lookup_get);
+  const result = await lookup.run({ id: 1 });
+  const id: number | undefined = result.rows[0]?.id;
+  void [title, id];
+  await service.operations.insert_upload_upload_post({ id: 2, title: 'image', image: new Blob() });
+  // @ts-expect-error The generated input requires title.
+  await service.operations.insert_docs_docs_post({ id: 1 });
+  // @ts-expect-error Query IDs are numbers.
+  await service.operations.query_lookup_lookup_get({ id: '1' });
+  // @ts-expect-error Upload inputs are binary.
+  await service.operations.insert_upload_upload_post({ id: 2, title: 'image', image: 'file.png' });
+  // @ts-expect-error Only declared outputs are available.
+  inserted.title;
 }
