@@ -145,3 +145,20 @@ export async function checkCatalogQueryTypes(): Promise<void> {
   // @ts-expect-error Non-nullable fields do not accept null equality inputs.
   table.columns.title.eq(null);
 }
+
+export async function checkCatalogMutationTypes(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.openTable('docs', {
+    id: { type: 'int' },
+    title: { type: 'string' },
+    score: { type: 'float', nullable: true },
+  });
+  await table.update({ score: null }, { where: table.columns.id.eq(1) });
+  await table.delete({ where: table.columns.title.eq('old') });
+  // @ts-expect-error Updates retain column types.
+  await table.update({ id: '1' });
+  // @ts-expect-error Updates reject unknown columns.
+  await table.update({ missing: true });
+  // @ts-expect-error Non-nullable columns reject null.
+  await table.update({ title: null });
+}

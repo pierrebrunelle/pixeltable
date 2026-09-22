@@ -226,6 +226,27 @@ try {
   );
   assert.equal(await reopened.query().where(reopened.columns.id.gte(2.5)).count(), 2);
   assert.equal(await reopened.query().where(reopened.columns.payload.eq(authoredRow.payload)).count(), 4);
+  assert.deepEqual(
+    await reopened.update(
+      { title: 'updated', score: null },
+      {
+        where: reopened.columns.id.eq(3),
+      },
+    ),
+    { updatedRows: 1 },
+  );
+  assert.deepEqual(await reopened.query().where(reopened.columns.id.eq(3)).select('title', 'score').collect(), [
+    { title: 'updated', score: null },
+  ]);
+  await assert.rejects(authored.update({ title: 'stale' }), { name: 'CatalogStaleError' });
+  await assert.rejects(authored.delete(), { name: 'CatalogStaleError' });
+  assert.equal(await reopened.count(), 4);
+  assert.deepEqual(await reopened.delete({ where: reopened.columns.id.eq(4) }), { deletedRows: 1 });
+  assert.deepEqual(await reopened.delete({ where: reopened.columns.id.eq(999) }), { deletedRows: 0 });
+  assert.deepEqual(await reopened.update({ active: false }), { updatedRows: 3 });
+  assert.equal(await reopened.query().where(reopened.columns.active.eq(true)).count(), 0);
+  assert.deepEqual(await reopened.delete(), { deletedRows: 3 });
+  assert.equal(await reopened.count(), 0);
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );

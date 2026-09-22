@@ -248,3 +248,43 @@ test('JSON cells preserve reserved keys and reject values that JSON would silent
     assert.throws(() => jsonValue(value, true), TypeError);
   assert.throws(() => columnValue(null, { type: 'json' }, true), TypeError);
 });
+
+test('updates and deletes validate values, encode predicates, and advance write versions', async () => {
+  const requests = [];
+  const metadata = structuredClone(tableResponse.result.v[0]);
+  const catalog = createCatalogClient({
+    baseUrl: 'https://catalog.test',
+    fetch: async (request) => {
+      const head = JSON.parse(decoder.decode(decodeProxyFrame(new Uint8Array(await request.arrayBuffer())).head));
+      requests.push(head);
+      if (head.method === 'get_table') return response(metadata);
+      metadata[0].v.version_md.version++;
+      return new Response(
+        encodeProxyFrame(
+          encoder.encode(
+            JSON.stringify({
+              result: { $pxt: 'UpdateStatus', v: { row_count_stats: { upd_rows: 1, del_rows: 2 } } },
+              current_md: metadata,
+            }),
+          ),
+          [],
+        ),
+      );
+    },
+  });
+  const table = await catalog.openTable('test/docs', schemaDefinition);
+  assert.deepEqual(await table.update({ title: 'changed', score: null }, { where: table.columns.id.eq(1) }), {
+    updatedRows: 1,
+  });
+  assert.equal(requests[1].args.where.$pxt, 'Expr');
+  assert.equal(requests[1].args.where.v._classname, 'Comparison');
+  assert.deepEqual(requests[1].args.value_spec, { title: 'changed', score: null });
+  assert.equal(requests[1].snapshot_path_key.tbl_version.effective_version, 0);
+  assert.deepEqual(await table.delete(), { deletedRows: 2 });
+  assert.equal(requests[2].args.where, null);
+  assert.equal(requests[2].snapshot_path_key.tbl_version.effective_version, 1);
+  const sent = requests.length;
+  for (const values of [{}, { missing: 1 }, { title: null }, { id: 'bad' }, { score: undefined }])
+    await assert.rejects(table.update(values), TypeError);
+  assert.equal(requests.length, sent);
+});
