@@ -48,6 +48,7 @@ for name, array in {
     'int64': np.array([-(2**63), 2**63 - 1], dtype='<i8'),
     'uint64': np.array([0, 2**64 - 1], dtype='<u8'),
     'half': np.array([1.5, -2], dtype='<f2'),
+    'tensor': np.asfortranarray(np.arange(24, dtype='>i4').reshape(2, 3, 4)),
     'bool': np.array([True, False], dtype='?'),
     'scalar': np.array(3.5, dtype='<f8'),
     'empty': np.empty((2, 0, 3), dtype='<u2'),
@@ -60,6 +61,7 @@ for name, array in {
             'shape': list(array.shape),
             'fortranOrder': bool(array.flags.f_contiguous and not array.flags.c_contiguous),
             'data': base64.b64encode(array.tobytes(order='A')).decode(),
+            'flat': [str(value) for value in array.flatten(order='C').tolist()],
             'npy': base64.b64encode(buffer.getvalue()).decode(),
         }
 Path(__file__).with_name('fixtures').joinpath('catalog-npy.json').write_text(json.dumps(arrays, indent=2) + '\n')

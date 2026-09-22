@@ -1,7 +1,7 @@
 import { decodeNpy, encodeNpy } from './catalog-npy.js';
 import type { NpyArray } from './catalog-npy.js';
 
-type NumericArray =
+export type CatalogNumericArray =
   | Int8Array
   | Uint8Array
   | Int16Array
@@ -35,6 +35,59 @@ export class CatalogArray {
     return new Uint8Array(this.#data);
   }
 
+  /** Return an independent, native-endian, row-major flattened typed array. */
+  toTypedArray(): CatalogNumericArray {
+    const dtype = this.descr.slice(1);
+    const size = Number(this.descr.slice(2));
+    const count = this.#data.length / size;
+    const bytes = new Uint8Array(this.#data.length);
+    const swap = size > 1 && this.descr[0] !== nativeOrder;
+    const strides: number[] = [];
+    let stride = 1;
+    for (const dimension of this.shape) {
+      strides.push(stride);
+      stride *= dimension;
+    }
+    for (let index = 0; index < count; index++) {
+      let source = index;
+      if (this.fortranOrder) {
+        let remaining = index;
+        source = 0;
+        for (let axis = this.shape.length - 1; axis >= 0; axis--) {
+          source += (remaining % this.shape[axis]!) * strides[axis]!;
+          remaining = Math.floor(remaining / this.shape[axis]!);
+        }
+      }
+      for (let byte = 0; byte < size; byte++)
+        bytes[index * size + byte] = this.#data[source * size + (swap ? size - 1 - byte : byte)]!;
+    }
+    if (dtype === 'f2') {
+      const bits = new Uint16Array(bytes.buffer);
+      return Float32Array.from(bits, (value) => {
+        const sign = value & 0x8000 ? -1 : 1;
+        const exponent = (value >> 10) & 31;
+        const fraction = value & 1023;
+        if (exponent === 31) return fraction ? NaN : sign * Infinity;
+        return sign * (exponent === 0 ? fraction * 2 ** -24 : (1 + fraction / 1024) * 2 ** (exponent - 15));
+      });
+    }
+    if (dtype === 'b1') return bytes.map((value) => (value ? 1 : 0));
+    const types = {
+      i1: Int8Array,
+      u1: Uint8Array,
+      i2: Int16Array,
+      u2: Uint16Array,
+      i4: Int32Array,
+      u4: Uint32Array,
+      i8: BigInt64Array,
+      u8: BigUint64Array,
+      f4: Float32Array,
+      f8: Float64Array,
+    };
+    const Type = types[dtype as keyof typeof types];
+    return new Type(bytes.buffer);
+  }
+
   toNpy(): Uint8Array {
     return encodeNpy({ descr: this.descr, shape: this.shape, fortranOrder: this.fortranOrder, data: this.#data });
   }
@@ -44,7 +97,7 @@ export class CatalogArray {
   }
 }
 
-export function catalogArray(values: NumericArray, shape: readonly number[] = [values.length]): CatalogArray {
+export function catalogArray(values: CatalogNumericArray, shape: readonly number[] = [values.length]): CatalogArray {
   const types: readonly [Function, string][] = [
     [Int8Array, '|i1'],
     [Uint8Array, '|u1'],
