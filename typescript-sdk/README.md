@@ -518,3 +518,5 @@ PXT_TEST_PYTHON=/absolute/path/to/python npm run test:integration
 It starts a service in a temporary Pixeltable home, checks its OpenAPI document against the snapshot, and exercises insert, query, compute, update, delete, image upload, background jobs, and validation errors. It requires local PostgreSQL support through Pixeltable. It does not call an AI provider or a hosted deployment.
 
 See [ROADMAP.md](ROADMAP.md) for the subsequent phases and [CODEBASE_GUIDE.md](CODEBASE_GUIDE.md) for package maintenance.
+
+The CI workflow checks Node 22 and 24 against the checked-out Python engine, using Python 3.12 and the frozen repository dependency lock with the serving extra. It regenerates Python protocol/catalog fixtures to catch wire drift and runs the live HTTP/catalog integration suite without external AI provider credentials. SDK changes, Python engine changes, dependency changes, and merge-queue entries trigger these checks. This is a source-checkout compatibility check; it does not establish compatibility with every published Pixeltable version or a hosted service.

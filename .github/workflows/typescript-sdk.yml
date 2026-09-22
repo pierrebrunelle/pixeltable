@@ -2,11 +2,17 @@ name: TypeScript SDK
 
 on:
   pull_request:
-    paths: ['typescript-sdk/**', '.github/workflows/typescript-sdk.yml']
+    paths: ['typescript-sdk/**', 'pixeltable/**', 'pyproject.toml', 'uv.lock', '.github/workflows/typescript-sdk.yml']
   push:
     branches: [main]
-    paths: ['typescript-sdk/**', '.github/workflows/typescript-sdk.yml']
+    paths: ['typescript-sdk/**', 'pixeltable/**', 'pyproject.toml', 'uv.lock', '.github/workflows/typescript-sdk.yml']
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -14,6 +20,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       matrix:
         node: [22, 24]
@@ -27,7 +34,27 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
           cache-dependency-path: typescript-sdk/package-lock.json
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.12.3'
+          python-version: '3.12'
+      - name: Install locked Python service dependencies
+        working-directory: .
+        run: uv sync --frozen --no-default-groups --extra serve
+      - name: Check Python protocol fixtures
+        working-directory: .
+        run: |
+          PIXELTABLE_HOME="$(mktemp -d)"
+          export PIXELTABLE_HOME
+          export PYTHONPATH="$PWD"
+          .venv/bin/python typescript-sdk/tests/proxy-fixture.py
+          .venv/bin/python typescript-sdk/tests/catalog-fixture.py
+          git diff --exit-code -- typescript-sdk/tests/fixtures
       - run: npm ci
       - run: npm run format:check
       - run: npm test
+      - name: Test against the Python service and catalog dispatcher
+        run: npm run test:integration
+        env:
+          PXT_TEST_PYTHON: ${{ github.workspace }}/.venv/bin/python
       - run: npm pack --dry-run
