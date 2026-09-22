@@ -283,6 +283,18 @@ const visible = await enabledDocuments.query().select('id', 'title').collect();
 
 Views inherit the base table's schema, including computed columns, and reflect inserts, updates, and deletes in the base. Use `openView(path, schema)` to reopen a live view with schema verification. View handles expose queries, history, computed-column creation, B-tree and text embedding indexes, and nested view creation. They do not expose row insertion, updates, or deletion. Creation fails if the destination exists. Add a view-specific computed column with `const enriched = await enabledDocuments.addComputedColumn('adjusted', enabledDocuments.columns.score.add(1))`, then use the returned handle. Computed values propagate through nested views when the base changes. Schema and index mutations validate versions for the complete base chain; reopen a view after base writes before modifying its schema. Iterators and projected views are not yet supported.
 
+Extract JSON fields with `payload.jsonPath('items', 0, 'name')`. Paths accept string keys, integer indices (including negative indices), `'*'` for array projection, and Python-style slices such as `{ start: 1, stop: 5, step: 2 }`. Chained paths append to the same path. Missing keys, out-of-range indices, and mismatched containers produce null; wildcard/slice projections preserve positions with null entries. The `'*'` key is reserved for projection, as in Python.
+
+Use `asType({ type: 'float', nullable: true })` to cast an extracted value before arithmetic, filtering, or computed-column creation:
+
+```ts
+const score = documents.columns.payload.jsonPath('score').asType({ type: 'float', nullable: true });
+const scored = await documents.addComputedColumn('score', score);
+const matches = await scored.query().where(scored.columns.score.gt(0.5)).collect();
+```
+
+Casts use Python's value validation/conversion, not JavaScript coercion: invalid values fail at execution. A non-nullable target rejects missing values. A non-nullable source keeps its result non-nullable even when the target allows null, matching Python `astype()`. JSON paths themselves are always nullable. Python evaluates inline JSON paths and casts outside SQL; ordered comparisons on a null inline value can raise `TypeError`. Store the nullable cast as a computed column before SQL ordering comparisons, as above. Equality and explicit `isNull()` also work on inline paths.
+
 Filter by membership with `documents.columns.id.isIn([1, 3, 5])`. Use `.not()` on the returned predicate for exclusion. Membership also accepts a JSON expression from the same table, such as `documents.columns.id.isIn(documents.columns.payload)`, when each JSON cell contains a list. These predicates work in queries, updates, and deletes. Literal arrays are copied and validated against the scalar column type; unlike Python's literal-list normalization, mismatched values are rejected instead of silently omitted. An empty literal list matches no rows. Literal-list membership follows SQL null semantics: use `isNull()` explicitly to match null cells rather than placing null in the list. JSON-expression membership is evaluated by Python and follows its per-row iterable semantics.
 
 Freeze a table or live view at its current state:

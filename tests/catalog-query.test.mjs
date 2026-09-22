@@ -287,3 +287,39 @@ test('membership predicates match Python and validate list values and table owne
   assert.throws(() => columns.id.isIn(columns.title), TypeError);
   assert.throws(() => columns.id.isIn(setup('other').columns.payload), TypeError);
 });
+
+test('JSON paths and casts match Python and validate path elements', async () => {
+  const { columns } = createTableQueries(
+    tableId,
+    { payload: { type: 'json' }, required: { type: 'int' } },
+    { payload: 0, required: 1 },
+    async () => [],
+    async () => 0,
+  );
+  const expressions = {
+    nested: columns.payload.jsonPath('items', 0, 'name'),
+    wildcard: columns.payload.jsonPath('items').jsonPath('*', 'name'),
+    slice: columns.payload.jsonPath('items', { step: -1 }, 'name'),
+    cast: columns.payload.jsonPath('score').asType({ type: 'float', nullable: true }),
+    required_cast: columns.required.asType({ type: 'float', nullable: true }),
+  };
+  const python = JSON.parse(await readFile(new URL('./fixtures/catalog-json-path.json', import.meta.url), 'utf8'));
+  for (const [name, expression] of Object.entries(expressions))
+    assert.deepEqual(expression.computedDefinition(tableId).wire.v, python[name]);
+  for (const element of [
+    new Date(),
+    1.2,
+    Infinity,
+    Number.MAX_SAFE_INTEGER + 1,
+    null,
+    [],
+    { step: 0 },
+    { stop: 1.5 },
+    { typo: 1 },
+  ])
+    assert.throws(() => columns.payload.jsonPath(element), TypeError);
+  assert.throws(() => columns.payload.jsonPath(), TypeError);
+  assert.throws(() => columns.required.jsonPath('key'), TypeError);
+  assert.throws(() => columns.payload.asType({ type: 'int', computed: true }), TypeError);
+  assert.throws(() => expressions.nested.computedDefinition('another-table'), TypeError);
+});

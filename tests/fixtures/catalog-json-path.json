@@ -1,0 +1,111 @@
+{
+  "nested": {
+    "_classname": "JsonPath",
+    "path_elements": [
+      "items",
+      0,
+      "name"
+    ],
+    "root_type": null,
+    "components": [
+      {
+        "_classname": "ColumnRef",
+        "tbl_id": "12345678-1234-5678-1234-567812345678",
+        "effective_version": null,
+        "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+        "col_tbl_effective_version": null,
+        "col_id": 0,
+        "perform_validation": false
+      }
+    ]
+  },
+  "wildcard": {
+    "_classname": "JsonPath",
+    "path_elements": [
+      "items",
+      "*",
+      "name"
+    ],
+    "root_type": null,
+    "components": [
+      {
+        "_classname": "ColumnRef",
+        "tbl_id": "12345678-1234-5678-1234-567812345678",
+        "effective_version": null,
+        "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+        "col_tbl_effective_version": null,
+        "col_id": 0,
+        "perform_validation": false
+      }
+    ]
+  },
+  "slice": {
+    "_classname": "JsonPath",
+    "path_elements": [
+      "items",
+      [
+        null,
+        null,
+        -1
+      ],
+      "name"
+    ],
+    "root_type": null,
+    "components": [
+      {
+        "_classname": "ColumnRef",
+        "tbl_id": "12345678-1234-5678-1234-567812345678",
+        "effective_version": null,
+        "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+        "col_tbl_effective_version": null,
+        "col_id": 0,
+        "perform_validation": false
+      }
+    ]
+  },
+  "cast": {
+    "_classname": "TypeCast",
+    "new_type": {
+      "_classname": "FloatType",
+      "nullable": true
+    },
+    "components": [
+      {
+        "_classname": "JsonPath",
+        "path_elements": [
+          "score"
+        ],
+        "root_type": null,
+        "components": [
+          {
+            "_classname": "ColumnRef",
+            "tbl_id": "12345678-1234-5678-1234-567812345678",
+            "effective_version": null,
+            "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+            "col_tbl_effective_version": null,
+            "col_id": 0,
+            "perform_validation": false
+          }
+        ]
+      }
+    ]
+  },
+  "required_cast": {
+    "_classname": "TypeCast",
+    "new_type": {
+      "_classname": "FloatType",
+      "nullable": false
+    },
+    "components": [
+      {
+        "_classname": "ColumnRef",
+        "tbl_id": "12345678-1234-5678-1234-567812345678",
+        "effective_version": null,
+        "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+        "col_tbl_effective_version": null,
+        "col_id": 1,
+        "perform_validation": false
+      }
+    ]
+  }
+}

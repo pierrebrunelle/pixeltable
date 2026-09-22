@@ -866,6 +866,57 @@ try {
     insertedRows: 2,
     errors: 0,
   });
+  const jsonSource = await catalog.createTable('sdk_test/json_paths', {
+    id: { type: 'int' },
+    payload: { type: 'json' },
+  });
+  await jsonSource.insert([
+    { id: 1, payload: { score: 2.5, items: [{ name: 'a' }, {}, { name: 'c' }] } },
+    { id: 2, payload: { items: [] } },
+    { id: 3, payload: { score: 1, items: [{ name: 'd' }] } },
+  ]);
+  const json = jsonSource.columns.payload;
+  const score = json.jsonPath('score').asType({ type: 'float', nullable: true });
+  assert.deepEqual(
+    await jsonSource
+      .query()
+      .selectExpressions({
+        first: json.jsonPath('items', 0, 'name'),
+        last: json.jsonPath('items', -1, 'name'),
+        names: json.jsonPath('items', '*', 'name'),
+        reverse: json.jsonPath('items', { step: -1 }, 'name'),
+        score,
+      })
+      .orderBy('id')
+      .collect(),
+    [
+      { first: 'a', last: 'c', names: ['a', null, 'c'], reverse: ['c', null, 'a'], score: 2.5 },
+      { first: null, last: null, names: [], reverse: [], score: null },
+      { first: 'd', last: 'd', names: ['d'], reverse: ['d'], score: 1 },
+    ],
+  );
+  assert.deepEqual(await jsonSource.query().where(score.eq(2.5)).select('id').collect(), [{ id: 1 }]);
+  await assert.rejects(jsonSource.query().where(score.gt(2)).collect(), /NoneType/);
+  const jsonComputed = await jsonSource.addComputedColumn('score', score);
+  assert.deepEqual(await jsonComputed.query().where(jsonComputed.columns.score.gt(2)).select('id').collect(), [
+    { id: 1 },
+  ]);
+  await jsonComputed.update({ payload: { score: 4 } }, { where: jsonComputed.columns.id.eq(1) });
+  assert.deepEqual(await jsonComputed.query().select('score').orderBy('id').collect(), [
+    { score: 4 },
+    { score: null },
+    { score: 1 },
+  ]);
+  await assert.rejects(jsonComputed.insert([{ id: 4, payload: { score: 'not a number' } }]));
+  assert.equal(await jsonComputed.count(), 3);
+  await assert.rejects(
+    jsonSource
+      .query()
+      .selectExpressions({
+        required: json.jsonPath('absent').asType({ type: 'int' }),
+      })
+      .collect(),
+  );
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );
