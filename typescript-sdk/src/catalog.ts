@@ -2,6 +2,7 @@ import { createClient } from './index.js';
 import type { ClientOptions } from './index.js';
 import { decodeProxyFrame, encodeProxyFrame, proxyProtocolVersion, proxySchemaVersion } from './proxy-protocol.js';
 
+import type { CatalogPredicate } from './catalog-query.js';
 import { createTableQueries } from './catalog-query.js';
 export type { CatalogQuery, CatalogColumns, CatalogPredicate } from './catalog-query.js';
 import { columnClasses, columnValue, copySchema } from './catalog-schema.js';
@@ -178,6 +179,29 @@ export function createCatalogClient(options: ClientOptions) {
         throw new TypeError('Invalid row count');
       return result;
     }
+    async function mutate(
+      method: string,
+      args: Record<string, unknown>,
+      countKey: string,
+      signal?: AbortSignal,
+    ): Promise<number> {
+      const response = await rpc(method, args, signal, {
+        class_name: 'Table',
+        path_key: pathKey,
+        snapshot_path_key: { tbl_version: { id, effective_version: state.version }, base: null },
+      });
+      const updated = readMetadata(response.current_md);
+      if (updated.id !== id) throw new TypeError('Table identity changed');
+      state = updated;
+      const status = record(tagged(response.result, 'UpdateStatus'));
+      const count = record(status.row_count_stats)[countKey];
+      if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0)
+        throw new TypeError('Invalid mutation count');
+      return count;
+    }
+    function predicateWire(where?: CatalogPredicate): unknown {
+      return where === undefined ? null : { $pxt: 'Expr', v: where.toWire(id) };
+    }
     return {
       id,
       path,
@@ -202,24 +226,42 @@ export function createCatalogClient(options: ClientOptions) {
             ]),
           );
         });
-        const response = await rpc(
+        const insertedRows = await mutate(
           'insert',
           { rows: wireRows, on_error: 'abort', print_stats: false, return_rows: false },
+          'ins_rows',
           options.signal,
-          {
-            class_name: 'Table',
-            path_key: pathKey,
-            snapshot_path_key: { tbl_version: { id, effective_version: state.version }, base: null },
-          },
         );
-        const updated = readMetadata(response.current_md);
-        if (updated.id !== id) throw new TypeError('Table identity changed');
-        state = updated;
-        const status = record(tagged(response.result, 'UpdateStatus'));
-        const insertedRows = record(status.row_count_stats).ins_rows;
-        if (typeof insertedRows !== 'number' || !Number.isSafeInteger(insertedRows) || insertedRows < 0)
-          throw new TypeError('Invalid insert count');
         return { insertedRows };
+      },
+      async update(
+        values: Partial<CatalogRow<S>>,
+        options: { where?: CatalogPredicate; signal?: AbortSignal } = {},
+      ): Promise<{ updatedRows: number }> {
+        const entries = Object.entries(record(values));
+        if (entries.length === 0) throw new TypeError('Specify at least one update column');
+        const valueSpec = Object.fromEntries(
+          entries.map(([name, value]) => {
+            if (!Object.hasOwn(schema, name)) throw new TypeError('Unknown update column');
+            return [name, columnValue(value, schema[name]!, true)];
+          }),
+        );
+        const updatedRows = await mutate(
+          'update',
+          {
+            value_spec: valueSpec,
+            where: predicateWire(options.where),
+            cascade: true,
+            return_rows: false,
+          },
+          'upd_rows',
+          options.signal,
+        );
+        return { updatedRows };
+      },
+      async delete(options: { where?: CatalogPredicate; signal?: AbortSignal } = {}): Promise<{ deletedRows: number }> {
+        const deletedRows = await mutate('delete', { where: predicateWire(options.where) }, 'del_rows', options.signal);
+        return { deletedRows };
       },
       async collect(options: { limit?: number; signal?: AbortSignal } = {}): Promise<CatalogRow<S>[]> {
         let query = queries.query();

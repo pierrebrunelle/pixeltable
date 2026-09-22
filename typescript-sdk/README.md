@@ -247,7 +247,21 @@ Query builders are immutable: filtering or selecting returns a new query. Predic
 
 Use `openTable(path, schema)` to open an existing base table with runtime schema verification. `createTable` fails if the table exists unless `ifExists: 'ignore'` is specified; an ignored existing table must still match the supplied schema. Both methods reject computed columns, views, and specialized types outside the supported scalar schema. Creation does not replace tables.
 
-Handles retain the catalog version for writes. A concurrent write or schema change can cause `CatalogStaleError` before insertion. Reopen the table, review its schema, and explicitly retry if appropriate. The SDK never automatically replays a write. A network failure after submission can leave its outcome unknown. These operations apply immediately; previewing schema changes remains a subsequent phase.
+Update or delete matching rows:
+
+```typescript
+await documents.update(
+  { title: 'Revised', score: null },
+  {
+    where: documents.columns.id.eq(1),
+  },
+);
+await documents.delete({ where: documents.columns.enabled.eq(false) });
+```
+
+Updates accept partial literal rows and return `{ updatedRows }`; deletes return `{ deletedRows }`. Omitting `where` affects every row, matching Python. Updates validate values and reject empty patches. Expression-valued updates are not yet supported.
+
+Handles retain the catalog version for writes. A concurrent write or schema change can cause `CatalogStaleError` before insertion, update, or deletion. Reopen the table, review its schema, and explicitly retry if appropriate. The SDK never automatically replays a write. A network failure after submission can leave its outcome unknown. These operations apply immediately; previewing schema changes remains a subsequent phase.
 
 ## Authenticated backend example
 

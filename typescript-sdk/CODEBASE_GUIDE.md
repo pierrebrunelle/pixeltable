@@ -3,7 +3,7 @@
 Run package commands in `typescript-sdk/`. The package has its own dependency lockfile, compiler configuration, tests, and license so it can be extracted into a separate repository.
 
 - `src/index.ts`: named client exports, service-scoped transport, HTTP errors, multipart serialization, job polling.
-- `src/catalog.ts`: experimental direct-HTTP catalog operations, typed table handles, metadata verification, and version checks.
+- `src/catalog.ts`: experimental direct-HTTP catalog operations, typed table handles, metadata verification, and shared version checks for insert/update/delete. Mutation predicates use the protocol's Expr tag; query predicates remain embedded expression dictionaries.
 - `src/catalog-query.ts`: immutable typed query builders and Python-compatible expression serialization.
 - `src/catalog-schema.ts`: scalar schema inference, runtime value validation, and reserved JSON key encoding.
 - `src/proxy-protocol.ts`: protocol version constants and binary framing; tagged JSON stays opaque.
