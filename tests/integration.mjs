@@ -935,6 +935,22 @@ try {
     { category: 'b', amount: 9 },
     { category: 'c', amount: null },
   ]);
+  const uniqueCategories = sales.query().select('category').distinct().orderBy('category');
+  assert.deepEqual(await uniqueCategories.collect(), [{ category: 'a' }, { category: 'b' }, { category: 'c' }]);
+  assert.equal(await uniqueCategories.count(), 3);
+  assert.deepEqual(await uniqueCategories.limit(1).offset(1).collect(), [{ category: 'b' }]);
+  assert.equal(await sales.query().select('amount').distinct().count(), 4);
+  assert.equal(await sales.query().where(sales.columns.amount.gt(100)).distinct().count(), 0);
+  assert.equal(await sales.query().distinct().count(), 5);
+  assert.deepEqual(
+    await sales
+      .query()
+      .selectExpressions({ remainder: sales.columns.amount.modulo(2) })
+      .distinct()
+      .collect()
+      .then((rows) => rows.sort((a, b) => (a.remainder ?? -1) - (b.remainder ?? -1))),
+    [{ remainder: null }, { remainder: 0 }, { remainder: 1 }],
+  );
   const summaries = {
     category: sales.columns.category,
     total: sales.columns.amount.aggregate('sum'),

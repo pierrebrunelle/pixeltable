@@ -332,6 +332,8 @@ const summaries = await sales
   .collect();
 ```
 
+Use `query.select('category').distinct()` to remove duplicate selected rows, or `query.distinct()` to group all columns. Expression projections are supported. Like Python, this captures the selected expressions as grouping keys when called; select the desired columns before calling `distinct()`. Null values form one group. The returned row type is unchanged, and `count()` counts distinct groups. Ordering and pagination can follow, but `count()` still rejects limits/offsets. Calling `distinct()` or `groupBy()` again on an already grouped query raises an error. Python validates whether selected expressions support grouping.
+
 `sum` and `mean` accept numeric expressions; `min` and `max` accept strings, numbers, booleans, and timestamps; `count` accepts every supported column type and counts non-null values. Empty/all-null inputs return null for all except `count`, which returns zero. Aggregation without `groupBy()` summarizes the whole filtered input. `groupBy()` accepts column names or same-table expressions and can be specified once per query. Select grouping expressions alongside aggregates; Python validates invalid mixed selections and nested aggregates. `where()` filters input rows. Grouped `count()` returns the number of groups; limits/offsets apply to collected groups and remain unsupported by `count()`. Custom aggregate declarations and grouping component views by base rows are not implemented yet.
 
 Calculate running aggregates by passing window options to `sum`, `min`, `max`, or `count`:

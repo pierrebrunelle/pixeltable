@@ -607,3 +607,13 @@ export async function checkJoinTypes(): Promise<void> {
   // @ts-expect-error Python does not implement right joins.
   catalog.join(left, right, { how: 'right' });
 }
+
+export async function checkDistinctTypes(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.openTable('values', { id: { type: 'int' }, label: { type: 'string', nullable: true } });
+  const rows = await table.query().select('label').distinct().collect();
+  const label: string | null = rows[0]!.label;
+  // @ts-expect-error Distinct preserves the selected row shape.
+  const id = rows[0]!.id;
+  void [label, id];
+}

@@ -234,3 +234,10 @@ serialized = (
 Path(__file__).with_name('fixtures').joinpath('catalog-joins.json').write_text(
     json.dumps(json.loads(serialized), indent=2) + '\n'
 )
+
+
+distinct = table.where(table.id > 0).select(title=table.title, adjusted=table.score + 1).distinct()
+serialized = json.dumps(distinct.as_dict()).replace(str(table._id), '12345678-1234-5678-1234-567812345678')
+Path(__file__).with_name('fixtures').joinpath('catalog-distinct.json').write_text(
+    json.dumps(json.loads(serialized), indent=2) + '\n'
+)

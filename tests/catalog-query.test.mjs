@@ -372,3 +372,23 @@ test('aggregate windows match Python partition and ordering serialization', asyn
   assert.throws(() => columns.score.aggregate('sum', { orderBy: setup('other').columns.id }), /belong/);
   assert.throws(() => columns.score.aggregate('sum', { orderBy: columns.id, descending: true }), /requires/);
 });
+
+test('distinct matches Python selected-expression grouping and preserves query branches', async () => {
+  const { columns, query, calls } = setup();
+  const base = query()
+    .where(columns.id.gt(0))
+    .selectExpressions({ title: columns.title, adjusted: columns.score.add(1) });
+  const unique = base.distinct();
+  await unique.collect();
+  const python = JSON.parse(await readFile(new URL('./fixtures/catalog-distinct.json', import.meta.url), 'utf8'));
+  assert.deepEqual(calls[0].wire, python);
+  await base.collect();
+  assert.equal(calls[1].wire.group_by_clause, null);
+  await query().distinct().collect();
+  assert.equal(calls[2].wire.group_by_clause.length, Object.keys(schema).length);
+  await unique.orderBy('title').limit(1).offset(1).collect();
+  assert.deepEqual(calls[3].wire.group_by_clause, python.group_by_clause);
+  assert.throws(() => unique.distinct(), /already specified/);
+  assert.throws(() => unique.groupBy('title'), /already specified/);
+  assert.throws(() => query().groupBy('title').distinct(), /already specified/);
+});

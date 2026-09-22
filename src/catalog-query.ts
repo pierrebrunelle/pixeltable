@@ -470,6 +470,7 @@ export interface CatalogQuery<S extends CatalogSchema, R = CatalogRow<S>> {
     column: SortableName<S> | CatalogExpression<string | number | boolean | null>,
     direction?: 'asc' | 'desc',
   ): CatalogQuery<S, R>;
+  distinct(): CatalogQuery<S, R>;
   groupBy(...columns: (ColumnName<S> | ProjectionExpression)[]): CatalogQuery<S, R>;
   limit(value: number): CatalogQuery<S, R>;
   offset(value: number): CatalogQuery<S, R>;
@@ -596,6 +597,17 @@ export function createTableQueries<S extends CatalogSchema>(
         const column = definition ? definition.column : schema[name as string]!;
         if (column.type === 'json') throw new TypeError('JSON columns cannot be sorted');
         return build<R>(selected, predicate, [...order, [reference, direction === 'asc']], limit, offset, grouping);
+      },
+      distinct() {
+        if (grouping !== null) throw new TypeError('groupBy() is already specified');
+        return build<R>(
+          selected,
+          predicate,
+          order,
+          limit,
+          offset,
+          selected.map(({ expression }) => expression),
+        );
       },
       groupBy(...items) {
         if (grouping !== null) throw new TypeError('groupBy() is already specified');
