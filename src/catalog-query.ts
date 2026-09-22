@@ -1,4 +1,4 @@
-import { columnClasses, columnValue } from './catalog-schema.js';
+import { columnClasses, columnValue, copySchema } from './catalog-schema.js';
 import type { CatalogColumn, CatalogRow, CatalogSchema, WritableColumn } from './catalog-schema.js';
 
 type Wire = Record<string, unknown>;
@@ -190,13 +190,20 @@ export function updateValue(value: unknown, column: CatalogColumn, tableId: stri
   return value instanceof ColumnExpression ? value.toUpdateWire(tableId, column) : columnValue(value, column, true);
 }
 
-export interface CatalogQuery<S extends CatalogSchema, K extends ColumnName<S> = ColumnName<S>> {
-  where(predicate: CatalogPredicate): CatalogQuery<S, K>;
-  select<const C extends readonly ColumnName<S>[]>(...columns: C): CatalogQuery<S, C[number]>;
-  orderBy(column: SortableName<S>, direction?: 'asc' | 'desc'): CatalogQuery<S, K>;
-  limit(value: number): CatalogQuery<S, K>;
-  offset(value: number): CatalogQuery<S, K>;
-  collect(options?: { signal?: AbortSignal }): Promise<Pick<CatalogRow<S>, K>[]>;
+export type CatalogProjection<E extends Record<string, CatalogExpression<unknown>>> = {
+  [K in keyof E & string]: E[K] extends CatalogExpression<infer T> ? T : never;
+};
+
+export interface CatalogQuery<S extends CatalogSchema, R = CatalogRow<S>> {
+  where(predicate: CatalogPredicate): CatalogQuery<S, R>;
+  select<const C extends readonly ColumnName<S>[]>(...columns: C): CatalogQuery<S, Pick<CatalogRow<S>, C[number]>>;
+  selectExpressions<const E extends Record<string, CatalogExpression<unknown>>>(
+    expressions: E,
+  ): CatalogQuery<S, CatalogProjection<E>>;
+  orderBy(column: SortableName<S>, direction?: 'asc' | 'desc'): CatalogQuery<S, R>;
+  limit(value: number): CatalogQuery<S, R>;
+  offset(value: number): CatalogQuery<S, R>;
+  collect(options?: { signal?: AbortSignal }): Promise<R[]>;
   count(options?: { signal?: AbortSignal }): Promise<number>;
 }
 
@@ -204,7 +211,12 @@ export function createTableQueries<S extends CatalogSchema>(
   tableId: string,
   schema: S,
   columnIds: Record<string, number | { id: number; tableId: string }>,
-  collect: (query: Wire, columns: readonly string[], signal?: AbortSignal) => Promise<CatalogRow<S>[]>,
+  collect: (
+    query: Wire,
+    columns: readonly string[],
+    signal?: AbortSignal,
+    outputSchema?: CatalogSchema,
+  ) => Promise<Record<string, unknown>[]>,
   count: (query: Wire, signal?: AbortSignal) => Promise<number>,
   pathKey: Wire = { tbl_version: { id: tableId, effective_version: null }, base: null },
 ): { columns: CatalogColumns<S>; query: () => CatalogQuery<S> } {
@@ -239,13 +251,17 @@ export function createTableQueries<S extends CatalogSchema>(
       throw new TypeError('Query limits and offsets must be nonnegative safe integers');
     return { _classname: 'Literal', val: value, col_type: { _classname: 'IntType', nullable: false } };
   }
-  function build<K extends ColumnName<S>>(
-    selected: readonly K[],
+  type Selection = { name: string; expression: Wire; alias: string | null; column: CatalogColumn };
+  function namedSelections(names: readonly string[]): Selection[] {
+    return names.map((name) => ({ name, expression: columnReference(name), alias: null, column: schema[name]! }));
+  }
+  function build<R>(
+    selected: readonly Selection[],
     predicate: Predicate | null = null,
     order: readonly unknown[] = [],
     limit: Wire | null = null,
     offset: Wire | null = null,
-  ): CatalogQuery<S, K> {
+  ): CatalogQuery<S, R> {
     function wire(): Wire {
       return {
         _classname: 'Query',
@@ -253,7 +269,7 @@ export function createTableQueries<S extends CatalogSchema>(
           tbls: [pathKey],
           join_clauses: [],
         },
-        select_list: selected.map((name) => [columnReference(name), null]),
+        select_list: selected.map(({ expression, alias }) => [expression, alias]),
         where_clause: predicate?.toWire(tableId) ?? null,
         group_by_clause: null,
         grouping_tbl: null,
@@ -267,28 +283,44 @@ export function createTableQueries<S extends CatalogSchema>(
       where(next) {
         if (!(next instanceof Predicate)) throw new TypeError('Expected a catalog predicate');
         next.toWire(tableId);
-        return build(selected, predicate ? predicate.and(next) : next, order, limit, offset);
+        return build<R>(selected, predicate ? predicate.and(next) : next, order, limit, offset);
       },
       select(...names) {
         if (names.length === 0 || new Set(names).size !== names.length)
           throw new TypeError('Select distinct column names');
         names.forEach(columnReference);
-        return build(names, predicate, order, limit, offset);
+        return build(namedSelections(names), predicate, order, limit, offset);
+      },
+      selectExpressions(expressions) {
+        const entries = Object.entries(expressions);
+        if (entries.length === 0) throw new TypeError('Select at least one expression');
+        const projected = entries.map(([name, expression]) => {
+          if (!(expression instanceof ColumnExpression)) throw new TypeError('Expected a catalog expression');
+          const definition = expression.computedDefinition(tableId);
+          return { name, expression: definition.wire.v as Wire, alias: name, column: definition.column };
+        });
+        copySchema(Object.fromEntries(projected.map(({ name, column }) => [name, column])));
+        return build(projected, predicate, order, limit, offset);
       },
       orderBy(name, direction = 'asc') {
         if (direction !== 'asc' && direction !== 'desc') throw new TypeError('Invalid sort direction');
         const reference = columnReference(name);
         if (schema[name]!.type === 'json') throw new TypeError('JSON columns cannot be sorted');
-        return build(selected, predicate, [...order, [reference, direction === 'asc']], limit, offset);
+        return build<R>(selected, predicate, [...order, [reference, direction === 'asc']], limit, offset);
       },
       limit(value) {
-        return build(selected, predicate, order, integerLiteral(value), offset);
+        return build<R>(selected, predicate, order, integerLiteral(value), offset);
       },
       offset(value) {
-        return build(selected, predicate, order, limit, integerLiteral(value));
+        return build<R>(selected, predicate, order, limit, integerLiteral(value));
       },
       async collect(options = {}) {
-        return collect(wire(), selected, options.signal);
+        return collect(
+          wire(),
+          selected.map(({ name }) => name),
+          options.signal,
+          Object.fromEntries(selected.map(({ name, column }) => [name, column])),
+        ) as Promise<R[]>;
       },
       async count(options = {}) {
         if (limit !== null || offset !== null) throw new TypeError('count() cannot be used with limit() or offset()');
@@ -296,5 +328,5 @@ export function createTableQueries<S extends CatalogSchema>(
       },
     };
   }
-  return { columns, query: () => build(Object.keys(schema) as ColumnName<S>[]) };
+  return { columns, query: () => build<CatalogRow<S>>(namedSelections(Object.keys(schema))) };
 }

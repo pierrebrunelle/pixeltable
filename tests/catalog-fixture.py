@@ -76,3 +76,10 @@ serialized = (
 Path(__file__).with_name('fixtures').joinpath('catalog-view-query.json').write_text(
     json.dumps(json.loads(serialized), indent=2) + '\n'
 )
+
+serialized = json.dumps(table.select(item=table.id, new_score=table.score * 2).as_dict()).replace(
+    str(table._id), '12345678-1234-5678-1234-567812345678'
+)
+Path(__file__).with_name('fixtures').joinpath('catalog-projection.json').write_text(
+    json.dumps(json.loads(serialized), indent=2) + '\n'
+)

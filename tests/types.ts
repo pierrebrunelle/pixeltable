@@ -296,3 +296,29 @@ export async function checkSchemaMutationTypes(): Promise<void> {
   // @ts-expect-error Renaming preserves computed write protection.
   await renamedComputed.update({ twice: 4 });
 }
+
+export async function checkProjectionTypes(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.openTable('base', { id: { type: 'int' }, score: { type: 'float', nullable: true } });
+  const rows = await table
+    .query()
+    .selectExpressions({
+      item: table.columns.id,
+      total: table.columns.score.multiply(2),
+    })
+    .where(table.columns.id.gt(0))
+    .orderBy('id')
+    .limit(5)
+    .collect();
+  const item: number = rows[0]!.item;
+  const total: number | null = rows[0]!.total;
+  void item;
+  void total;
+  // @ts-expect-error Projections preserve nullable outputs.
+  const required: number = rows[0]!.total;
+  void required;
+  // @ts-expect-error Original names are replaced by aliases.
+  rows[0]!.score;
+  // @ts-expect-error Projection values must be catalog expressions.
+  table.query().selectExpressions({ total: 2 });
+}

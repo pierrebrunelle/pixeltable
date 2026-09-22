@@ -1,0 +1,62 @@
+{
+  "_classname": "Query",
+  "from_clause": {
+    "tbls": [
+      {
+        "tbl_version": {
+          "id": "12345678-1234-5678-1234-567812345678",
+          "effective_version": null
+        },
+        "base": null
+      }
+    ],
+    "join_clauses": []
+  },
+  "select_list": [
+    [
+      {
+        "_classname": "ColumnRef",
+        "tbl_id": "12345678-1234-5678-1234-567812345678",
+        "effective_version": null,
+        "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+        "col_tbl_effective_version": null,
+        "col_id": 0,
+        "perform_validation": false
+      },
+      "item"
+    ],
+    [
+      {
+        "_classname": "ArithmeticExpr",
+        "operator": 2,
+        "components": [
+          {
+            "_classname": "ColumnRef",
+            "tbl_id": "12345678-1234-5678-1234-567812345678",
+            "effective_version": null,
+            "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+            "col_tbl_effective_version": null,
+            "col_id": 2,
+            "perform_validation": false
+          },
+          {
+            "_classname": "Literal",
+            "val": 2,
+            "col_type": {
+              "_classname": "IntType",
+              "nullable": false
+            }
+          }
+        ]
+      },
+      "new_score"
+    ]
+  ],
+  "where_clause": null,
+  "group_by_clause": null,
+  "grouping_tbl": null,
+  "order_by_clause": null,
+  "limit_val": null,
+  "offset_val": null,
+  "sample_clause": null
+}
