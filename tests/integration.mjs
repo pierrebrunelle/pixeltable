@@ -11,7 +11,7 @@ import { createClient, multipartBody, PixeltableHttpError } from '../dist/index.
 
 import { loadGeneratedClient, loadTypeScriptModule } from './load-generated.mjs';
 
-import { createCatalogClient, CatalogError, defineCatalogFunction } from '../dist/catalog.js';
+import { createCatalogClient, CatalogError, CatalogStaleError, defineCatalogFunction } from '../dist/catalog.js';
 
 if (!process.env.PXT_TEST_PYTHON)
   throw new Error('Set PXT_TEST_PYTHON to a Python executable with pixeltable[serve] installed');
@@ -477,6 +477,71 @@ try {
       .collect(),
     [{ answer: 42 }],
   );
+  const searchSchema = { text: { type: 'string' } };
+  const searchTable = await catalog.createTable('typescript_catalog/search', searchSchema);
+  await searchTable.insert([{ text: 'aaa' }, { text: 'bbb' }, { text: 'ab' }]);
+  await searchTable.addEmbeddingIndex('text', {
+    embedding: 'udf_fixture.text_embedding',
+    name: 'text_idx',
+    precision: 'fp32',
+  });
+  const similarity = searchTable.columns.text.similarity('aaa', 'text_idx');
+  const ranked = await searchTable
+    .query()
+    .selectExpressions({ text: searchTable.columns.text, score: similarity })
+    .orderBy(similarity, 'desc')
+    .limit(2)
+    .collect();
+  assert.deepEqual(
+    ranked.map((row) => row.text),
+    ['aaa', 'ab'],
+  );
+  assert.ok(Math.abs(ranked[0].score - 1) < 0.00001);
+  assert.deepEqual(await searchTable.query().where(similarity.gt(0.9)).collect(), [{ text: 'aaa' }]);
+  await searchTable.insert([{ text: 'aaaa' }]);
+  assert.equal((await searchTable.query().where(similarity.gt(0.9)).collect()).length, 2);
+  await assert.rejects(
+    searchTable.addEmbeddingIndex('text', {
+      embedding: 'udf_fixture.missing_embedding',
+      name: 'missing',
+    }),
+    (error) => error instanceof CatalogError && error.detail.error_code === 'FUNCTION_NOT_FOUND',
+  );
+  const staleSearch = await catalog.openTable('typescript_catalog/search', searchSchema);
+  await searchTable.update({ text: 'bb' }, { where: searchTable.columns.text.eq('aaa') });
+  await assert.rejects(
+    staleSearch.addEmbeddingIndex('text', {
+      embedding: 'udf_fixture.text_embedding',
+      name: 'stale_idx',
+    }),
+    CatalogStaleError,
+  );
+  assert.deepEqual(await searchTable.query().where(similarity.gt(0.9)).collect(), [{ text: 'aaaa' }]);
+  await assert.rejects(
+    searchTable.addEmbeddingIndex('text', {
+      embedding: 'udf_fixture.text_embedding',
+      name: 'text_idx',
+    }),
+    CatalogError,
+  );
+  await searchTable.addEmbeddingIndex('text', {
+    embedding: 'udf_fixture.text_embedding',
+    name: 'text_idx',
+    ifExists: 'ignore',
+  });
+  const searchView = await searchTable.createView('typescript_catalog/search_view');
+  await searchView.addEmbeddingIndex('text', {
+    embedding: 'udf_fixture.text_embedding',
+    name: 'view_idx',
+    metric: 'l2',
+    precision: 'fp32',
+  });
+  const distance = searchView.columns.text.similarity('aaaa', 'view_idx');
+  assert.deepEqual(await searchView.query().select('text').orderBy(distance, 'asc').limit(1).collect(), [
+    { text: 'aaaa' },
+  ]);
+  await searchTable.dropIndex('text_idx');
+  await assert.rejects(searchTable.query().selectExpressions({ score: similarity }).collect(), CatalogError);
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );

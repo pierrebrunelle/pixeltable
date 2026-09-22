@@ -315,6 +315,32 @@ test('index operations use version checks and validate columns before sending', 
   await assert.rejects(table.dropIndex(''), /name is required/);
   await assert.rejects(table.dropIndex('id_idx', { ifNotExists: 'replace' }), /Invalid ifNotExists/);
   assert.equal(requests.length, 3);
+  const embedding = 'udf_fixture.text_embedding';
+  for (const options of [
+    { embedding: 'bad' },
+    { embedding, metric: 'bad' },
+    { embedding, precision: 'bad' },
+    { embedding, name: '' },
+    { embedding, ifExists: 'replace' },
+  ])
+    await assert.rejects(table.addEmbeddingIndex('title', options), TypeError);
+  await assert.rejects(table.addEmbeddingIndex('id', { embedding }), TypeError);
+  assert.equal(requests.length, 3);
+  await table.addEmbeddingIndex('title', { embedding });
+  assert.equal(requests[3].snapshot_path_key.tbl_version.effective_version, 2);
+  assert.deepEqual(requests[3].args, {
+    column: 'title',
+    idx_name: null,
+    embedding: {
+      $pxt: 'Function',
+      v: { _classpath: 'pixeltable.func.callable_function.CallableFunction', path: embedding },
+    },
+    string_embed: null,
+    image_embed: null,
+    metric: 'cosine',
+    precision: 'fp16',
+    if_exists: 'error',
+  });
 });
 
 test('version history validates metadata and rejects invalid limits before transport', async () => {

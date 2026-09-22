@@ -209,3 +209,20 @@ test('registered scalar function calls match Python and validate arguments local
   );
   assert.throws(() => defineCatalogFunction('invalid', { value: { type: 'int' } }, { type: 'int' }), /import path/);
 });
+
+test('text similarity ranking matches Python serialization', async () => {
+  const { columns, query, calls } = setup();
+  const similarity = columns.title.similarity('aaa', 'text_idx');
+  await query()
+    .selectExpressions({ title: columns.title, score: similarity })
+    .orderBy(similarity, 'desc')
+    .limit(2)
+    .collect();
+  const expected = JSON.parse(await readFile(new URL('fixtures/catalog-similarity.json', import.meta.url), 'utf8'));
+  assert.deepEqual(calls[0].wire, expected);
+  assert.throws(() => columns.id.similarity('a'), TypeError);
+  assert.throws(() => columns.title.similarity(1), TypeError);
+  assert.throws(() => columns.title.similarity('a', ''), TypeError);
+  assert.throws(() => query().orderBy(setup('other').columns.title.similarity('a')), TypeError);
+  assert.throws(() => query().orderBy(columns.payload), TypeError);
+});

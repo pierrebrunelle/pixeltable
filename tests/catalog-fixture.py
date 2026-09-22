@@ -4,7 +4,7 @@ import json
 import os
 from pathlib import Path
 
-from udf_fixture import decorate
+from udf_fixture import decorate, text_embedding
 
 import pixeltable as pxt
 from pixeltable.env import Env
@@ -90,5 +90,15 @@ serialized = json.dumps(decorate(text=table.title, prefix='Hi ').as_dict()).repl
     str(table._id), '12345678-1234-5678-1234-567812345678'
 )
 Path(__file__).with_name('fixtures').joinpath('catalog-function.json').write_text(
+    json.dumps(json.loads(serialized), indent=2) + '\n'
+)
+
+
+table.add_embedding_index('title', embedding=text_embedding, idx_name='text_idx', precision='fp32')
+similarity = table.title.similarity(string='aaa', idx='text_idx')
+serialized = json.dumps(
+    table.select(title=table.title, score=similarity).order_by(similarity, asc=False).limit(2).as_dict()
+).replace(str(table._id), '12345678-1234-5678-1234-567812345678')
+Path(__file__).with_name('fixtures').joinpath('catalog-similarity.json').write_text(
     json.dumps(json.loads(serialized), indent=2) + '\n'
 )

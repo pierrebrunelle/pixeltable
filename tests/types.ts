@@ -342,3 +342,25 @@ export async function checkFunctionTypes(): Promise<void> {
   // @ts-expect-error Function parameters must match declared names.
   table.callFunction(upper, { wrong: 'hello' });
 }
+
+export async function checkTextSearchTypes(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.createTable('search', {
+    title: { type: 'string' },
+    id: { type: 'int' },
+    payload: { type: 'json' },
+  });
+  await table.addEmbeddingIndex('title', { embedding: 'app.embed' });
+  const score = table.columns.title.similarity('query');
+  const rows = await table.query().selectExpressions({ score }).orderBy(score, 'desc').collect();
+  const value: number = rows[0]!.score;
+  void value;
+  // @ts-expect-error Text indexes require string columns.
+  await table.addEmbeddingIndex('id', { embedding: 'app.embed' });
+  // @ts-expect-error Similarity requires a string column.
+  table.columns.id.similarity('query');
+  // @ts-expect-error Similarity requires a string query.
+  table.columns.title.similarity(1);
+  // @ts-expect-error JSON expressions cannot be sorted.
+  table.query().orderBy(table.columns.payload);
+}
