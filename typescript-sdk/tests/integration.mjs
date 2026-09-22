@@ -797,6 +797,75 @@ try {
     { values: { text: '20', number: 20 }, errors: {} },
   ]);
   await assert.rejects(backfilled.compute([]), TypeError);
+  const batchSource = await catalog.createTable('sdk_test/batch', {
+    id: { type: 'int', primaryKey: true },
+    value: { type: 'int' },
+  });
+  const batch = await batchSource.addComputedColumn('doubled', batchSource.columns.value.multiply(2));
+  await batch.insert([
+    { id: 1, value: 2 },
+    { id: 2, value: 3 },
+  ]);
+  assert.deepEqual(
+    await batch.batchUpdate([
+      { id: 1, value: 4 },
+      { id: 2, value: 5 },
+    ]),
+    { updatedRows: 2, insertedRows: 0, errors: 0 },
+  );
+  assert.deepEqual(await batch.query().select('doubled').orderBy('id').collect(), [{ doubled: 8 }, { doubled: 10 }]);
+  await assert.rejects(
+    batch.batchUpdate([
+      { id: 1, value: 100 },
+      { id: 99, value: 1 },
+    ]),
+    CatalogError,
+  );
+  assert.deepEqual(await batch.query().where(batch.columns.id.eq(1)).select('value').collect(), [{ value: 4 }]);
+  assert.deepEqual(await batch.batchUpdate([{ id: 99, value: 1 }], { ifNotExists: 'ignore' }), {
+    updatedRows: 0,
+    insertedRows: 0,
+    errors: 0,
+  });
+  assert.deepEqual(
+    await batch.batchUpdate(
+      [
+        { id: 2, value: 6 },
+        { id: 3, value: 7 },
+      ],
+      { ifNotExists: 'insert' },
+    ),
+    { updatedRows: 1, insertedRows: 1, errors: 0 },
+  );
+  const staleBatch = await catalog.openTable('sdk_test/batch', batch.schema);
+  await batch.batchUpdate([{ id: 1, value: 9 }], { cascade: false });
+  assert.deepEqual(await batch.query().where(batch.columns.id.eq(1)).select('value', 'doubled').collect(), [
+    { value: 9, doubled: 8 },
+  ]);
+  await assert.rejects(staleBatch.batchUpdate([{ id: 1, value: 10 }]), CatalogStaleError);
+  await assert.rejects(batch.batchUpdate([{ value: 1 }]), TypeError);
+  await assert.rejects(batch.batchUpdate([{ id: 1, doubled: 8 }]), TypeError);
+  const composite = await catalog.createTable('sdk_test/composite', {
+    tenant: { type: 'string', primaryKey: true },
+    id: { type: 'int', primaryKey: true },
+    value: { type: 'int' },
+  });
+  await composite.insert([
+    { tenant: 'a', id: 1, value: 1 },
+    { tenant: 'b', id: 1, value: 2 },
+  ]);
+  await composite.batchUpdate([{ tenant: 'a', id: 1, value: 3 }]);
+  assert.deepEqual(await composite.query().select('value').orderBy('tenant').collect(), [{ value: 3 }, { value: 2 }]);
+  await assert.rejects(composite.batchUpdate([{ id: 1, value: 4 }]), TypeError);
+  await assert.rejects(composite.batchUpdate([], { ifNotExists: 'insert' }), TypeError);
+  await assert.rejects(composite.batchUpdate([{ tenant: 'a', id: 1 }], { cascade: 'false' }), TypeError);
+  const batchView = await batch.createView('sdk_test/batch_view');
+  await batchView.addComputedColumn('tripled', batchView.columns.value.multiply(3));
+  assert.deepEqual(await batch.batchUpdate([{ id: 4, value: 2 }], { ifNotExists: 'insert' }), {
+    updatedRows: 0,
+    insertedRows: 2,
+    errors: 0,
+  });
   console.log(
     'Pixeltable integration passed: OpenAPI, insert, query, compute, update, delete, upload, jobs, validation, authenticated backend, catalog operations.',
   );

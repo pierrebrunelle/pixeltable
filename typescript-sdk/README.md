@@ -369,6 +369,17 @@ const failures = await scored
 
 `errorType` and `errorMessage` are nullable string expressions: successful rows return `null`. They require stored computed column references; ordinary scalar columns and inline calculations are rejected. Use `insert(rows, { onError: 'ignore' })` to retain rows with failed computed values; the default `onError: 'abort'` rejects the insertion when computation fails. Inserts return `{ insertedRows, errors }`: insertedRows counts rows in the target table and errors includes computation failures in dependent views. Invalid input values still fail local validation before transport. Computed-column creation also defaults to abort; pass `{ onError: 'ignore' }` to `addComputedColumn()` to retain failures during backfill. Select the error properties instead of a failed required value, whose stored null would not match its declared TypeScript type.
 
+Update multiple rows by primary key in one request:
+
+```typescript
+const status = await documents.batchUpdate([
+  { id: 1, title: 'Revised' },
+  { id: 2, title: 'Another revision' },
+]);
+```
+
+Every row must contain all declared primary-key columns; other writable columns are optional. Values are literals, and computed columns cannot be assigned. Missing rows fail the operation by default. Set `ifNotExists: 'ignore'` to skip them or `'insert'` to insert them; rows that may be inserted must include every required input column. `cascade` defaults to `true`; disabling it leaves dependent computed values unchanged. The result reports updated rows, inserted rows, and errors, including cascaded table/view operations, matching Python's status accounting. These counts can exceed the number of input rows. Batch updates use version checks and are never retried automatically.
+
 Evaluate a pipeline without persisting the input rows:
 
 ```typescript
@@ -378,7 +389,7 @@ const preview = await scored.compute([{ id: 9, title: 'Preview', score: 3, enabl
 console.log(preview[0]?.values, preview[0]?.errors);
 ```
 
-`compute()` requires a nonempty array with the same input shape as `insert()` and returns `{ values, errors }` for each resulting row. Values are conservatively nullable so failed cells are represented honestly; errors map column names to `{ type, message }`. It defaults to aborting on computation errors. A live view evaluates the base pipeline and drops rows excluded by its filter. Computation does not insert rows or create table versions, but UDFs still execute and can incur costs or external side effects. It uses the current server schema and verifies the returned schema. Scalar and JSON outputs are supported; media and embedding-index vector outputs are not yet decoded by this adapter.
+`compute()` requires a nonempty array with the same input shape as `insert()` and returns `{ values, errors }` for each resulting row. Values are conservatively nullable so failed cells are represented honestly; errors map column names to `{ type, message }`. It defaults to aborting on computation errors. A live view evaluates the base pipeline and drops rows excluded by its filter. Computation does not insert rows or create table versions, but UDFs still execute and can incur costs or external side effects. It uses the current server schema and verifies the returned schema. Scalar and JSON outputs are supported; media outputs are not yet decoded by this adapter. Python excludes embedding-index vectors from compute outputs.
 
 Retry a stored computed column after fixing its Python UDF or restoring an external dependency:
 

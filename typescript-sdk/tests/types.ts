@@ -456,3 +456,21 @@ export async function checkComputeTypes(): Promise<void> {
   // @ts-expect-error Computed columns are not inputs.
   await table.compute([{ input: '1', result: 1 }]);
 }
+
+export async function checkBatchUpdateTypes(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.openTable('items', {
+    tenant: { type: 'string', primaryKey: true },
+    id: { type: 'int', primaryKey: true },
+    text: { type: 'string' },
+    derived: { type: 'int', computed: true },
+  });
+  await table.batchUpdate([{ tenant: 'a', id: 1, text: 'changed' }]);
+  // @ts-expect-error All components of a composite primary key are required.
+  await table.batchUpdate([{ id: 1, text: 'changed' }]);
+  // @ts-expect-error Computed values cannot be updated.
+  await table.batchUpdate([{ tenant: 'a', id: 1, derived: 2 }]);
+  const unkeyed = await catalog.openTable('unkeyed', { id: { type: 'int' } });
+  // @ts-expect-error Batch updates require declared primary keys.
+  await unkeyed.batchUpdate([{ id: 1 }]);
+}
