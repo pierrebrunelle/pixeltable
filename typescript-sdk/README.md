@@ -2,14 +2,12 @@
 
 Call a running Pixeltable service from Node.js 22 or newer. Generate types from the service's OpenAPI document, then call the routes declared in its Python application file.
 
-The SDK is packaged separately within this checkout so it can move to its own repository. It is unpublished and marked private. Python still defines tables, computed columns, indexes, and routes. The SDK supports service requests, multipart uploads, HTTP errors, background-job polling, and optional React hooks.
+This standalone package is unpublished and marked private. Python still defines tables, computed columns, indexes, and routes. The SDK supports service requests, multipart uploads, HTTP errors, background-job polling, and optional React hooks.
 
 ## Install locally
 
 ```bash
-cd typescript-sdk
 npm ci
-npm run build
 npm pack
 ```
 
