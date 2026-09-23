@@ -1,0 +1,188 @@
+{
+  "count": {
+    "_classname": "Query",
+    "from_clause": {
+      "tbls": [
+        {
+          "tbl_version": {
+            "id": "12345678-1234-5678-1234-567812345678",
+            "effective_version": null
+          },
+          "base": null
+        }
+      ],
+      "join_clauses": []
+    },
+    "select_list": [
+      [
+        {
+          "_classname": "ColumnRef",
+          "tbl_id": "12345678-1234-5678-1234-567812345678",
+          "effective_version": null,
+          "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+          "col_tbl_effective_version": null,
+          "col_id": 0,
+          "perform_validation": false
+        },
+        null
+      ]
+    ],
+    "where_clause": {
+      "_classname": "Comparison",
+      "operator": 4,
+      "components": [
+        {
+          "_classname": "ColumnRef",
+          "tbl_id": "12345678-1234-5678-1234-567812345678",
+          "effective_version": null,
+          "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+          "col_tbl_effective_version": null,
+          "col_id": 0,
+          "perform_validation": false
+        },
+        {
+          "_classname": "Literal",
+          "val": 0,
+          "col_type": {
+            "_classname": "IntType",
+            "nullable": false
+          }
+        }
+      ]
+    },
+    "group_by_clause": null,
+    "grouping_tbl": null,
+    "order_by_clause": null,
+    "limit_val": null,
+    "offset_val": null,
+    "sample_clause": {
+      "version": 1,
+      "n": 2,
+      "n_per_stratum": null,
+      "fraction": null,
+      "seed": 7,
+      "stratify_exprs": [],
+      "_classname": "SampleClause"
+    }
+  },
+  "stratified": {
+    "_classname": "Query",
+    "from_clause": {
+      "tbls": [
+        {
+          "tbl_version": {
+            "id": "12345678-1234-5678-1234-567812345678",
+            "effective_version": null
+          },
+          "base": null
+        }
+      ],
+      "join_clauses": []
+    },
+    "select_list": [
+      [
+        {
+          "_classname": "ColumnRef",
+          "tbl_id": "12345678-1234-5678-1234-567812345678",
+          "effective_version": null,
+          "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+          "col_tbl_effective_version": null,
+          "col_id": 0,
+          "perform_validation": false
+        },
+        null
+      ],
+      [
+        {
+          "_classname": "ColumnRef",
+          "tbl_id": "12345678-1234-5678-1234-567812345678",
+          "effective_version": null,
+          "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+          "col_tbl_effective_version": null,
+          "col_id": 1,
+          "perform_validation": false
+        },
+        null
+      ]
+    ],
+    "where_clause": null,
+    "group_by_clause": null,
+    "grouping_tbl": null,
+    "order_by_clause": null,
+    "limit_val": null,
+    "offset_val": null,
+    "sample_clause": {
+      "version": 1,
+      "n": null,
+      "n_per_stratum": 1,
+      "fraction": null,
+      "seed": -4,
+      "stratify_exprs": [
+        {
+          "_classname": "ColumnRef",
+          "tbl_id": "12345678-1234-5678-1234-567812345678",
+          "effective_version": null,
+          "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+          "col_tbl_effective_version": null,
+          "col_id": 1,
+          "perform_validation": false
+        }
+      ],
+      "_classname": "SampleClause"
+    }
+  },
+  "fraction": {
+    "_classname": "Query",
+    "from_clause": {
+      "tbls": [
+        {
+          "tbl_version": {
+            "id": "12345678-1234-5678-1234-567812345678",
+            "effective_version": null
+          },
+          "base": null
+        }
+      ],
+      "join_clauses": []
+    },
+    "select_list": [
+      [
+        {
+          "_classname": "ColumnRef",
+          "tbl_id": "12345678-1234-5678-1234-567812345678",
+          "effective_version": null,
+          "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+          "col_tbl_effective_version": null,
+          "col_id": 0,
+          "perform_validation": false
+        },
+        null
+      ]
+    ],
+    "where_clause": null,
+    "group_by_clause": null,
+    "grouping_tbl": null,
+    "order_by_clause": null,
+    "limit_val": null,
+    "offset_val": null,
+    "sample_clause": {
+      "version": 1,
+      "n": null,
+      "n_per_stratum": null,
+      "fraction": 0.5,
+      "seed": 9,
+      "stratify_exprs": [
+        {
+          "_classname": "ColumnRef",
+          "tbl_id": "12345678-1234-5678-1234-567812345678",
+          "effective_version": null,
+          "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+          "col_tbl_effective_version": null,
+          "col_id": 1,
+          "perform_validation": false
+        }
+      ],
+      "_classname": "SampleClause"
+    }
+  }
+}

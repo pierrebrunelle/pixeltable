@@ -50,6 +50,18 @@ Path(__file__).with_name('fixtures').joinpath('catalog-query.json').write_text(
     json.dumps(json.loads(serialized), indent=2) + '\n'
 )
 
+samples = {
+    'count': table.select(table.id).where(table.id > 0).sample(n=2, seed=7),
+    'stratified': table.select(table.id, table.title).sample(n_per_stratum=1, seed=-4, stratify_by=[table.title]),
+    'fraction': table.select(table.id).sample(fraction=0.5, seed=9, stratify_by=table.title),
+}
+serialized = json.dumps({name: query.as_dict() for name, query in samples.items()}).replace(
+    str(table._id), '12345678-1234-5678-1234-567812345678'
+)
+Path(__file__).with_name('fixtures').joinpath('catalog-sample.json').write_text(
+    json.dumps(json.loads(serialized), indent=2) + '\n'
+)
+
 expressions = {
     'add': table.id + 2,
     'subtract': table.id - 2,

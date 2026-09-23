@@ -578,6 +578,14 @@ export type CatalogProjection<E extends Record<string, ProjectionExpression>> = 
   [K in keyof E & string]: E[K][typeof expressionValue];
 };
 
+export interface CatalogSampleOptions<S extends CatalogSchema> {
+  n?: number;
+  nPerStratum?: number;
+  fraction?: number;
+  seed?: number;
+  stratifyBy?: ColumnName<S> | ProjectionExpression | readonly (ColumnName<S> | ProjectionExpression)[];
+}
+
 export interface CatalogQuery<S extends CatalogSchema, R = CatalogRow<S>> {
   where(predicate: CatalogPredicate): CatalogQuery<S, R>;
   select<const C extends readonly ColumnName<S>[]>(...columns: C): CatalogQuery<S, Pick<CatalogRow<S>, C[number]>>;
@@ -590,6 +598,7 @@ export interface CatalogQuery<S extends CatalogSchema, R = CatalogRow<S>> {
   ): CatalogQuery<S, R>;
   distinct(): CatalogQuery<S, R>;
   groupBy(...columns: (ColumnName<S> | ProjectionExpression)[]): CatalogQuery<S, R>;
+  sample(options: CatalogSampleOptions<S>): CatalogQuery<S, R>;
   limit(value: number): CatalogQuery<S, R>;
   offset(value: number): CatalogQuery<S, R>;
   collect(options?: { signal?: AbortSignal }): Promise<R[]>;
@@ -667,6 +676,7 @@ export function createTableQueries<S extends CatalogSchema>(
     limit: Wire | null = null,
     offset: Wire | null = null,
     grouping: readonly Wire[] | null = null,
+    sampling: Wire | null = null,
   ): CatalogQuery<S, R> {
     function wire(): Wire {
       return {
@@ -682,20 +692,21 @@ export function createTableQueries<S extends CatalogSchema>(
         order_by_clause: order.length ? order : null,
         limit_val: limit,
         offset_val: offset,
-        sample_clause: null,
+        sample_clause: sampling,
       };
     }
     return {
       where(next) {
+        if (sampling) throw new TypeError('where() cannot be used after sample()');
         if (!(next instanceof Predicate)) throw new TypeError('Expected a catalog predicate');
         next.toWire(tableId);
-        return build<R>(selected, predicate ? predicate.and(next) : next, order, limit, offset, grouping);
+        return build<R>(selected, predicate ? predicate.and(next) : next, order, limit, offset, grouping, sampling);
       },
       select(...names) {
         if (names.length === 0 || new Set(names).size !== names.length)
           throw new TypeError('Select distinct column names');
         names.forEach(columnReference);
-        return build(namedSelections(names), predicate, order, limit, offset, grouping);
+        return build(namedSelections(names), predicate, order, limit, offset, grouping, sampling);
       },
       selectExpressions(expressions) {
         const entries = Object.entries(expressions);
@@ -706,18 +717,28 @@ export function createTableQueries<S extends CatalogSchema>(
           return { name, expression: definition.wire.v as Wire, alias: name, column: definition.column };
         });
         copySchema(Object.fromEntries(projected.map(({ name, column }) => [name, column])));
-        return build(projected, predicate, order, limit, offset, grouping);
+        return build(projected, predicate, order, limit, offset, grouping, sampling);
       },
       orderBy(name, direction = 'asc') {
+        if (sampling) throw new TypeError('orderBy() cannot be used with sample()');
         if (direction !== 'asc' && direction !== 'desc') throw new TypeError('Invalid sort direction');
         const definition = name instanceof ColumnExpression ? name.computedDefinition(tableId) : null;
         const reference = definition ? definition.wire.v : columnReference(name as string);
         const column = definition ? definition.column : schema[name as string]!;
         if (['json', 'binary', 'array'].includes(column.type))
           throw new TypeError('JSON, binary, and array columns cannot be sorted');
-        return build<R>(selected, predicate, [...order, [reference, direction === 'asc']], limit, offset, grouping);
+        return build<R>(
+          selected,
+          predicate,
+          [...order, [reference, direction === 'asc']],
+          limit,
+          offset,
+          grouping,
+          sampling,
+        );
       },
       distinct() {
+        if (sampling) throw new TypeError('distinct() cannot be used with sample()');
         if (grouping !== null) throw new TypeError('groupBy() is already specified');
         return build<R>(
           selected,
@@ -729,6 +750,7 @@ export function createTableQueries<S extends CatalogSchema>(
         );
       },
       groupBy(...items) {
+        if (sampling) throw new TypeError('groupBy() cannot be used with sample()');
         if (grouping !== null) throw new TypeError('groupBy() is already specified');
         const expressions = items.map((item) => {
           if (typeof item === 'string') return columnReference(item);
@@ -737,11 +759,54 @@ export function createTableQueries<S extends CatalogSchema>(
         });
         return build<R>(selected, predicate, order, limit, offset, expressions);
       },
+      sample(options) {
+        if (sampling) throw new TypeError('Multiple sample() clauses are not supported');
+        if (joined || grouping !== null || order.length || limit !== null || offset !== null)
+          throw new TypeError('sample() cannot be used with joins, grouping, ordering, limits, or offsets');
+        if (typeof options !== 'object' || options === null || Array.isArray(options))
+          throw new TypeError('Sample options are required');
+        if (Object.keys(options).some((key) => !['n', 'nPerStratum', 'fraction', 'seed', 'stratifyBy'].includes(key)))
+          throw new TypeError('Unsupported sample option');
+        const { n, nPerStratum, fraction, seed, stratifyBy } = options;
+        if ([n, nPerStratum, fraction].filter((value) => value !== undefined).length !== 1)
+          throw new TypeError('Specify exactly one of n, nPerStratum, or fraction');
+        if (n !== undefined && (!Number.isSafeInteger(n) || n < 1))
+          throw new TypeError('Sample n must be a positive safe integer');
+        if (nPerStratum !== undefined && (!Number.isSafeInteger(nPerStratum) || nPerStratum < 1))
+          throw new TypeError('Sample nPerStratum must be a positive safe integer');
+        if (fraction !== undefined && (!Number.isFinite(fraction) || fraction < 0 || fraction > 1))
+          throw new TypeError('Sample fraction must be between 0 and 1');
+        if (seed !== undefined && !Number.isSafeInteger(seed))
+          throw new TypeError('Sample seed must be a safe integer');
+        const items = stratifyBy === undefined ? [] : Array.isArray(stratifyBy) ? stratifyBy : [stratifyBy];
+        if (stratifyBy !== undefined && items.length === 0) throw new TypeError('Specify a stratification expression');
+        if (nPerStratum !== undefined && items.length === 0) throw new TypeError('nPerStratum requires stratifyBy');
+        const stratifyExprs = items.map((item) => {
+          const definition = item instanceof ColumnExpression ? item.computedDefinition(tableId) : null;
+          if (!definition && typeof item !== 'string')
+            throw new TypeError('Stratification requires column names or catalog expressions');
+          const column = definition ? definition.column : schema[item as string];
+          if (!column || !['string', 'int', 'float', 'bool', 'timestamp', 'date', 'uuid'].includes(column.type))
+            throw new TypeError('Stratification requires scalar columns');
+          return definition ? definition.wire.v : columnReference(item as string);
+        });
+        return build<R>(selected, predicate, order, limit, offset, grouping, {
+          _classname: 'SampleClause',
+          version: 1,
+          n: n ?? null,
+          n_per_stratum: nPerStratum ?? null,
+          fraction: fraction ?? null,
+          seed: seed ?? null,
+          stratify_exprs: stratifyExprs,
+        });
+      },
       limit(value) {
-        return build<R>(selected, predicate, order, integerLiteral(value), offset, grouping);
+        if (sampling) throw new TypeError('limit() cannot be used with sample()');
+        return build<R>(selected, predicate, order, integerLiteral(value), offset, grouping, sampling);
       },
       offset(value) {
-        return build<R>(selected, predicate, order, limit, integerLiteral(value), grouping);
+        if (sampling) throw new TypeError('offset() cannot be used with sample()');
+        return build<R>(selected, predicate, order, limit, integerLiteral(value), grouping, sampling);
       },
       async collect(options = {}) {
         return collect(

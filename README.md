@@ -258,6 +258,8 @@ const totals = await documents
 
 Result types contain the selected aliases and preserve expression nullability. Aliases follow the SDK's column-name rules. Filters and ordering still refer to source columns; projections do not add reusable table columns. The same method works on views.
 
+Sample rows in a shuffled order with `query.sample({ n: 10, seed: 42 })`, `query.sample({ fraction: 0.2 })`, or `query.sample({ nPerStratum: 2, stratifyBy: 'category' })`. `stratifyBy` accepts a scalar column name, an expression from the same table, or an array of them. Exactly one size option is required. Apply filters before sampling. Sampling cannot be combined with joins, grouping, ordering, limits, or offsets; a sampled query can still be projected, collected, or counted. Without a seed, repeated samples may differ.
+
 Date and timestamp columns use validated ISO strings, preserving Python's microsecond precision:
 
 ```ts
