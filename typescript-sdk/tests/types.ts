@@ -743,3 +743,14 @@ export async function checkSampleTypes(): Promise<void> {
   table.query().sample(2);
   void [id, category];
 }
+
+export async function checkCursorTypes(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.openTable('cursor', { id: { type: 'int' }, title: { type: 'string' } });
+  for await (const row of table.query().select('id').cursor()) {
+    const id: number = row.id;
+    // @ts-expect-error Cursor rows preserve the query projection.
+    const title: string = row.title;
+    void [id, title];
+  }
+}

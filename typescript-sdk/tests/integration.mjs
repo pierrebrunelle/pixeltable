@@ -1362,6 +1362,12 @@ try {
     group: { type: 'string' },
   });
   await sampleTable.insert(Array.from({ length: 6 }, (_, id) => ({ id, group: id < 3 ? 'a' : 'b' })));
+  const cursorIds = [];
+  for await (const row of sampleTable.query().select('id').orderBy('id').cursor()) {
+    cursorIds.push(row.id);
+    if (cursorIds.length === 2) break;
+  }
+  assert.deepEqual(cursorIds, [0, 1]);
   const sampled = await sampleTable.query().sample({ n: 3, seed: 7 }).collect();
   assert.equal(sampled.length, 3);
   assert.equal(new Set(sampled.map(({ id }) => id)).size, 3);

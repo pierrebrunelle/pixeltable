@@ -130,6 +130,30 @@ test('count rejects pagination before transport', async () => {
   assert.equal(calls.length, 0);
 });
 
+test('cursor reads once on first iteration and stops after early return', async () => {
+  const calls = [];
+  const { query } = createTableQueries(
+    tableId,
+    { id: schema.id },
+    { id: 0 },
+    async (wire, selected, signal) => {
+      calls.push({ wire, selected, signal });
+      return [{ id: 1 }, { id: 2 }];
+    },
+    async () => 0,
+  );
+  const signal = new AbortController().signal;
+  const cursor = query().cursor({ signal });
+  assert.equal(calls.length, 0);
+  assert.deepEqual(await cursor.next(), { value: { id: 1 }, done: false });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].signal, signal);
+  assert.deepEqual(calls[0].selected, ['id']);
+  await cursor.return();
+  assert.deepEqual(await cursor.next(), { value: undefined, done: true });
+  assert.equal(calls.length, 1);
+});
+
 test('arithmetic expressions match Python and enforce assignment types and table identity', async () => {
   const { columns } = setup();
   const python = JSON.parse(await readFile(new URL('./fixtures/catalog-arithmetic.json', import.meta.url), 'utf8'));

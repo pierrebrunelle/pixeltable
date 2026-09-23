@@ -260,6 +260,8 @@ Result types contain the selected aliases and preserve expression nullability. A
 
 Sample rows in a shuffled order with `query.sample({ n: 10, seed: 42 })`, `query.sample({ fraction: 0.2 })`, or `query.sample({ nPerStratum: 2, stratifyBy: 'category' })`. `stratifyBy` accepts a scalar column name, an expression from the same table, or an array of them. Exactly one size option is required. Apply filters before sampling. Sampling cannot be combined with joins, grouping, ordering, limits, or offsets; a sampled query can still be projected, collected, or counted. Without a seed, repeated samples may differ.
 
+Use `for await (const row of query.cursor())` for one-shot row iteration. The query runs when iteration starts. The current catalog protocol returns all rows in one response, so the cursor holds them in memory and an early `break` stops only local iteration. Pass `{ signal }` to cancel the request while it is running.
+
 Date and timestamp columns use validated ISO strings, preserving Python's microsecond precision:
 
 ```ts
