@@ -706,3 +706,25 @@ export async function checkMixedArraySliceTypes(): Promise<void> {
   const value: import('@pixeltable/sdk/experimental/catalog').CatalogArray | null = (await copy.collect())[0]!.row;
   void value;
 }
+
+export async function checkArrayLiteralFunctionTypes(): Promise<void> {
+  const { catalogArray, defineCatalogFunction } = await import('@pixeltable/sdk/experimental/catalog');
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.openTable('matrix', { id: { type: 'int' } });
+  const fn = defineCatalogFunction(
+    'udf_fixture.array_total',
+    { values: { type: 'array', dtype: 'float32', shape: [2, 2] } },
+    { type: 'float' },
+  );
+  const expression = table.callFunction(fn, { values: catalogArray(new Float32Array([1, 2, 3, 4]), [2, 2]) });
+  const rows = await table.query().selectExpressions({ total: expression }).collect();
+  const total: number = rows[0]!.total;
+  table.callFunction(fn, {
+    // @ts-expect-error Array arguments require a CatalogArray.
+    values: [
+      [1, 2],
+      [3, 4],
+    ],
+  });
+  void total;
+}

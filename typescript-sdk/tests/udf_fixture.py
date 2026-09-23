@@ -21,6 +21,11 @@ def text_embedding(text: str) -> pxt.Array[(3,), pxt.Float]:
 
 
 @pxt.udf
+def array_total(values: pxt.Array[(2, 2), pxt.Float]) -> float:
+    return float(values.sum())
+
+
+@pxt.udf
 def parse_number(text: str) -> int:
     return int(text)
 

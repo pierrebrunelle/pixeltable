@@ -1,4 +1,4 @@
-import { createTableQueries } from '../dist/catalog-query.js';
+import { createTableQueries, defineCatalogFunction, callCatalogFunction } from '../dist/catalog-query.js';
 import { copySchema, columnValue, columnWire, matchesColumn } from '../dist/catalog-schema.js';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -172,4 +172,54 @@ test('mixed array indices require known rank and preserve wildcard dimensions', 
   assert.equal(row.dtype, 'float32');
   assert.throws(() => columns.wildcard.arraySlice({}, 4), /out of bounds/);
   assert.throws(() => columns.wildcard.arraySlice(0, 0), /arrayElement/);
+  assert.throws(() => columns.wildcard.eq(catalogArray(new Float32Array([1, 2, 3, 4]), [1, 4])), /not supported/);
+});
+
+test('array literals in function calls match Python and reject values JSON cannot preserve', async () => {
+  const fn = defineCatalogFunction(
+    'udf_fixture.array_total',
+    { values: { type: 'array', dtype: 'float32', shape: [2, 2] } },
+    { type: 'float' },
+  );
+  const value = catalogArray(new Float32Array([1, 2, 3, 4]), [2, 2]);
+  const expression = callCatalogFunction('matrix', fn, { values: value });
+  const python = JSON.parse(await readFile(new URL('./fixtures/catalog-array-literal.json', import.meta.url), 'utf8'));
+  assert.deepEqual(expression.computedDefinition('matrix').wire.v, python);
+  assert.throws(
+    () => callCatalogFunction('matrix', fn, { values: catalogArray(new Float32Array([1, NaN, 3, 4]), [2, 2]) }),
+    /finite/,
+  );
+  assert.throws(
+    () => callCatalogFunction('matrix', fn, { values: catalogArray(new Float32Array([1, -0, 3, 4]), [2, 2]) }),
+    /negative zero/,
+  );
+  const stored = catalogArray(new Float32Array([1, 3, 2, 4]), [2, 2]);
+  const fortran = new CatalogArray({
+    descr: stored.descr,
+    shape: [2, 2],
+    fortranOrder: true,
+    data: stored.data,
+  });
+  assert.deepEqual(
+    callCatalogFunction('matrix', fn, { values: fortran }).computedDefinition('matrix').wire.v.components[0].val,
+    [
+      [1, 2],
+      [3, 4],
+    ],
+  );
+  const bigFn = defineCatalogFunction(
+    'udf_fixture.array_total',
+    { values: { type: 'array', dtype: 'int64', shape: [1] } },
+    { type: 'float' },
+  );
+  assert.throws(
+    () => callCatalogFunction('matrix', bigFn, { values: catalogArray(new BigInt64Array([2n ** 53n]), [1]) }),
+    /safe/,
+  );
+  assert.deepEqual(
+    callCatalogFunction('matrix', bigFn, { values: catalogArray(new BigInt64Array([42n]), [1]) }).computedDefinition(
+      'matrix',
+    ).wire.v.components[0].val,
+    [42],
+  );
 });

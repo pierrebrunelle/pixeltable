@@ -184,8 +184,26 @@ export function columnValue(value: unknown, column: CatalogColumn, input: boolea
 }
 
 export function literalValue(value: unknown, column: CatalogColumn): unknown {
-  if (column.type === 'array' && value !== null) throw new TypeError('Array expression literals are not supported yet');
   const encoded = columnValue(value, column, true);
+  if (column.type === 'array' && encoded !== null) {
+    const array = encoded as CatalogArray;
+    const flat = [...array.toTypedArray()].map((item) => {
+      const number = typeof item === 'bigint' ? Number(item) : item;
+      if (
+        !Number.isFinite(number) ||
+        (Number.isInteger(number) && !Number.isSafeInteger(number)) ||
+        Object.is(number, -0)
+      )
+        throw new TypeError('Array expression literals require finite, safe numeric values without negative zero');
+      return array.descr.slice(1) === 'b1' ? Boolean(number) : number;
+    });
+    let offset = 0;
+    const nested = (axis: number): unknown => {
+      if (axis === array.shape.length) return flat[offset++];
+      return Array.from({ length: array.shape[axis]! }, () => nested(axis + 1));
+    };
+    return nested(0);
+  }
   if (column.type === 'binary' && encoded !== null) {
     let text = '';
     for (const byte of encoded as Uint8Array) text += String.fromCharCode(byte);
