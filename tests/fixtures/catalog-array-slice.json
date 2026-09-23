@@ -23,6 +23,97 @@
       "nullable": false
     }
   },
+  "row": {
+    "expression": {
+      "_classname": "ArraySlice",
+      "index": [
+        -1
+      ],
+      "components": [
+        {
+          "_classname": "ColumnRef",
+          "tbl_id": "12345678-1234-5678-1234-567812345678",
+          "effective_version": null,
+          "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+          "col_tbl_effective_version": null,
+          "col_id": 0,
+          "perform_validation": false
+        }
+      ]
+    },
+    "type": {
+      "_classname": "ArrayType",
+      "nullable": false,
+      "shape": [
+        4
+      ],
+      "numpy_dtype": "float32"
+    }
+  },
+  "column": {
+    "expression": {
+      "_classname": "ArraySlice",
+      "index": [
+        [
+          null,
+          null,
+          -1
+        ],
+        1
+      ],
+      "components": [
+        {
+          "_classname": "ColumnRef",
+          "tbl_id": "12345678-1234-5678-1234-567812345678",
+          "effective_version": null,
+          "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+          "col_tbl_effective_version": null,
+          "col_id": 0,
+          "perform_validation": false
+        }
+      ]
+    },
+    "type": {
+      "_classname": "ArrayType",
+      "nullable": false,
+      "shape": [
+        3
+      ],
+      "numpy_dtype": "float32"
+    }
+  },
+  "row_slice": {
+    "expression": {
+      "_classname": "ArraySlice",
+      "index": [
+        0,
+        [
+          1,
+          null,
+          2
+        ]
+      ],
+      "components": [
+        {
+          "_classname": "ColumnRef",
+          "tbl_id": "12345678-1234-5678-1234-567812345678",
+          "effective_version": null,
+          "col_tbl_id": "12345678-1234-5678-1234-567812345678",
+          "col_tbl_effective_version": null,
+          "col_id": 0,
+          "perform_validation": false
+        }
+      ]
+    },
+    "type": {
+      "_classname": "ArrayType",
+      "nullable": false,
+      "shape": [
+        2
+      ],
+      "numpy_dtype": "float32"
+    }
+  },
   "reverse": {
     "expression": {
       "_classname": "ArraySlice",

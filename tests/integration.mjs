@@ -1330,6 +1330,24 @@ try {
     }),
     /Schema mismatch/,
   );
+  const matrices = await catalog.createTable('sdk_test/matrices', {
+    value: { type: 'array', dtype: 'float32', shape: [2, 3], nullable: true },
+  });
+  await matrices.insert([{ value: catalogArray(new Float32Array([1, 2, 3, 4, 5, 6]), [2, 3]) }, { value: null }]);
+  const mixed = await matrices
+    .query()
+    .selectExpressions({
+      row: matrices.columns.value.arraySlice(-1),
+      column: matrices.columns.value.arraySlice({ step: -1 }, 1),
+    })
+    .collect();
+  assert.deepEqual(mixed[0].row.shape, [3]);
+  assert.deepEqual(mixed[0].row.toTypedArray(), new Float32Array([4, 5, 6]));
+  assert.deepEqual(mixed[0].column.shape, [2]);
+  assert.deepEqual(mixed[0].column.toTypedArray(), new Float32Array([5, 2]));
+  assert.deepEqual(mixed[1], { row: null, column: null });
+  const matrixCopy = await matrices.addComputedColumn('first_row', matrices.columns.value.arraySlice(0));
+  assert.deepEqual((await matrixCopy.collect())[0].first_row.toTypedArray(), new Float32Array([1, 2, 3]));
   const flags = await catalog.createTable('sdk_test/array_flags', {
     id: { type: 'int' },
     value: { type: 'array', dtype: 'bool', shape: [2], nullable: true },

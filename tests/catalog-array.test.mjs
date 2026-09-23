@@ -132,6 +132,9 @@ test('array slice expressions and inferred shapes match Python', async () => {
   );
   const cases = {
     element: columns.value.arrayElement(-1, 2),
+    row: columns.value.arraySlice(-1),
+    column: columns.value.arraySlice({ step: -1 }, 1),
+    row_slice: columns.value.arraySlice(0, { start: 1, step: 2 }),
     reverse: columns.value.arraySlice({ step: -1 }, { start: 1, step: 2 }),
     empty: columns.value.arraySlice({ start: 2, stop: 1 }),
     clamped: columns.value.arraySlice({ start: -100, stop: 100, step: 2 }, { step: -1 }),
@@ -145,6 +148,28 @@ test('array slice expressions and inferred shapes match Python', async () => {
   }
   for (const indices of [[], [0], [0, 0, 0], [3, 0], [-4, 0], [0.5, 1]])
     assert.throws(() => columns.value.arrayElement(...indices));
-  for (const args of [[], [1], [{ step: 0 }], [{ start: 0.5 }], [{ unknown: 1 }], [{}, {}, {}]])
+  for (const args of [[], [1, 1], [3], [-4], [0.5], [{ step: 0 }], [{ start: 0.5 }], [{ unknown: 1 }], [{}, {}, {}]])
     assert.throws(() => columns.value.arraySlice(...args));
+});
+
+test('mixed array indices require known rank and preserve wildcard dimensions', () => {
+  const id = '12345678-1234-5678-1234-567812345678';
+  const { columns } = createTableQueries(
+    id,
+    {
+      unknown: { type: 'array' },
+      wildcard: { type: 'array', dtype: 'float32', shape: [null, 4], nullable: true },
+    },
+    { unknown: 0, wildcard: 1 },
+    async () => [],
+    async () => 0,
+  );
+  assert.throws(() => columns.unknown.arraySlice(0, {}), /declared shape/);
+  assert.deepEqual(columns.wildcard.arraySlice({}, -1).computedDefinition(id).column.shape, [null]);
+  const row = columns.wildcard.arraySlice(-1).computedDefinition(id).column;
+  assert.deepEqual(row.shape, [4]);
+  assert.equal(row.nullable, true);
+  assert.equal(row.dtype, 'float32');
+  assert.throws(() => columns.wildcard.arraySlice({}, 4), /out of bounds/);
+  assert.throws(() => columns.wildcard.arraySlice(0, 0), /arrayElement/);
 });

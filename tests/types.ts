@@ -676,8 +676,8 @@ export async function checkArraySliceTypes(): Promise<void> {
   const required: import('@pixeltable/sdk/experimental/catalog').CatalogArray = rows[0]!.sliced;
   // @ts-expect-error String columns cannot be sliced as arrays.
   table.columns.label.arraySlice({});
-  // @ts-expect-error Integer indexing is separate from dimension-preserving slicing.
-  table.columns.value.arraySlice(1);
+  // @ts-expect-error Array indices must be integers or slice objects.
+  table.columns.value.arraySlice('1');
   void [value, required];
 }
 
@@ -695,4 +695,14 @@ export async function checkArrayElementTypes(): Promise<void> {
   // @ts-expect-error Integer indexing does not accept slice objects.
   table.columns.value.arrayElement({ start: 0 });
   void [scalar, array];
+}
+
+export async function checkMixedArraySliceTypes(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.openTable('matrices', {
+    value: { type: 'array', dtype: 'float32', shape: [2, 3], nullable: true },
+  });
+  const copy = await table.addComputedColumn('row', table.columns.value.arraySlice(-1));
+  const value: import('@pixeltable/sdk/experimental/catalog').CatalogArray | null = (await copy.collect())[0]!.row;
+  void value;
 }
