@@ -23,7 +23,7 @@ Run package commands in `typescript-sdk/`. The package has its own dependency lo
 - `tests/types.ts`: successful calls and compile-time rejection cases.
 - `tests/*.test.mjs`: transport and generator tests using Node's test runner.
 - `tests/react.test.mjs`: mounted React hook tests for cancellation, caching, invalidation, and job transitions.
-- `tests/integration.mjs`: starts a Python service from this package in a temporary home and tests the client against it. The selected `PXT_TEST_PYTHON` must have a compatible Pixeltable engine installed; the runner does not rely on a parent checkout path.
+- `tests/integration.mjs`: starts a Python service from this package in a temporary home and tests the client against it. The selected `PXT_TEST_PYTHON` must have a compatible Pixeltable engine installed; the runner does not rely on a parent checkout path. Cursor iteration remains one-shot and materializes the protocol response, as Python ProxyResultCursor does.
 
 Change the Python fixture → regenerate its OpenAPI document → run `npm run generate -- tests/fixtures/openapi.json --output tests/fixtures/service.d.ts` → run `npm run generate -- tests/fixtures/openapi.json --client --output tests/fixtures/client.ts` → run `npm test` and `npm run test:integration`.
 

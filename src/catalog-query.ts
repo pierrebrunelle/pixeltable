@@ -602,6 +602,7 @@ export interface CatalogQuery<S extends CatalogSchema, R = CatalogRow<S>> {
   limit(value: number): CatalogQuery<S, R>;
   offset(value: number): CatalogQuery<S, R>;
   collect(options?: { signal?: AbortSignal }): Promise<R[]>;
+  cursor(options?: { signal?: AbortSignal }): AsyncIterableIterator<R>;
   count(options?: { signal?: AbortSignal }): Promise<number>;
 }
 
@@ -694,6 +695,14 @@ export function createTableQueries<S extends CatalogSchema>(
         offset_val: offset,
         sample_clause: sampling,
       };
+    }
+    function readRows(signal?: AbortSignal): Promise<R[]> {
+      return collect(
+        wire(),
+        selected.map(({ name }) => name),
+        signal,
+        Object.fromEntries(selected.map(({ name, column }) => [name, column])),
+      ) as Promise<R[]>;
     }
     return {
       where(next) {
@@ -809,12 +818,10 @@ export function createTableQueries<S extends CatalogSchema>(
         return build<R>(selected, predicate, order, limit, integerLiteral(value), grouping, sampling);
       },
       async collect(options = {}) {
-        return collect(
-          wire(),
-          selected.map(({ name }) => name),
-          options.signal,
-          Object.fromEntries(selected.map(({ name, column }) => [name, column])),
-        ) as Promise<R[]>;
+        return readRows(options.signal);
+      },
+      async *cursor(options = {}) {
+        for (const row of await readRows(options.signal)) yield row;
       },
       async count(options = {}) {
         if (limit !== null || offset !== null) throw new TypeError('count() cannot be used with limit() or offset()');
