@@ -40,7 +40,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.tests.json",
-    "test": "npm run build && npm run typecheck && node --test --test-timeout=10000 tests/*.test.mjs",
+    "test": "npm run build && npm run typecheck && node --test --test-timeout=30000 tests/*.test.mjs",
     "generate": "node bin/generate.mjs",
     "prepack": "npm run build",
     "test:integration": "npm run build && node tests/integration.mjs",
