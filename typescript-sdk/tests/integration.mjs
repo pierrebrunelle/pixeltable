@@ -1357,6 +1357,17 @@ try {
     { total: 10 },
     { total: 10 },
   ]);
+  const sampleTable = await catalog.createTable('sdk_test/sampling', {
+    id: { type: 'int' },
+    group: { type: 'string' },
+  });
+  await sampleTable.insert(Array.from({ length: 6 }, (_, id) => ({ id, group: id < 3 ? 'a' : 'b' })));
+  const sampled = await sampleTable.query().sample({ n: 3, seed: 7 }).collect();
+  assert.equal(sampled.length, 3);
+  assert.equal(new Set(sampled.map(({ id }) => id)).size, 3);
+  const strata = await sampleTable.query().sample({ nPerStratum: 1, stratifyBy: 'group', seed: 7 }).collect();
+  assert.deepEqual(strata.map(({ group }) => group).sort(), ['a', 'b']);
+  assert.equal(await sampleTable.query().sample({ fraction: 1, seed: 7 }).count(), 6);
   const flags = await catalog.createTable('sdk_test/array_flags', {
     id: { type: 'int' },
     value: { type: 'array', dtype: 'bool', shape: [2], nullable: true },

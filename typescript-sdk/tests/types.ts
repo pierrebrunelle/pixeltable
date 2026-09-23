@@ -728,3 +728,18 @@ export async function checkArrayLiteralFunctionTypes(): Promise<void> {
   });
   void total;
 }
+
+export async function checkSampleTypes(): Promise<void> {
+  const catalog = createCatalogClient({ baseUrl: 'https://catalog.test' });
+  const table = await catalog.openTable('sampling', {
+    id: { type: 'int' },
+    category: { type: 'string' },
+  });
+  const rows = await table.query().select('id').sample({ n: 2, seed: 7, stratifyBy: table.columns.category }).collect();
+  const id: number = rows[0]!.id;
+  // @ts-expect-error Sampling retains the selected columns.
+  const category: string = rows[0]!.category;
+  // @ts-expect-error Sampling is configured with an options object.
+  table.query().sample(2);
+  void [id, category];
+}

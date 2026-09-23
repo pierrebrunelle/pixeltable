@@ -44,6 +44,42 @@ test('query expressions match Python serialization for filter, projection, sort,
   assert.deepEqual(calls[0].selected, ['id', 'title']);
 });
 
+test('sample queries match Python serialization and reject invalid combinations', async () => {
+  const { columns, query, calls } = setup();
+  await query().select('id').where(columns.id.gt(0)).sample({ n: 2, seed: 7 }).collect();
+  await query()
+    .select('id', 'title')
+    .sample({ nPerStratum: 1, seed: -4, stratifyBy: ['title'] })
+    .collect();
+  await query().select('id').sample({ fraction: 0.5, seed: 9, stratifyBy: columns.title }).collect();
+  await query().sample({ n: 1 }).select('id').collect();
+  const python = JSON.parse(await readFile(new URL('./fixtures/catalog-sample.json', import.meta.url), 'utf8'));
+  assert.deepEqual(
+    calls.slice(0, 3).map(({ wire }) => wire),
+    [python.count, python.stratified, python.fraction],
+  );
+  assert.deepEqual(calls[3].wire.sample_clause.n, 1);
+  for (const options of [
+    {},
+    { n: 1, fraction: 0.5 },
+    { n: 0 },
+    { fraction: -1 },
+    { n: 2, seed: 1.5 },
+    { nPerStratum: 1 },
+  ])
+    assert.throws(() => query().sample(options));
+  assert.throws(() => query().sample({ n: 1, stratifyBy: columns.payload }), /scalar/);
+  assert.throws(() => query().sample({ n: 1, stratifyBy: setup('other').columns.id }), /belong/);
+  assert.throws(() => query().sample({ n: 1 }).sample({ n: 1 }), /Multiple/);
+  assert.throws(() => query().orderBy('id').sample({ n: 1 }), /cannot be used/);
+  assert.throws(() => query().limit(1).sample({ n: 1 }), /cannot be used/);
+  assert.throws(() => query().groupBy('id').sample({ n: 1 }), /cannot be used/);
+  assert.throws(() => query().sample({ n: 1 }).where(columns.id.gt(0)), /after sample/);
+  assert.throws(() => query().sample({ n: 1 }).orderBy('id'), /with sample/);
+  assert.throws(() => query().sample({ n: 1 }).limit(1), /with sample/);
+  assert.throws(() => query().sample({ n: 1 }).distinct(), /with sample/);
+});
+
 test('query branches preserve their source and repeated filters combine', async () => {
   const { columns, query, calls } = setup();
   const base = query().where(columns.id.gt(0));
