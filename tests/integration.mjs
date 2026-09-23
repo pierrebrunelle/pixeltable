@@ -68,21 +68,18 @@ for case in json.load(sys.stdin):
   },
 );
 assert.equal(npyRoundTrip.status, 0, npyRoundTrip.stderr || String(npyRoundTrip.error));
-const root = fileURLToPath(new URL('../../', import.meta.url));
+const packageRoot = fileURLToPath(new URL('../', import.meta.url));
+const servicePath = fileURLToPath(new URL('./service.py', import.meta.url));
 const temp = await mkdtemp(join(tmpdir(), 'pxt-sdk-integration-'));
 const portProbe = createServer().listen(0, '127.0.0.1');
 await once(portProbe, 'listening');
 const port = portProbe.address().port;
 await new Promise((resolve) => portProbe.close(resolve));
-const service = spawn(
-  process.env.PXT_TEST_PYTHON,
-  ['typescript-sdk/tests/service.py', '--port', String(port), '--catalog'],
-  {
-    cwd: root,
-    env: { ...process.env, PIXELTABLE_HOME: join(temp, 'home'), PYTHONPATH: root },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  },
-);
+const service = spawn(process.env.PXT_TEST_PYTHON, [servicePath, '--port', String(port), '--catalog'], {
+  cwd: packageRoot,
+  env: { ...process.env, PIXELTABLE_HOME: join(temp, 'home') },
+  stdio: ['ignore', 'pipe', 'pipe'],
+});
 const exited = once(service, 'exit');
 let logs = '';
 service.stdout.on('data', (chunk) => {
