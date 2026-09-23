@@ -6,7 +6,9 @@ import os
 import uuid
 from pathlib import Path
 
-from udf_fixture import decorate, text_embedding
+import numpy as np
+
+from udf_fixture import array_total, decorate, text_embedding
 
 import pixeltable as pxt
 from pixeltable.env import Env
@@ -94,6 +96,11 @@ serialized = json.dumps(decorate(text=table.title, prefix='Hi ').as_dict()).repl
 )
 Path(__file__).with_name('fixtures').joinpath('catalog-function.json').write_text(
     json.dumps(json.loads(serialized), indent=2) + '\n'
+)
+
+array_literal = array_total(values=np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32))
+Path(__file__).with_name('fixtures').joinpath('catalog-array-literal.json').write_text(
+    json.dumps(array_literal.as_dict(), indent=2) + '\n'
 )
 
 

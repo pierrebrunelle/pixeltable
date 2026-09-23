@@ -447,6 +447,7 @@ class ColumnExpression<T> {
   }
   private compare(operator: number, value: unknown): Predicate {
     if (value === null) throw new TypeError('Use isNull() to test for null');
+    if (this.column.type === 'array') throw new TypeError('Array comparisons are not supported');
     if (
       ![2, 3].includes(operator) &&
       !['int', 'float', 'string', 'date', 'timestamp', 'uuid'].includes(this.column.type)

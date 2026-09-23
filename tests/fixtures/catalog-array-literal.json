@@ -1,0 +1,69 @@
+{
+  "_classname": "FunctionCall",
+  "fn": {
+    "_classpath": "pixeltable.func.callable_function.CallableFunction",
+    "path": "udf_fixture.array_total",
+    "signatures": [
+      {
+        "return_type": {
+          "_classname": "FloatType",
+          "nullable": false
+        },
+        "parameters": [
+          {
+            "name": "values",
+            "col_type": {
+              "_classname": "ArrayType",
+              "nullable": false,
+              "shape": [
+                2,
+                2
+              ],
+              "numpy_dtype": "float32"
+            },
+            "kind": "POSITIONAL_OR_KEYWORD",
+            "is_batched": false,
+            "default": null
+          }
+        ],
+        "is_batched": false
+      }
+    ]
+  },
+  "return_type": {
+    "_classname": "FloatType",
+    "nullable": false
+  },
+  "arg_idxs": [],
+  "kwarg_idxs": {
+    "values": 0
+  },
+  "group_by_start_idx": 0,
+  "group_by_stop_idx": 0,
+  "order_by_start_idx": 1,
+  "is_method_call": false,
+  "components": [
+    {
+      "_classname": "Literal",
+      "val": [
+        [
+          1.0,
+          2.0
+        ],
+        [
+          3.0,
+          4.0
+        ]
+      ],
+      "col_type": {
+        "_classname": "ArrayType",
+        "nullable": false,
+        "shape": [
+          2,
+          2
+        ],
+        "numpy_dtype": "float32"
+      }
+    }
+  ]
+}
