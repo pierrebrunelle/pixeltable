@@ -89,12 +89,20 @@ class ColumnExpression<T> {
     );
   }
   arraySlice(
-    ...slices: Exclude<T, null> extends CatalogArray ? CatalogArraySlice[] : never
+    ...slices: Exclude<T, null> extends CatalogArray ? (CatalogArraySlice | number)[] : never
   ): ColumnExpression<CatalogArray | Extract<T, null>> {
     if (this.column.type !== 'array') throw new TypeError('Array slicing requires an array expression');
     if (!slices.length) throw new TypeError('Specify at least one array slice');
     if (this.column.shape && slices.length > this.column.shape.length) throw new TypeError('Too many array slices');
-    const index = slices.map((slice) => {
+    const index = slices.map((slice, axis) => {
+      if (typeof slice === 'number') {
+        if (!this.column.shape) throw new TypeError('Integer array indices require a declared shape');
+        if (!Number.isSafeInteger(slice)) throw new TypeError('Array indices must be safe integers');
+        const dimension = this.column.shape[axis];
+        if (dimension !== null && dimension !== undefined && (slice < -dimension || slice >= dimension))
+          throw new TypeError('Array index is out of bounds');
+        return slice;
+      }
       if (
         typeof slice !== 'object' ||
         slice === null ||
@@ -108,26 +116,35 @@ class ColumnExpression<T> {
         throw new TypeError('Array slice bounds must be safe integers and step cannot be zero');
       return values.map((value) => value ?? null);
     });
-    const shape = this.column.shape?.map((dimension, axis) => {
-      const slice = index[axis];
-      if (dimension === null || !slice) return dimension;
-      const size = BigInt(dimension);
-      const step = BigInt(slice[2] ?? 1);
-      const positive = step > 0n;
-      const bound = (value: number | null | undefined, fallback: bigint): bigint => {
-        if (value === null || value === undefined) return fallback;
-        let result = BigInt(value);
-        if (result < 0n) result += size;
-        const lower = positive ? 0n : -1n;
-        const upper = positive ? size : size - 1n;
-        return result < lower ? lower : result > upper ? upper : result;
-      };
-      const start = bound(slice[0], positive ? 0n : size - 1n);
-      const stop = bound(slice[1], positive ? size : -1n);
-      const distance = positive ? stop - start : start - stop;
-      const stride = positive ? step : -step;
-      return distance <= 0n ? 0 : Number((distance + stride - 1n) / stride);
-    });
+    if (
+      this.column.shape &&
+      index.length === this.column.shape.length &&
+      index.every((part) => typeof part === 'number')
+    )
+      throw new TypeError('Use arrayElement to select a scalar; arraySlice must retain at least one dimension');
+    const shape = this.column.shape
+      ?.map((dimension, axis) => {
+        const slice = index[axis];
+        if (typeof slice === 'number') return undefined;
+        if (dimension === null || !slice) return dimension;
+        const size = BigInt(dimension);
+        const step = BigInt(slice[2] ?? 1);
+        const positive = step > 0n;
+        const bound = (value: number | null | undefined, fallback: bigint): bigint => {
+          if (value === null || value === undefined) return fallback;
+          let result = BigInt(value);
+          if (result < 0n) result += size;
+          const lower = positive ? 0n : -1n;
+          const upper = positive ? size : size - 1n;
+          return result < lower ? lower : result > upper ? upper : result;
+        };
+        const start = bound(slice[0], positive ? 0n : size - 1n);
+        const stop = bound(slice[1], positive ? size : -1n);
+        const distance = positive ? stop - start : start - stop;
+        const stride = positive ? step : -step;
+        return distance <= 0n ? 0 : Number((distance + stride - 1n) / stride);
+      })
+      .filter((dimension) => dimension !== undefined);
     return new ColumnExpression(
       this.tableId,
       { ...this.column, ...(shape ? { shape } : {}) },

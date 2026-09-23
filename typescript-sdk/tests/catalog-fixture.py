@@ -262,6 +262,9 @@ Path(__file__).with_name('fixtures').joinpath('catalog-uuid.json').write_text(
 matrix = pxt.create_table('inspect/matrix', {'value': pxt.Array[(3, 4), pxt.Float]})
 slices = {
     'element': matrix.value[-1, 2],
+    'row': matrix.value[-1],
+    'column': matrix.value[::-1, 1],
+    'row_slice': matrix.value[0, 1::2],
     'reverse': matrix.value[::-1, 1::2],
     'empty': matrix.value[2:1],
     'clamped': matrix.value[-100:100:2, ::-1],
