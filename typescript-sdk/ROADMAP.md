@@ -24,7 +24,7 @@ Verification: compile-time rejection tests, HTTP transport tests, reproducible g
 
 Implemented: generated request/response types, service URL and optional bearer auth, JSON and multipart requests, file response modes, HTTP errors, background-job polling, cancellation, and bounded waits. The package can be built and packed independently, and contains standalone Node CI. The endpoint must already exist.
 
-Remaining release gates: select the standalone GitHub repository and npm owner; test against a hosted HTTP service; define the supported Pixeltable/FastAPI version matrix; configure release publishing. The package remains private and unpublished.
+The standalone repository is private at [pixeltable/typescript-sdk](https://github.com/pixeltable/typescript-sdk), with an installable alpha archive in GitHub Releases. Remaining gates before npm publication: choose the npm owner, test against a hosted HTTP service, define the supported Pixeltable/FastAPI version matrix, and configure registry publishing. The npm package remains private and unpublished.
 
 ## Phase 2: application handles and React
 

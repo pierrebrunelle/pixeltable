@@ -31,7 +31,7 @@ To regenerate OpenAPI from the repository root, set `PIXELTABLE_HOME` to a new t
 
 The SDK relies on the declared HTTP service surface. Keep Python engine and daemon implementation details outside its public API. Any future typed job result needs additional service metadata or a caller-supplied runtime validator; the current result remains unknown.
 
-The package contains `.github/workflows/ci.yml` for Node package checks when extracted into its own repository. The parent repository workflow also regenerates Python fixtures and runs live integration against this checkout. Before publishing, choose repository/package ownership and a supported Python engine version matrix; remove the private flag only when publishing is intended.
+The private standalone repository is [pixeltable/typescript-sdk](https://github.com/pixeltable/typescript-sdk). Its `.github/workflows/ci.yml` runs Node 22 and 24 package checks. The parent repository workflow also regenerates Python fixtures and runs live integration against this checkout. Before npm publishing, choose package ownership and a supported Python engine version matrix; remove the private flag only when registry publication is intended.
 
 The root and server imports must remain usable without React installed. React and TanStack Query are optional peer dependencies used only by the `./react` entry point. Keep cache keys scoped by application endpoint and session; clear the application cache when its authentication context changes.
 

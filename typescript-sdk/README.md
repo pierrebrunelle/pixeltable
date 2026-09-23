@@ -2,19 +2,22 @@
 
 Call a running Pixeltable service from Node.js 22 or newer. Generate types from the service's OpenAPI document, then call the routes declared in its Python application file.
 
-This standalone package is unpublished and marked private. Python still defines tables, computed columns, indexes, and routes. The SDK supports service requests, multipart uploads, HTTP errors, background-job polling, and optional React hooks.
+The npm package is unpublished and marked private. Python still defines tables, computed columns, indexes, and routes. The SDK supports service requests, multipart uploads, HTTP errors, background-job polling, and optional React hooks.
 
-## Install locally
+## Install the alpha
+
+Download the archive from the [private GitHub prerelease](https://github.com/pixeltable/typescript-sdk/releases/tag/v0.1.0-alpha.0) in your application directory:
+
+```bash
+gh release download v0.1.0-alpha.0 --repo pixeltable/typescript-sdk --pattern '*.tgz'
+npm install ./pixeltable-sdk-0.1.0-alpha.0.tgz
+```
+
+To build the same archive from a checkout of this repository:
 
 ```bash
 npm ci
 npm pack
-```
-
-Install the resulting archive in your application:
-
-```bash
-npm install /absolute/path/to/pixeltable-sdk-0.1.0-alpha.0.tgz
 ```
 
 The root import and `@pixeltable/sdk/server` expose the same named exports. This release is ESM and intended for server code. Keep service credentials in server actions, route handlers, or workers.
