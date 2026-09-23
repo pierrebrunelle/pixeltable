@@ -22,7 +22,7 @@ Verification: compile-time rejection tests, HTTP transport tests, reproducible g
 
 ## Phase 1: service client
 
-Implemented: generated request/response types, service URL and optional bearer auth, JSON and multipart requests, file response modes, HTTP errors, background-job polling, cancellation, and bounded waits. The package can be built and packed independently. The endpoint must already exist.
+Implemented: generated request/response types, service URL and optional bearer auth, JSON and multipart requests, file response modes, HTTP errors, background-job polling, cancellation, and bounded waits. The package can be built and packed independently, and contains standalone Node CI. The endpoint must already exist.
 
 Remaining release gates: select the standalone GitHub repository and npm owner; test against a hosted HTTP service; define the supported Pixeltable/FastAPI version matrix; configure release publishing. The package remains private and unpublished.
 
