@@ -3025,9 +3025,12 @@ class TestTable:
 
         img_t = small_img_tbl
 
-        # filter not expressible in SQL
-        with pxt_raises(pxt.ErrorCode.UNSUPPORTED_OPERATION, match='not expressible'):
-            img_t.update({'split': 'train'}, where=img_t.img.width > 100)
+        # a filter that requires Python evaluation is resolved via a rowid lookup
+        num_wide = len(img_t.where(img_t.img.width > 100).collect())
+        assert num_wide > 0
+        status = img_t.update({'split': 'train'}, where=img_t.img.width > 100)
+        assert status.num_rows == num_wide
+        assert img_t.where(img_t.split == 'train').count() == num_wide
 
     def test_batch_update_computed_pk(self, db_root: DatabaseRoot, is_data_versioned: bool) -> None:
         p = db_root.make_catalog_path
@@ -3293,10 +3296,12 @@ class TestTable:
 
         img_t = small_img_tbl
 
-        # filter not expressible in SQL
-        with pxt_raises(pxt.ErrorCode.UNSUPPORTED_OPERATION) as excinfo:
-            img_t.delete(where=img_t.img.width > 100)
-        assert 'not expressible' in str(excinfo.value)
+        # a filter that requires Python evaluation is resolved via a rowid lookup
+        num_wide = len(img_t.where(img_t.img.width > 100).collect())
+        assert num_wide > 0
+        status = img_t.delete(where=img_t.img.width > 100)
+        assert status.num_rows == num_wide
+        assert len(img_t.where(img_t.img.width > 100).collect()) == 0
 
     def test_add_drop_column(self, db_root: DatabaseRoot, is_data_versioned: bool) -> None:
         """Add and drop columns on a populated table. Validates values, dependencies, and persistence."""

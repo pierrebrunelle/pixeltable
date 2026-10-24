@@ -1408,17 +1408,7 @@ class TableVersion:
 
         update_spec = self._validate_update_spec(value_spec, allow_pk=False, allow_exprs=True, allow_media=True)
         if where is not None:
-            if not isinstance(where, exprs.Expr):
-                raise excs.RequestError(
-                    excs.ErrorCode.INVALID_EXPRESSION,
-                    f'`where` argument must be a valid Pixeltable expression; got `{type(where)}`',
-                )
-            analysis_info = Planner.analyze(self.path, where)
-            # for now we require that the updated rows can be identified via SQL, rather than via a Python filter
-            if analysis_info.filter is not None:
-                raise excs.RequestError(
-                    excs.ErrorCode.UNSUPPORTED_OPERATION, f'Filter not expressible in SQL: {analysis_info.filter}'
-                )
+            where = self._resolve_where_clause(where, error_prefix='`where` argument')
 
         with telemetry.span('pixeltable.plan.create', level=telemetry.DEBUG) as plan_span:
             update_plan = Planner.create_update_plan(
@@ -1598,8 +1588,7 @@ class TableVersion:
         target_columns = [self.cols_by_name[name] for name in col_names]
         where_clause: exprs.Expr | None = None
         if where is not None:
-            self._validate_where_clause(where, error_prefix='`where` argument')
-            where_clause = where
+            where_clause = self._resolve_where_clause(where, error_prefix='`where` argument')
         if errors_only:
             errortype_pred = (
                 exprs.ColumnPropertyRef(
@@ -1751,11 +1740,17 @@ class TableVersion:
             self._write_md(new_version=True, new_schema_version=self.version == self.schema_version)
         return result
 
-    def _validate_where_clause(self, pred: exprs.Expr, error_prefix: str) -> None:
-        """Validates that pred can be expressed as a SQL Where clause"""
+    def _resolve_where_clause(self, pred: exprs.Expr, error_prefix: str) -> exprs.Expr:
+        """Validates pred as a Where clause and returns a SQL-expressible equivalent.
+
+        If part of pred requires Python evaluation, the matching rows are resolved first and the returned
+        predicate identifies them via rowid.
+        """
         assert self.is_mutable
-        from pixeltable.exprs import Expr
+        from pixeltable._query import Query
+        from pixeltable.exprs import Expr, RowidRef
         from pixeltable.plan import Planner
+        from pixeltable.query_clauses import FromClause
 
         if not isinstance(pred, Expr):
             raise excs.RequestError(
@@ -1763,16 +1758,21 @@ class TableVersion:
                 f'{error_prefix} must be a valid Pixeltable expression; got `{type(pred)}`',
             )
         analysis_info = Planner.analyze(self.path, pred)
-        # for now we require that the updated rows can be identified via SQL, rather than via a Python filter
-        if analysis_info.filter is not None:
+        if analysis_info.filter is None:
+            return pred
+        # a composite rowid cannot be matched with a single-component IN predicate
+        if self.num_rowid_columns() > 1:
             raise excs.RequestError(
                 excs.ErrorCode.UNSUPPORTED_OPERATION, f'Filter not expressible in SQL: {analysis_info.filter}'
             )
+        rowid_ref = RowidRef(self.handle, 0)
+        rows = Query(FromClause(tbls=[self.path])).where(pred).select(r=rowid_ref).collect()
+        return rowid_ref.isin([row['r'] for row in rows])
 
     def delete(self, where: exprs.Expr | None = None) -> UpdateStatus:
         assert self.is_insertable
         if where is not None:
-            self._validate_where_clause(where, error_prefix='`where` argument')
+            where = self._resolve_where_clause(where, error_prefix='`where` argument')
         status = self.propagate_delete(where, base_versions=[], timestamp=time.time())
         return status
 

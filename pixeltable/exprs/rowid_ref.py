@@ -35,7 +35,13 @@ class RowidRef(Expr):
         normalized_base_id: UUID | None = None,
         normalized_base_effective_version: int | None = None,
     ):
-        super().__init__(ts.IntType(nullable=False))
+        col_type: ts.ColumnType = ts.IntType(nullable=False)
+        if tbl is not None:
+            # the rowid is an int on data-versioned tables, a UUID on operational ones
+            resolved = ts.ColumnType.from_sa_type(tbl.get().store_tbl.rowid_columns()[idx].type, nullable=False)
+            if resolved is not None:
+                col_type = resolved
+        super().__init__(col_type)
         if tbl is not None:
             self.tbl = tbl
             # normalize to simplify comparisons: we refer to the lowest base table that has the requested rowid idx
