@@ -91,7 +91,12 @@ def publish(manifest: dict[str, Any], review: dict[str, Any]) -> dict[str, Any]:
         moved = '\n\n'.join(f'**{c["path"]}:{c["line"]}**\n\n{c["body"]}' for c in review['comments'])
         appendix = '\n\n### Comments not attached to lines\n\n' + moved if moved else ''
         try:
-            fallback = {'event': 'COMMENT', 'body': publication_body(review['body'], appendix)}
+            # Prior-history lookup binds to the review's commit_id, so the retry keeps the pin.
+            fallback = {
+                'event': 'COMMENT',
+                'commit_id': manifest['head_sha'],
+                'body': publication_body(review['body'], appendix),
+            }
         except ValueError as e:
             return {'delivery': 'failed', 'publication_fallback': False, 'reason': str(e)}
         if source_status(manifest) == 'base':

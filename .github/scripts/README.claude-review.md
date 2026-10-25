@@ -49,7 +49,7 @@ publication request. To publish an already validated result, run the same host c
 
 Every published defect, rule finding, or design objection needs a declared independent decision. The renderer uses the exact
 checked record. Coverage, finding, and decision gaps produce an incomplete result and preserve valid checked
-findings. Invalid snapshots, tampered sources, and malformed pass envelopes still fail validation. A review can skip
+findings. Invalid snapshots, tampered sources, and malformed result envelopes still fail validation. A review can skip
 only when preparation supplies a whole-change policy, currently an empty diff. Invalid inline locations move to
 the body individually. A skipped result records its reason in the artifacts and makes no publication request.
 Binary, rename, and mode-only changes retain metadata without requiring nonexistent text lines. Relevant passes

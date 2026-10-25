@@ -135,9 +135,24 @@ class PublishTest(unittest.TestCase):
         self.assertEqual(outcome['delivery'], 'posted')
         self.assertTrue(outcome['publication_fallback'])
         fallback = submit.call_args_list[1].args[2]
-        self.assertNotIn('commit_id', fallback)
+        self.assertEqual(fallback['commit_id'], manifest['head_sha'])
         self.assertIn(manifest['head_sha'], fallback['body'])
         self.assertIn('A supported finding', fallback['body'])
+
+    def test_pinned_fallback_fails_when_the_reviewed_commit_left_the_pr(self) -> None:
+        manifest, _ = fixture()
+        review = {'body': 'Reviewed', 'comments': [{'path': 'example.py', 'line': 2, 'body': 'x'}]}
+        results = [
+            subprocess.CompletedProcess([], 1, '', 'HTTP 422'),
+            subprocess.CompletedProcess([], 1, '', 'HTTP 422'),
+        ]
+        with (
+            mock.patch.object(post, 'source_status', return_value='head'),
+            mock.patch.object(post, 'post', side_effect=results) as submit,
+        ):
+            outcome = post.publish(manifest, review)
+        self.assertEqual(outcome['delivery'], 'failed')
+        self.assertEqual(submit.call_args_list[1].args[2]['commit_id'], manifest['head_sha'])
 
     def test_transport_error_is_not_retried(self) -> None:
         import subprocess

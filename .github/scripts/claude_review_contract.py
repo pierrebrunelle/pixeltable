@@ -385,19 +385,30 @@ def validate(data: dict[str, Any], manifest: dict[str, Any]) -> dict[str, Any]:
             raise ValueError(f'{field} must be an array')
     passes: dict[str, Any] = {}
     gaps: list[str] = []
-    for result in data['passes']:
-        if not isinstance(result, dict):
-            raise ValueError('Pass result must be an object')
-        name = text(result.get('pass'), 'pass')
-        if name in passes or name not in [*REQUIRED_PASSES, 'walk', 'focus']:
-            raise ValueError('Duplicate or unknown pass')
+    for number, result in enumerate(data['passes'], 1):
+        raw_name = result.get('pass') if isinstance(result, dict) else None
+        label = raw_name if isinstance(raw_name, str) and raw_name.strip() else f'pass {number}'
+
+        def examine_pass(result: Any = result) -> str:
+            if not isinstance(result, dict):
+                raise ValueError('Pass result must be an object')
+            name = text(result.get('pass'), 'pass')
+            if name in passes or name not in [*REQUIRED_PASSES, 'walk', 'focus']:
+                raise ValueError('Duplicate or unknown pass')
+            if result.get('status') not in {'complete', 'incomplete'}:
+                raise ValueError('Pass needs an explicit outcome')
+            if result['status'] == 'incomplete':
+                text(result.get('reason'), 'reason')
+            if not isinstance(result.get('checks'), list) or not isinstance(result.get('exclusions'), list):
+                raise ValueError('Pass needs checks and exclusions')
+            return name
+
+        name = gap_boundary(gaps, label, examine_pass)
+        if name is None:
+            continue
         passes[name] = result
-        if result.get('status') not in {'complete', 'incomplete'}:
-            raise ValueError('Pass needs an explicit outcome')
         if result['status'] == 'incomplete':
-            gaps.append(f'{name}: {text(result.get("reason"), "reason")}')
-        if not isinstance(result.get('checks'), list) or not isinstance(result.get('exclusions'), list):
-            raise ValueError('Pass needs checks and exclusions')
+            gaps.append(f'{name}: {result["reason"]}')
         valid_checks: list[Any] = []
         for index, check in enumerate(result['checks'], 1):
 
@@ -502,6 +513,7 @@ def validate(data: dict[str, Any], manifest: dict[str, Any]) -> dict[str, Any]:
         raise ValueError('A skipped review cannot contain findings')
     incomplete = bool(gaps) and status == 'complete'
     return {
+        'passes': passes,
         'findings': findings,
         'decisions': decisions,
         'questions': questions,
@@ -655,8 +667,7 @@ def render(data: dict[str, Any], manifest: dict[str, Any]) -> tuple[dict[str, An
         state = {**state, 'records': [], 'reason': 'history exceeds size limit; recheck without suppression'}
         body += ['', STATE_MARKER + json.dumps(state, ensure_ascii=True) + '\n-->']
     pass_stats: dict[str, Any] = {}
-    for result in data['passes']:
-        name = result['pass']
+    for name, result in checked['passes'].items():
         owned = [key for key, claim in checked['findings'].items() if claim['producer'] == name]
         verdicts = [checked['decisions'].get(key, {}).get('decision', 'unverified') for key in owned]
         pass_stats[name] = {

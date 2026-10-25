@@ -154,6 +154,21 @@ class ContractTest(unittest.TestCase):
         self.assertIn('Coverage incomplete', review['body'])
         self.assertNotIn('No supported findings', review['body'])
 
+    def test_malformed_pass_result_becomes_a_gap_without_losing_siblings(self) -> None:
+        manifest, result = fixture()
+        result['passes'][0] = 'not-a-dict'
+        result['passes'][2] = {'pass': 'design', 'status': 'ready'}
+        add_finding(result, finding())
+        review, stats = contract.render(result, manifest)
+        self.assertEqual(stats['status'], 'incomplete')
+        self.assertEqual(len(review['comments']), 1)
+        self.assertTrue(any('pass 1: Pass result must be an object' in gap for gap in stats['gaps']))
+        self.assertTrue(any('design: Pass needs an explicit outcome' in gap for gap in stats['gaps']))
+        self.assertTrue(any('abstractions: no result' in gap for gap in stats['gaps']))
+        self.assertTrue(any('design: no result' in gap for gap in stats['gaps']))
+        self.assertIn('lines', stats['passes'])
+        self.assertNotIn('abstractions', stats['passes'])
+
     def test_line_and_rules_passes_account_for_all_changed_ranges(self) -> None:
         manifest, result = fixture()
         result['passes'][1]['checks'] = []
